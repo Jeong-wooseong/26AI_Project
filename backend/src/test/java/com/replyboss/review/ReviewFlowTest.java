@@ -175,4 +175,44 @@ class ReviewFlowTest {
 
         assertThat(dup).containsExactly(0);
     }
+
+    @Test
+    void 불만_리뷰에_답글_초안_3종을_만들고_약속_표현이_있으면_다시_생성한다() throws Exception {
+        when(llmClient.generateJson(any())).thenReturn(
+                mapper.readTree("""
+                        {"type":"COMPLAINT","sentiment":"NEGATIVE","keywords":["배달 지연"],"confidence":0.9}
+                        """),
+                mapper.readTree("""
+                        {"polite":"배달이 늦어 죄송합니다. 다음 주문 때 쿠폰을 드리겠습니다.","friendly":"배달이 늦어 죄송해요.","concise":"배달 지연 죄송해요."}
+                        """),
+                mapper.readTree("""
+                        {"polite":"배달이 늦어 불편을 드려 죄송합니다. 배달 과정을 다시 점검하겠습니다.","friendly":"배달이 늦어져 정말 죄송해요. 더 신경 쓸게요.","concise":"배달 지연 죄송해요. 개선할게요."}
+                        """));
+        ReviewResponse review = reviewService.createBatch(storeId, new ReviewBatchRequest(
+                Platform.BAEMIN, List.of(new ReviewItem(2, "배달이 너무 늦었어요")))).get(0);
+
+        ReviewResponse withDrafts = reviewService.generateReplies(review.id());
+
+        assertThat(withDrafts.replies()).extracting(r -> r.tone())
+                .containsExactly(ReplyTone.POLITE, ReplyTone.FRIENDLY, ReplyTone.CONCISE);
+        assertThat(withDrafts.replies()).noneMatch(r -> r.content().contains("쿠폰"));
+        ArgumentCaptor<LlmRequest> captor = ArgumentCaptor.forClass(LlmRequest.class);
+        verify(llmClient, times(3)).generateJson(captor.capture());
+        LlmRequest retry = captor.getAllValues().get(2);
+        assertThat(retry.user()).contains("해요체").contains("배달 지연").contains("보상·할인 약속");
+
+        // 다시 생성하면 복사하지 않은 초안은 새것으로 바뀐다 (개수 유지)
+        when(llmClient.generateJson(any())).thenReturn(mapper.readTree("""
+                {"polite":"배달이 늦어 죄송합니다.","friendly":"배달이 늦어 죄송해요!","concise":"배달 지연 죄송해요."}
+                """));
+        assertThat(reviewService.generateReplies(review.id()).replies()).hasSize(3);
+    }
+
+    @Test
+    void 평점만_리뷰는_답글_초안_생성_대상이_아니다() {
+        ReviewResponse review = reviewService.createBatch(storeId, new ReviewBatchRequest(
+                Platform.BAEMIN, List.of(new ReviewItem(5, "")))).get(0);
+        assertThatThrownBy(() -> reviewService.generateReplies(review.id()))
+                .isInstanceOf(com.replyboss.common.ApiException.class);
+    }
 }

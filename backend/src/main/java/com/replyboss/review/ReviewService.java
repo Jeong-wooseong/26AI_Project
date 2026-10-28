@@ -5,6 +5,8 @@ import com.replyboss.common.ApiException;
 import com.replyboss.common.JsonText;
 import com.replyboss.masking.MaskingService;
 import com.replyboss.reply.RatingOnlyReplyService;
+import com.replyboss.reply.ReplyGenerationService;
+import com.replyboss.reply.ReplyTone;
 import com.replyboss.reply.Reply;
 import com.replyboss.reply.ReplyRepository;
 import com.replyboss.review.ReviewDtos.DuplicateCheckItem;
@@ -43,19 +45,22 @@ public class ReviewService {
     private final MaskingService maskingService;
     private final ClassificationService classificationService;
     private final RatingOnlyReplyService ratingOnlyReplyService;
+    private final ReplyGenerationService replyGenerationService;
 
     public ReviewService(ReviewRepository reviewRepository,
                          ReplyRepository replyRepository,
                          StoreService storeService,
                          MaskingService maskingService,
                          ClassificationService classificationService,
-                         RatingOnlyReplyService ratingOnlyReplyService) {
+                         RatingOnlyReplyService ratingOnlyReplyService,
+                         ReplyGenerationService replyGenerationService) {
         this.reviewRepository = reviewRepository;
         this.replyRepository = replyRepository;
         this.storeService = storeService;
         this.maskingService = maskingService;
         this.classificationService = classificationService;
         this.ratingOnlyReplyService = ratingOnlyReplyService;
+        this.replyGenerationService = replyGenerationService;
     }
 
     public List<ReviewResponse> createBatch(Long storeId, ReviewBatchRequest request) {
@@ -133,6 +138,37 @@ public class ReviewService {
             }
         }
         return duplicates;
+    }
+
+    private static final List<ReplyTone> DRAFT_TONES = List.of(ReplyTone.POLITE, ReplyTone.FRIENDLY, ReplyTone.CONCISE);
+
+    /**
+     * 기능 3. 칭찬·불만·문의 리뷰에 답글 초안 3종을 만든다. 다시 부르면 복사하지 않은 이전 초안을 새 초안으로 바꾼다.
+     * (복사한 초안은 이력으로 남긴다.) LLM 호출이 끼어 있어 하나의 트랜잭션으로 묶지 않는다.
+     */
+    public ReviewResponse generateReplies(Long reviewId) {
+        Review review = reviewRepository.findById(reviewId).orElseThrow(() -> ApiException.notFound("리뷰"));
+        if (review.getStatus() != ReviewStatus.CLASSIFIED || !List.of(ReviewType.PRAISE, ReviewType.COMPLAINT, ReviewType.INQUIRY)
+                .contains(review.getType())) {
+            throw ApiException.badRequest("NOT_DRAFT_TARGET", "칭찬·불만·문의로 분류된 리뷰만 답글 초안을 생성합니다.");
+        }
+        Store store = storeService.get(review.getStore().getId());
+        ToneProfile tone = JsonText.read(store.getToneProfile(), ToneProfile.class);
+        if (tone == null) {
+            throw ApiException.badRequest("NO_TONE", "매장 설정에서 답글 스타일을 먼저 저장하십시오.");
+        }
+
+        Map<ReplyTone, String> drafts = replyGenerationService.generate(new ReplyGenerationService.Context(
+                store.getName(), store.getCategory(), tone,
+                review.getRating(), review.getType(), review.getKeywords(), review.getMaskedContent()));
+
+        replyRepository.deleteAll(replyRepository.findByReview_IdAndToneInAndSelectedFalse(reviewId, DRAFT_TONES));
+        for (ReplyTone t : DRAFT_TONES) {
+            if (drafts.containsKey(t)) {
+                replyRepository.save(new Reply(review, null, t, drafts.get(t)));
+            }
+        }
+        return ReviewResponse.from(review, replyRepository.findByReview_IdInOrderByIdAsc(List.of(reviewId)));
     }
 
     /** 날짜(없으면 전체)와 유형으로 거른 리뷰 목록. 최신순. */

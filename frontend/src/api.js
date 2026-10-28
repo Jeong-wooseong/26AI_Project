@@ -52,6 +52,8 @@ export const api = {
     const qs = q.toString();
     return request('GET', `/api/stores/${storeId}/reviews${qs ? `?${qs}` : ''}`);
   },
+  // 답글 초안 3종 생성 (다시 부르면 복사하지 않은 초안을 새로 바꿈)
+  generateReplies: (reviewId) => request('POST', `/api/reviews/${reviewId}/replies`),
   reclassify: (reviewId) => request('POST', `/api/reviews/${reviewId}/classify`),
   selectReply: (replyId, editedContent) => request('PATCH', `/api/replies/${replyId}/select`, { editedContent }),
 };

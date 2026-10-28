@@ -47,6 +47,12 @@ public class ReviewController {
         return reviewService.list(storeId, date, type);
     }
 
+    /** 답글 초안 3종 생성 (다시 부르면 복사하지 않은 초안을 새로 바꿈) */
+    @PostMapping("/api/reviews/{reviewId}/replies")
+    public ReviewResponse generateReplies(@PathVariable Long reviewId) {
+        return reviewService.generateReplies(reviewId);
+    }
+
     /** 분류 다시 시도 */
     @PostMapping("/api/reviews/{reviewId}/classify")
     public ReviewResponse reclassify(@PathVariable Long reviewId) {

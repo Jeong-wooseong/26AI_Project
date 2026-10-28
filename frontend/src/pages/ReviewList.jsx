@@ -28,6 +28,8 @@ export default function ReviewList({ store, toast, go }) {
   const [page, setPage] = useState(1);
   const [reviews, setReviews] = useState(null);
   const [error, setError] = useState(null);
+  const [bulk, setBulk] = useState(null); // 초안 일괄 생성 진행: { done, total }
+  const [bulkError, setBulkError] = useState(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -68,6 +70,31 @@ export default function ReviewList({ store, toast, go }) {
   const current = Math.min(page, pageCount);
   const paged = visible.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
   const usedPlatforms = PLATFORMS.filter(([v]) => all.some((r) => r.platform === v) || v === platform);
+
+  // 초안이 아직 없는 칭찬·불만·문의 리뷰 (지금 보이는 조건 기준)
+  const needDrafts = visible.filter((r) => r.status === 'CLASSIFIED' && DRAFT_TYPES.includes(r.type)
+    && !r.replies.some((p) => p.tone !== 'TEMPLATE'));
+
+  // 한 건씩 차례로 생성한다 (동시에 보내면 OpenAI 속도 제한에 걸리기 쉬움). 실패하면 멈추고 이유를 보여준다.
+  async function generateAll() {
+    if (bulk) return;
+    const targets = needDrafts;
+    setBulkError(null);
+    setBulk({ done: 0, total: targets.length });
+    let done = 0;
+    for (const r of targets) {
+      try {
+        replace(await api.generateReplies(r.id));
+        done += 1;
+        setBulk({ done, total: targets.length });
+      } catch (e) {
+        setBulkError(`${done}건 생성 후 중단되었습니다: ${e.message} (오류 코드 ${e.code})`);
+        break;
+      }
+    }
+    setBulk(null);
+    if (done) toast.show(`답글 초안 ${done}건 생성 완료`);
+  }
 
   const typeOptions = [
     ['ALL', `전체 유형 (${byStatus.length})`],
@@ -111,6 +138,8 @@ export default function ReviewList({ store, toast, go }) {
         </Alert>
       )}
 
+      {bulkError && <Alert>{bulkError}</Alert>}
+
       {reviews === null && !error && <EmptyState loading description="불러오는 중" />}
       {reviews && reviews.length === 0 && (
         <EmptyState
@@ -132,6 +161,12 @@ export default function ReviewList({ store, toast, go }) {
                 </button>
               ))}
             </div>
+            {(needDrafts.length > 0 || bulk) && (
+              <SecondaryButton size="sm" icon="analyze" onClick={generateAll} loading={!!bulk}
+                               loadingText={bulk ? `초안 생성 중 ${bulk.done}/${bulk.total}` : '생성 중'}>
+                초안 일괄 생성 ({needDrafts.length})
+              </SecondaryButton>
+            )}
             {visible.length > 0 && (
               <span className="page-range">
                 {visible.length}건 중 {(current - 1) * PAGE_SIZE + 1}–{Math.min(current * PAGE_SIZE, visible.length)}
@@ -275,13 +310,9 @@ function Ticket({ no, review: r, onUpdated, toast }) {
         </p>
       )}
 
-      {r.replies.map((reply) => (
-        <TemplateReply key={reply.id} reply={reply} toast={toast}
-                       onCopied={(text) => onUpdated({
-                         ...r,
-                         replies: r.replies.map((p) => (p.id === reply.id ? { ...p, selected: true, editedContent: text } : p)),
-                       })} />
-      ))}
+      {!failed && (r.replies.length > 0 || DRAFT_TYPES.includes(r.type)) && (
+        <ReplyDrafts review={r} onUpdated={onUpdated} toast={toast} />
+      )}
 
       {!failed && r.type === 'MALICIOUS' && (
         <p className="rt-reply hint">악성 리뷰: 즉시 답글보다 대응 방향 검토를 권장합니다. (대응 가이드 준비 중)</p>
@@ -290,19 +321,86 @@ function Ticket({ no, review: r, onUpdated, toast }) {
   );
 }
 
+const DRAFT_TYPES = ['PRAISE', 'COMPLAINT', 'INQUIRY'];
+const TONE_LABEL = { POLITE: '정중형', FRIENDLY: '친근형', CONCISE: '간결형', TEMPLATE: '별점 템플릿' };
+const FILL_IN = /(\[[^\]\n]{1,30}\])/g;
+
 /**
- * 답글 초안: 복사·수정 버튼은 행의 '관리' 칸에, 본문은 행 아래 AI 답글 영역에 놓는다.
- * (지금은 리뷰당 초안이 최대 1개 — 3종 초안이 들어오면 이 배치를 다시 정한다)
+ * 행 아래 AI 답글 영역: 칭찬·불만·문의는 초안 3종(정중형·친근형·간결형), 별점만 리뷰는 템플릿 답글 1개.
+ * 초안이 없으면 생성 버튼, 있으면 다시 생성(복사한 초안은 이력으로 남음).
  */
-function TemplateReply({ reply, toast, onCopied }) {
+function ReplyDrafts({ review: r, onUpdated, toast }) {
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState(null);
+  const canGenerate = DRAFT_TYPES.includes(r.type) && r.status !== 'FAILED';
+  const drafts = r.replies.filter((p) => p.tone !== 'TEMPLATE');
+
+  async function generate() {
+    setGenerating(true);
+    setError(null);
+    try {
+      onUpdated(await api.generateReplies(r.id));
+      toast.show('답글 초안 생성 완료');
+    } catch (e) {
+      setError({ code: e.code, message: e.message });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  const markCopied = (reply, text) => onUpdated({
+    ...r,
+    replies: r.replies.map((p) => (p.id === reply.id ? { ...p, selected: true, editedContent: text } : p)),
+  });
+
+  return (
+    <div className="rt-reply">
+      <div className="reply-head">
+        <span className="ai-label">
+          AI 답글 초안
+          <small>{drafts.length ? '정중형·친근형·간결형' : r.type === 'RATING_ONLY' ? '별점 템플릿 기반' : '매장 답글 스타일 반영'}, 게시 전 확인 필요</small>
+        </span>
+        {canGenerate && drafts.length > 0 && (
+          <button type="button" className="text-btn" onClick={generate} disabled={generating}>
+            {generating ? '생성 중…' : '다시 생성'}
+          </button>
+        )}
+      </div>
+
+      {r.replies.map((reply) => (
+        <TemplateReply key={reply.id} reply={reply} label={TONE_LABEL[reply.tone] ?? reply.tone} toast={toast}
+                       onCopied={(text) => markCopied(reply, text)} />
+      ))}
+
+      {canGenerate && drafts.length === 0 && (
+        <div className="reply-empty">
+          <SecondaryButton size="sm" icon="analyze" onClick={generate} loading={generating} loadingText="생성 중">
+            답글 초안 3개 생성
+          </SecondaryButton>
+          <span className="hint">매장 답글 스타일과 리뷰 키워드를 반영합니다.</span>
+        </div>
+      )}
+      {error && (
+        <p className="rt-error">
+          {error.message}
+          <span className="error-code">오류 코드 {error.code}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** 답글 초안 한 개: 복사·수정은 초안 오른쪽 위. [ ] 는 사장님이 채울 자리로 강조한다. */
+function TemplateReply({ reply, label, toast, onCopied }) {
   const [text, setText] = useState(reply.editedContent ?? reply.content);
   const [editing, setEditing] = useState(false);
   const [copied, setCopied] = useState(reply.selected);
+  const hasFillIn = /\[[^\]\n]{1,30}\]/.test(text);
 
   async function copy() {
     try {
       await navigator.clipboard.writeText(text);
-      toast.show('복사 완료');
+      toast.show(hasFillIn ? '복사 완료. 채워야 할 [ ] 항목이 남아 있습니다.' : '복사 완료');
     } catch {
       toast.show('클립보드 접근이 차단되었습니다. 답글을 직접 선택해 복사하십시오.');
     }
@@ -317,28 +415,32 @@ function TemplateReply({ reply, toast, onCopied }) {
   }
 
   return (
-    <>
-      <div className="rt-actions" role="cell">
-        <IconButton icon={editing ? 'confirm' : 'edit'} label={editing ? '수정 완료' : '답글 수정'}
+    <div className={`draft ${copied ? 'is-copied' : ''}`}>
+      <div className="draft-meta">
+        <span className="draft-tone">{label}</span>
+        {copied && <StatusIndicator tone="success" icon="confirm">복사함</StatusIndicator>}
+      </div>
+      <div className="draft-actions">
+        <IconButton icon={editing ? 'confirm' : 'edit'} label={editing ? `${label} 수정 완료` : `${label} 수정`}
                     aria-pressed={editing} onClick={() => setEditing(!editing)} />
-        <IconButton icon={copied ? 'confirm' : 'copy'} tone={copied ? 'success' : undefined}
-                    label={copied ? '복사 완료, 다시 복사' : '답글 복사'} onClick={copy} />
+        <IconButton icon="copy" label={`${label} 복사`} onClick={copy} />
       </div>
-      <div className="rt-reply">
-        <span className="ai-label">AI 답글 초안<small>별점 템플릿 기반, 게시 전 확인 필요</small></span>
-        {editing ? (
-          <div className="rt-edit">
-            <FormInput multiline aria-label="답글 수정" value={text} rows={3} onChange={(e) => setText(e.target.value)} />
-            <div className="end">
-              <SecondaryButton tone="neutral" size="sm" onClick={() => setEditing(false)}>수정 완료</SecondaryButton>
-              <PrimaryButton size="sm" icon="copy" onClick={copy}>복사</PrimaryButton>
-            </div>
+      {editing ? (
+        <div className="rt-edit">
+          <FormInput multiline aria-label={`${label} 답글 수정`} value={text} rows={3} onChange={(e) => setText(e.target.value)} />
+          <div className="end">
+            <SecondaryButton tone="neutral" size="sm" onClick={() => setEditing(false)}>수정 완료</SecondaryButton>
+            <PrimaryButton size="sm" icon="copy" onClick={copy}>복사</PrimaryButton>
           </div>
-        ) : (
-          <p className="ai-text">{text}</p>
-        )}
-      </div>
-    </>
+        </div>
+      ) : (
+        <p className="ai-text">
+          {text.split(FILL_IN).map((part, i) => (part.startsWith('[') && part.endsWith(']')
+            ? <mark key={i} className="fill-in">{part}</mark>
+            : part))}
+        </p>
+      )}
+    </div>
   );
 }
 

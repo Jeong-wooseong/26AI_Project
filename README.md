@@ -388,7 +388,7 @@ node eval/classify_eval.mjs
 | --- | --- | --- |
 | 1주차 | 기능 정의, 와이어프레임, ERD, API 명세, 개발 환경, 분류 프롬프트 v1, 라벨링 셋 50개 | 완료 |
 | 2주차 | 가게 등록, 톤 프로필 추출·수정·저장, 리뷰 입력, 마스킹, 분류 API, 평점만 분기 + 템플릿 풀, 정확도 측정 스크립트 | 완료 (정확도 1차 측정 필요) |
-| 3주차 | 답글 3톤 생성, 톤 주입, 안전 규칙, 편집·복사, 이력 조회 | 예정 |
+| 3주차 | 답글 3톤 생성, 톤 주입, 안전 규칙, 편집·복사, 이력 조회 | 진행 중 (3톤 생성·톤 주입·안전 규칙·편집·복사 완료) |
 | 4주차 | 임베딩, 중복 방지 3단, 악성 리뷰 가이드, 예외 처리 | 예정 |
 | 5주차 | 주간 리포트, (선택) 크롬 확장, 1차 테스트 | 예정 |
 
@@ -403,6 +403,7 @@ node eval/classify_eval.mjs
 | POST | `/api/stores/{id}/reviews` | 리뷰 일괄 입력 → 마스킹·분류 (평점만 리뷰는 템플릿 답글까지) |
 | GET | `/api/stores/{id}/reviews?date=&type=` | 날짜·유형별 리뷰 목록 |
 | POST | `/api/stores/{id}/reviews/duplicate-check` | 일괄 등록 전 중복 확인 (저장 안 함) |
+| POST | `/api/reviews/{id}/replies` | 답글 초안 3종(정중형·친근형·간결형) 생성 / 다시 생성 |
 | POST | `/api/reviews/{id}/classify` | 분류 다시 시도 |
 | PATCH | `/api/replies/{id}/select` | 복사한 답글 기록 (수정본 포함) |
 | POST | `/api/eval/classify` | 정확도 측정용 분류 (저장 안 함) |

@@ -107,7 +107,7 @@ export const FormInput = forwardRef(function FormInput(
       className={cls(
         multiline ? 'textarea' : 'input',
         icon && 'has-icon',
-        counter != null && counterInside && 'has-counter',
+        counterInside && 'has-counter',
         filled && 'is-filled',
         error && 'is-invalid',
         className,
@@ -119,7 +119,9 @@ export const FormInput = forwardRef(function FormInput(
   );
   return (
     <Field id={id} label={label} hideLabel={hideLabel} error={error} hint={hint} className={fieldClassName}>
-      {icon || (counter != null && counterInside) ? (
+      {/* 감싸는 구조는 값과 상관없이 고정해야 한다. 글자 수가 생길 때 구조가 바뀌면 입력창이 다시 만들어져
+          포커스와 한글 조합이 끊긴다 (첫 글자 입력 후 입력이 멈추는 문제) */}
+      {icon || counterInside ? (
         <div className="control-wrap">
           {icon && <Icon name={icon} className="control-icon" />}
           {control}
