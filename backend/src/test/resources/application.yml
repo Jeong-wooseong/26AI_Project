@@ -15,5 +15,6 @@ openai:
   generate-model: test-generate-model
   embedding-model: test-embedding-model
   reasoning-effort:
+  classify-reasoning-effort: low
   timeout-seconds: 1
   max-retries: 0
