@@ -353,8 +353,8 @@ DB_PASSWORD=replyboss
 
 ```bash
 cd backend
-./gradlew bootRunLocal   # MySQL 없이 실행 (Windows: gradlew.bat bootRunLocal)
-./gradlew bootRun        # MySQL 로 실행   (Windows: gradlew.bat bootRun)
+./gradlew bootRunLocal   # MySQL 없이 실행 (Windows PowerShell: .\gradlew.bat bootRunLocal)
+./gradlew bootRun        # MySQL 로 실행   (Windows PowerShell: .\gradlew.bat bootRun)
 ./gradlew test           # 테스트 (H2 메모리 DB, LLM 은 가짜로 대체)
 ```
 

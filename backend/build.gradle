@@ -43,7 +43,7 @@ tasks.withType(org.springframework.boot.gradle.tasks.run.BootRun).configureEach 
     jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8'
 }
 
-// MySQL 없이 바로 실행: gradlew.bat bootRunLocal (데이터는 backend/data 에 파일로 저장)
+// MySQL 없이 바로 실행: .\gradlew.bat bootRunLocal (PowerShell) (데이터는 backend/data 에 파일로 저장)
 tasks.register('bootRunLocal', org.springframework.boot.gradle.tasks.run.BootRun) {
     group = 'application'
     description = 'MySQL 없이 H2 파일 DB(local 프로필)로 실행합니다.'
