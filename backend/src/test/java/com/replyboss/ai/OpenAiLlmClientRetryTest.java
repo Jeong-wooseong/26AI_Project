@@ -89,7 +89,35 @@ class OpenAiLlmClientRetryTest {
 
         OpenAiLlmClient limited = start(List.of("{}"), new ArrayList<>(), 429);
         assertThatThrownBy(() -> limited.generateJson(request()))
-                .isInstanceOfSatisfying(LlmException.class, e -> assertThat(e.getReason()).isEqualTo("LLM_HTTP_429"));
+                .isInstanceOfSatisfying(LlmException.class, e -> assertThat(e.getReason()).isEqualTo("LLM_RATE_LIMIT"));
+        server.stop(0);
+
+        OpenAiLlmClient badGateway = start(List.of("{}"), new ArrayList<>(), 502);
+        assertThatThrownBy(() -> badGateway.generateJson(request()))
+                .isInstanceOfSatisfying(LlmException.class, e -> assertThat(e.getReason()).isEqualTo("LLM_HTTP_502"));
+    }
+
+    @Test
+    void 크레딧_소진_429는_다시_보내지_않고_한도_소진으로_알린다() throws IOException {
+        List<Integer> seen = new ArrayList<>();
+        OpenAiLlmClient client = start(List.of(
+                "{\"error\":{\"message\":\"You exceeded your current quota\",\"type\":\"insufficient_quota\",\"code\":\"credit_balance_exhausted\"}}"),
+                seen, 429);
+
+        assertThatThrownBy(() -> client.generateJson(request()))
+                .isInstanceOfSatisfying(LlmException.class, e -> assertThat(e.getReason()).isEqualTo("LLM_QUOTA"));
+        assertThat(seen).hasSize(1);
+    }
+
+    @Test
+    void 속도_제한_429는_기다렸다가_다시_보낸다() throws IOException {
+        List<Integer> seen = new ArrayList<>();
+        OpenAiLlmClient client = start(List.of(
+                "{\"error\":{\"message\":\"Rate limit reached\",\"type\":\"requests\",\"code\":\"rate_limit_exceeded\"}}", OK),
+                seen, List.of(429, 200));
+
+        assertThat(client.generateJson(request()).path("type").asText()).isEqualTo("COMPLAINT");
+        assertThat(seen).hasSize(2);
     }
 
     @Test

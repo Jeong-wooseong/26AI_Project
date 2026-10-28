@@ -38,6 +38,8 @@ public class GlobalExceptionHandler {
             case "LLM_REFUSED" -> "AI가 이 리뷰의 분석을 거절했습니다.";
             case "LLM_INVALID" -> "AI 응답 형식이 올바르지 않습니다. 다시 시도하십시오.";
             case "LLM_HTTP_401", "LLM_HTTP_403" -> "OpenAI API 키가 유효하지 않습니다. backend/.env의 OPENAI_API_KEY를 확인하십시오.";
+            case "LLM_QUOTA" -> "OpenAI 크레딧 또는 사용 한도가 소진되었습니다. platform.openai.com의 Billing과 Limits를 확인하십시오.";
+            case "LLM_RATE_LIMIT" -> "OpenAI 요청 속도 제한에 걸렸습니다. 잠시 후 다시 시도하십시오.";
             case "LLM_HTTP_429" -> "OpenAI 사용 한도를 초과했거나 요청이 많습니다. 잠시 후 다시 시도하거나 결제·한도를 확인하십시오.";
             case "LLM_HTTP_400" -> "OpenAI가 요청을 거부했습니다(HTTP 400). 서버 로그의 원인을 확인하십시오.";
             default -> reason.startsWith("LLM_HTTP_5")
