@@ -68,23 +68,19 @@ export default function App() {
     page = <div className="empty-state">불러오는 중…</div>;
   } else if (loadError) {
     page = (
-      <div className="panel">
+      <div className="empty-state">
         <p className="error-text">{loadError}</p>
-        <div>
-          <button className="btn" onClick={loadStore}>다시 시도</button>
-        </div>
+        <button className="btn" onClick={loadStore}>다시 불러오기</button>
       </div>
     );
   } else if (active === 'setup') {
     page = <StoreSetup store={store} onSaved={setStore} toast={toast} go={go} />;
   } else if (needsSetup) {
     page = (
-      <div className="panel">
-        <h2>가게 말투를 먼저 설정해주세요</h2>
-        <p className="note">답글이 가게 말투로 만들어지도록 예전에 쓴 답글 3~5개로 톤 프로필을 만들어요.</p>
-        <div>
-          <button className="btn primary" onClick={() => go('setup')}>가게 설정으로</button>
-        </div>
+      <div className="empty-state">
+        <h2 className="display">가게 말투부터 정해요</h2>
+        <p>예전에 직접 쓴 답글 3~5개를 넣으면 그 말투로 답글을 만들어드려요.</p>
+        <button className="btn primary" onClick={() => go('setup')}>가게 설정하기</button>
       </div>
     );
   } else if (active === 'input') {
@@ -95,22 +91,22 @@ export default function App() {
 
   return (
     <div className="app">
-      <aside className="side">
-        <div className="brand">
-          <b>ReplyBoss</b>
-          <span>{store?.name ?? '가게 미등록'}</span>
+      <header className="topbar">
+        <div className="topbar-inner">
+          <div className="brand">
+            <span className="brand-name">ReplyBoss</span>
+            <span className="brand-store">{store?.name ?? '가게를 등록해주세요'}</span>
+          </div>
+          <nav className="tabs-nav" aria-label="화면">
+            {VIEWS.map(([key, label]) => (
+              <a key={key} href={`#${key}`} aria-current={active === key ? 'page' : undefined}>
+                {label}
+              </a>
+            ))}
+          </nav>
         </div>
-        <nav className="nav" aria-label="화면">
-          {VIEWS.map(([key, label]) => (
-            <a key={key} href={`#${key}`} aria-current={active === key ? 'page' : undefined}>
-              {label}
-            </a>
-          ))}
-        </nav>
-      </aside>
-      <main>
-        <div className="wrap">{page}</div>
-      </main>
+      </header>
+      <main className={`page page-${active}`}>{page}</main>
       <Toast state={toast} />
     </div>
   );

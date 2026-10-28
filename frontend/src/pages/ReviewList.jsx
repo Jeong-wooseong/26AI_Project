@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { PLATFORM_LABEL, SENTIMENT_LABEL, TYPES, TYPE_LABEL, stars, todayISO } from '../labels.js';
 import Spinner from '../components/Spinner.jsx';
 
-/** 화면 ③ 오늘의 리뷰: 분류 결과, 평점만 리뷰의 템플릿 답글, 실패 시 다시 시도 */
+/** 화면 ③ 오늘의 리뷰: 리뷰 한 건 = 주문 전표 한 장. 분류 결과는 도장으로 찍힌다. */
 export default function ReviewList({ store, toast, go }) {
   const [date, setDate] = useState(todayISO());
   const [filter, setFilter] = useState('ALL');
@@ -26,72 +26,92 @@ export default function ReviewList({ store, toast, go }) {
 
   const replace = (updated) => setReviews((rs) => rs.map((r) => (r.id === updated.id ? updated : r)));
 
-  const counts = (reviews ?? []).reduce((m, r) => {
-    const key = r.type ?? 'FAILED';
-    m[key] = (m[key] ?? 0) + 1;
+  const list = reviews ?? [];
+  const counts = list.reduce((m, r) => {
+    if (r.type) m[r.type] = (m[r.type] ?? 0) + 1;
     return m;
   }, {});
-  const failedCount = (reviews ?? []).filter((r) => r.status === 'FAILED').length;
-  const visible = (reviews ?? []).filter((r) =>
+  const failedCount = list.filter((r) => r.status === 'FAILED').length;
+  const done = list.filter((r) => r.replies.some((p) => p.selected)).length;
+  const visible = list.filter((r) =>
     filter === 'ALL' ? true : filter === 'FAILED' ? r.status === 'FAILED' : r.type === filter);
+  const isToday = date === todayISO();
 
   return (
     <>
-      <div className="head">
-        <div>
-          <h1>오늘의 리뷰 {reviews && <span className="note">{reviews.length}개</span>}</h1>
-          <p>AI가 분류한 결과를 확인하세요. 평점만 리뷰는 바로 답글을 복사할 수 있어요.</p>
+      <div className="page-head">
+        <div className="page-title">
+          <h1 className="display">{isToday ? '오늘의 리뷰' : '지난 리뷰'}</h1>
+          {reviews && reviews.length > 0 && (
+            <p className="tally">
+              <strong>{reviews.length}</strong>장 중 <strong>{done}</strong>장 답글 복사
+            </p>
+          )}
         </div>
-        <div className="row">
-          <label className="label" htmlFor="date">날짜</label>
-          <input id="date" type="date" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} />
+        <div className="page-tools">
+          <label className="date-field">
+            <span className="sr-only">날짜</span>
+            <input type="date" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} />
+          </label>
           <button className="btn primary" onClick={() => go('input')}>리뷰 입력</button>
         </div>
       </div>
 
       {error && (
         <div className="error-box" role="alert">
-          {error} <button className="link-btn" onClick={load}>다시 불러오기</button>
+          <span>{error}</span>
+          <button className="btn small" onClick={load}>다시 불러오기</button>
         </div>
       )}
 
-      {reviews && reviews.length > 0 && (
-        <div className="chips" role="group" aria-label="유형 필터">
-          <Chip active={filter === 'ALL'} onClick={() => setFilter('ALL')}>전체 {reviews.length}</Chip>
+      {list.length > 0 && (
+        <div className="filters" role="group" aria-label="유형으로 거르기">
+          <FilterChip active={filter === 'ALL'} onClick={() => setFilter('ALL')} label="전체" count={list.length} />
           {TYPES.map(([key, label]) => (
-            <Chip key={key} active={filter === key} onClick={() => setFilter(key)}>{label} {counts[key] ?? 0}</Chip>
+            <FilterChip key={key} type={key} active={filter === key} onClick={() => setFilter(key)}
+                        label={label} count={counts[key] ?? 0} />
           ))}
           {failedCount > 0 && (
-            <Chip active={filter === 'FAILED'} onClick={() => setFilter('FAILED')}>분류 실패 {failedCount}</Chip>
+            <FilterChip type="FAILED" active={filter === 'FAILED'} onClick={() => setFilter('FAILED')}
+                        label="분류 실패" count={failedCount} />
           )}
         </div>
       )}
 
-      {reviews === null && !error && <div className="empty-state">불러오는 중…</div>}
+      {reviews === null && !error && <div className="empty-state"><Spinner /> 불러오는 중</div>}
       {reviews && reviews.length === 0 && (
         <div className="empty-state">
-          <p>{date === todayISO() ? '오늘 입력한 리뷰가 없어요.' : '이 날짜에 입력한 리뷰가 없어요.'}</p>
+          <h2 className="display">{isToday ? '아직 꽂힌 리뷰가 없어요' : '이날은 리뷰가 없어요'}</h2>
+          <p>배달앱이나 지도에서 리뷰를 복사해 붙여넣으면 유형별로 나눠드려요.</p>
           <button className="btn primary" onClick={() => go('input')}>리뷰 입력하기</button>
         </div>
       )}
-      {reviews && reviews.length > 0 && visible.length === 0 && (
-        <div className="empty-state">이 유형의 리뷰가 없어요.</div>
-      )}
+      {list.length > 0 && visible.length === 0 && <div className="empty-state"><p>이 유형의 리뷰가 없어요.</p></div>}
 
-      {visible.map((r) => (
-        <ReviewCard key={r.id} review={r} onUpdated={replace} toast={toast} />
-      ))}
+      <div className="rail">
+        {visible.map((r) => (
+          <Ticket key={r.id} review={r} onUpdated={replace} toast={toast} />
+        ))}
+      </div>
     </>
   );
 }
 
-function Chip({ active, onClick, children }) {
+function FilterChip({ active, onClick, label, count, type }) {
   return (
-    <button className="chip" aria-pressed={active} onClick={onClick}>{children}</button>
+    <button className={`chip ${type ? `chip-${type}` : ''}`} aria-pressed={active} onClick={onClick}>
+      {label}<span className="chip-count">{count}</span>
+    </button>
   );
 }
 
-function ReviewCard({ review: r, onUpdated, toast }) {
+function timeOf(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function Ticket({ review: r, onUpdated, toast }) {
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState(null);
   const failed = r.status === 'FAILED';
@@ -110,50 +130,62 @@ function ReviewCard({ review: r, onUpdated, toast }) {
   }
 
   return (
-    <article className={`card ${r.type === 'MALICIOUS' ? 'is-malicious' : ''} ${failed ? 'is-failed' : ''}`}>
-      <div className="meta">
-        <span className="stars" aria-label={`별점 ${r.rating}점`}>{stars(r.rating)}</span>
-        {r.type && <span className={`badge t-${r.type}`}>{TYPE_LABEL[r.type]}</span>}
-        {r.sentiment && !failed && <span>{SENTIMENT_LABEL[r.sentiment]}</span>}
-        <span>{PLATFORM_LABEL[r.platform]}</span>
-        {r.keywords.length > 0 && <span className="kw">#{r.keywords.join(' #')}</span>}
-        {r.confidence != null && r.type !== 'RATING_ONLY' && !failed && (
-          <span className="mono">확신도 {Math.round(r.confidence * 100)}%</span>
-        )}
-      </div>
+    <article className={`ticket ${failed ? 'is-failed' : `is-${r.type}`}`}>
+      <header className="ticket-head">
+        <div className="ticket-meta">
+          <span className="stars" role="img" aria-label={`별점 ${r.rating}점`}>{stars(r.rating)}</span>
+          <span>{PLATFORM_LABEL[r.platform]}</span>
+          <time dateTime={r.createdAt}>{timeOf(r.createdAt)}</time>
+        </div>
+        <span className={`stamp stamp-${failed ? 'FAILED' : r.type}`}>{failed ? '분류 실패' : TYPE_LABEL[r.type]}</span>
+      </header>
 
       <p className={`review-text ${r.maskedContent ? '' : 'empty'}`}>
         {r.maskedContent ? <Masked text={r.maskedContent} /> : '본문 없이 별점만 남긴 리뷰'}
       </p>
 
+      {!failed && (r.keywords.length > 0 || (r.type !== 'RATING_ONLY' && r.sentiment)) && (
+        <ul className="ticket-tags" aria-label="분류 정보">
+          {r.keywords.map((k) => <li key={k} className="kw">#{k}</li>)}
+          {r.type !== 'RATING_ONLY' && r.sentiment && <li className={`mood mood-${r.sentiment}`}>{SENTIMENT_LABEL[r.sentiment]}</li>}
+          {r.type !== 'RATING_ONLY' && r.confidence != null && (
+            <li className="confidence">확신도 {Math.round(r.confidence * 100)}%</li>
+          )}
+        </ul>
+      )}
+
       {failed && (
-        <div className="actions">
-          <span className="error-text">
+        <div className="ticket-alert">
+          <span>
             {r.failureCode === 'LLM_NOT_CONFIGURED'
-              ? 'Claude API 키가 설정되지 않아 분류하지 못했어요.'
+              ? 'Claude API 키가 설정되지 않아 분류하지 못했어요. backend/.env 를 확인해주세요.'
               : retryError ?? 'AI 응답을 받지 못해 분류하지 못했어요.'}
           </span>
           <button className="btn small" onClick={retry} disabled={retrying}>
-            {retrying && <Spinner />} 다시 시도
+            {retrying && <Spinner />}다시 분류
           </button>
         </div>
       )}
 
       {r.replies.map((reply) => (
-        <TemplateReply key={reply.id} reply={reply} toast={toast} />
+        <TemplateReply key={reply.id} reply={reply} toast={toast}
+                       onCopied={(text) => onUpdated({
+                         ...r,
+                         replies: r.replies.map((p) => (p.id === reply.id ? { ...p, selected: true, editedContent: text } : p)),
+                       })} />
       ))}
 
       {!failed && r.type === 'MALICIOUS' && (
-        <p className="note">감정적으로 답하기 전에 대응 방향부터 정해요. 악성 리뷰 대응 가이드는 다음 업데이트에서 추가돼요.</p>
+        <p className="ticket-note">바로 답하지 말고 대응 방향부터 정해요. 악성 리뷰 대응 가이드는 다음 업데이트에서 열려요.</p>
       )}
       {!failed && ['PRAISE', 'COMPLAINT', 'INQUIRY'].includes(r.type) && r.replies.length === 0 && (
-        <p className="note">가게 말투로 쓴 답글 초안 3종은 다음 업데이트에서 추가돼요.</p>
+        <p className="ticket-note">가게 말투로 쓴 답글 초안 3종은 다음 업데이트에서 열려요.</p>
       )}
     </article>
   );
 }
 
-function TemplateReply({ reply, toast }) {
+function TemplateReply({ reply, toast, onCopied }) {
   const [text, setText] = useState(reply.editedContent ?? reply.content);
   const [editing, setEditing] = useState(false);
   const [copied, setCopied] = useState(reply.selected);
@@ -167,6 +199,7 @@ function TemplateReply({ reply, toast }) {
     }
     setCopied(true);
     setEditing(false);
+    onCopied(text);
     try {
       await api.selectReply(reply.id, text);
     } catch {
@@ -176,18 +209,18 @@ function TemplateReply({ reply, toast }) {
 
   return (
     <div className="reply-block">
+      <p className="reply-label">답글 초안 <span>별점 템플릿, 확인 후 사용</span></p>
       {editing ? (
         <textarea aria-label="답글 수정" className="reply-edit" value={text} rows={3}
                   onChange={(e) => setText(e.target.value)} />
       ) : (
         <p className="reply">{text}</p>
       )}
-      <div className="actions">
-        <span className="sim">AI 없이 별점 템플릿으로 만든 초안이에요. 확인 후 사용해주세요</span>
-        <div className="row tight">
-          <button className="btn small" onClick={() => setEditing(!editing)}>{editing ? '수정 완료' : '수정'}</button>
-          <button className="btn small primary" onClick={copy}>{copied ? '복사 완료' : '복사'}</button>
-        </div>
+      <div className="reply-actions">
+        <button className="btn small ghost" onClick={() => setEditing(!editing)}>{editing ? '수정 완료' : '수정'}</button>
+        <button className={`btn small ${copied ? 'done' : 'primary'}`} onClick={copy}>
+          {copied ? '복사함' : '복사'}
+        </button>
       </div>
     </div>
   );
@@ -196,5 +229,5 @@ function TemplateReply({ reply, toast }) {
 /** [전화번호] 같은 가림 표시를 눈에 띄게 */
 function Masked({ text }) {
   const parts = text.split(/(\[(?:전화번호|이메일|주소|주문번호|번호)\])/g);
-  return parts.map((p, i) => (/^\[.+\]$/.test(p) ? <span key={i} className="mask">{p}</span> : p));
+  return parts.map((p, i) => (/^\[.+\]$/.test(p) ? <span key={i} className="mask">{p.slice(1, -1)} 가림</span> : p));
 }

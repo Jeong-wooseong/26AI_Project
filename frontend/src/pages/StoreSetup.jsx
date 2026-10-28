@@ -89,14 +89,14 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
 
   return (
     <>
-      <div className="head">
-        <div>
-          <h1>가게 설정</h1>
+      <div className="page-head">
+        <div className="page-title">
+          <h1 className="display">가게 설정</h1>
           <p>예전에 직접 쓴 답글로 가게 말투를 만들어요. 한 번 저장하면 모든 답글에 반영돼요.</p>
         </div>
       </div>
 
-      {error && <p className="error-box" role="alert">{error}</p>}
+      {error && <div className="error-box" role="alert"><span>{error}</span></div>}
 
       <form className="panel" onSubmit={saveStore}>
         <h2>가게 정보</h2>

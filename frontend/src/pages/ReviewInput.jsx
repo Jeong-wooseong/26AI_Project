@@ -50,14 +50,14 @@ export default function ReviewInput({ store, toast, go }) {
 
   return (
     <>
-      <div className="head">
-        <div>
-          <h1>리뷰 입력</h1>
+      <div className="page-head">
+        <div className="page-title">
+          <h1 className="display">리뷰 입력</h1>
           <p>배달앱·지도에서 오늘 리뷰를 복사해 붙여넣어 주세요. 본문을 비우면 평점만 리뷰로 처리해요.</p>
         </div>
       </div>
 
-      {error && <p className="error-box" role="alert">{error}</p>}
+      {error && <div className="error-box" role="alert"><span>{error}</span></div>}
 
       <form className="panel" onSubmit={submit}>
         <div className="field" style={{ maxWidth: 240 }}>
