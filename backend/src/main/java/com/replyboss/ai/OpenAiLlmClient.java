@@ -12,6 +12,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -27,6 +28,9 @@ import java.util.Map;
 public class OpenAiLlmClient implements LlmClient {
 
     private static final Logger log = LoggerFactory.getLogger(OpenAiLlmClient.class);
+
+    /** 잘림(finish_reason=length) 때 늘려 줄 수 있는 최대 토큰 한도 */
+    static final int MAX_COMPLETION_TOKENS_CAP = 8000;
 
     private final OpenAiProperties props;
     private final ObjectMapper objectMapper;
@@ -51,10 +55,10 @@ public class OpenAiLlmClient implements LlmClient {
     public JsonNode generateJson(LlmRequest request) {
         if (!props.hasApiKey()) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "LLM_NOT_CONFIGURED",
-                    "OpenAI API 키가 설정되지 않았어요. backend/.env 의 OPENAI_API_KEY 를 확인해주세요.");
+                    "OpenAI API 키가 설정되지 않았습니다. backend/.env의 OPENAI_API_KEY를 확인하십시오.");
         }
 
-        Map<String, Object> body = buildBody(request);
+        int maxTokens = request.maxTokens();
         int attempts = 1 + Math.max(0, props.maxRetries());
         RuntimeException last = null;
 
@@ -63,26 +67,53 @@ public class OpenAiLlmClient implements LlmClient {
                 JsonNode response = restClient.post()
                         .uri("/v1/chat/completions")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .body(body)
+                        .body(buildBody(request, maxTokens))
                         .retrieve()
                         .body(JsonNode.class);
                 return extractJson(response);
+            } catch (LlmTruncatedException e) {
+                last = e;
+                int next = Math.min(maxTokens * 2, MAX_COMPLETION_TOKENS_CAP);
+                log.warn("OpenAI 호출 실패 ({}/{}): {} (한도 {} → {} 로 다시 시도)", i, attempts, e.getMessage(), maxTokens, next);
+                if (next > maxTokens) {
+                    maxTokens = next;
+                    // 한도를 늘린 재시도는 재시도 횟수에 넣지 않는다 (같은 한도로는 같은 결과가 나오므로)
+                    if (i == attempts) {
+                        attempts++;
+                    }
+                }
+            } catch (RestClientResponseException e) {
+                last = e;
+                log.warn("OpenAI 호출 실패 ({}/{}): HTTP {} {}", i, attempts, e.getStatusCode().value(), abbreviate(e.getResponseBodyAsString()));
             } catch (RestClientException | LlmException e) {
                 last = e;
                 log.warn("OpenAI 호출 실패 ({}/{}): {}", i, attempts, e.getMessage());
             }
         }
-        throw new LlmException("OpenAI 호출이 " + attempts + "회 모두 실패했습니다", last);
+        throw new LlmException("OpenAI 호출이 " + attempts + "회 모두 실패했습니다 (마지막 원인: "
+                + (last == null ? "알 수 없음" : last.getMessage()) + ")", last);
+    }
+
+    private static String abbreviate(String text) {
+        if (text == null) {
+            return "";
+        }
+        String oneLine = text.replaceAll("\\s+", " ").strip();
+        return oneLine.length() > 300 ? oneLine.substring(0, 300) + "…" : oneLine;
     }
 
     Map<String, Object> buildBody(LlmRequest request) {
+        return buildBody(request, request.maxTokens());
+    }
+
+    Map<String, Object> buildBody(LlmRequest request, int maxTokens) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", request.model());
         body.put("messages", List.of(
                 Map.of("role", "system", "content", request.system()),
                 Map.of("role", "user", "content", request.user())
         ));
-        body.put("max_completion_tokens", request.maxTokens());
+        body.put("max_completion_tokens", maxTokens);
         body.put("response_format", Map.of(
                 "type", "json_schema",
                 "json_schema", Map.of(
@@ -108,7 +139,7 @@ public class OpenAiLlmClient implements LlmClient {
         }
         String finishReason = choice.path("finish_reason").asText("");
         if ("length".equals(finishReason)) {
-            throw new LlmException("응답이 max_completion_tokens 에서 잘렸습니다");
+            throw new LlmTruncatedException("응답이 max_completion_tokens 에서 잘렸습니다");
         }
         String content = message.path("content").asText("");
         if (content.isBlank()) {

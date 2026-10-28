@@ -16,6 +16,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -76,6 +77,10 @@ public class Review {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    /** 고객이 리뷰를 쓴 날짜 (일괄 가져오기에서 알 수 있을 때만, 없으면 null). 등록일은 createdAt. */
+    @Column(name = "written_on")
+    private LocalDate writtenOn;
+
     protected Review() {
     }
 
@@ -114,9 +119,17 @@ public class Review {
         this.failureCode = null;
     }
 
+    public void recordWrittenOn(LocalDate date) {
+        this.writtenOn = date;
+    }
+
     public void markFailed(String code) {
         this.status = ReviewStatus.FAILED;
         this.failureCode = code;
+    }
+
+    public LocalDate getWrittenOn() {
+        return writtenOn;
     }
 
     public Long getId() {

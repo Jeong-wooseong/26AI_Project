@@ -59,6 +59,6 @@ class OpenAiLlmClientTest {
                 """))).isInstanceOf(LlmException.class);
         assertThatThrownBy(() -> client("").extractJson(mapper.readTree("""
                 {"choices":[{"finish_reason":"length","message":{"refusal":null,"content":"{\\"ty"}}]}
-                """))).isInstanceOf(LlmException.class);
+                """))).isInstanceOf(LlmTruncatedException.class);
     }
 }

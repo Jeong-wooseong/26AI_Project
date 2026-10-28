@@ -27,7 +27,7 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
   async function saveStore(e) {
     e.preventDefault();
     if (!name.trim()) {
-      setNameError('가게 이름을 입력해주세요.');
+      setNameError('매장명을 입력하십시오.');
       nameRef.current?.focus();
       return;
     }
@@ -38,7 +38,7 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
       const body = { name: name.trim(), category };
       const saved = store ? await api.updateStore(store.id, body) : await api.createStore(body);
       onSaved(saved);
-      toast.show(store ? '가게 정보를 저장했어요' : '가게를 등록했어요. 이제 말투를 설정해주세요');
+      toast.show(store ? '매장 정보가 저장되었습니다.' : '매장이 등록되었습니다. 예시 답글을 등록하십시오.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -48,14 +48,14 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
 
   async function extract() {
     if (filledSamples.length < MIN_SAMPLES) {
-      setError(`예시 답글을 ${MIN_SAMPLES}개 이상 입력해주세요.`);
+      setError(`예시 답글은 최소 ${MIN_SAMPLES}개가 필요합니다.`);
       return;
     }
     setBusy('extract');
     setError(null);
     try {
       setTone(await api.extractTone(store.id, filledSamples));
-      toast.show('말투를 분석했어요. 확인 후 저장해주세요');
+      toast.show('답글 스타일 분석 완료. 결과 확인 후 저장하십시오.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -71,10 +71,10 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
       const saved = await api.saveTone(store.id, tone, filledSamples);
       onSaved(saved);
       if (firstTime) {
-        toast.show('톤 프로필을 저장했어요. 이제 리뷰를 입력해보세요');
+        toast.show('답글 스타일이 저장되었습니다.');
         go('input');
       } else {
-        toast.show('톤 프로필을 저장했어요');
+        toast.show('답글 스타일이 저장되었습니다.');
       }
     } catch (err) {
       setError(err.message);
@@ -95,8 +95,8 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
   return (
     <>
       <PageHeader
-        title="가게 설정"
-        description="예전에 직접 쓴 답글로 가게 말투를 만들어요. 한 번 저장하면 모든 답글 초안에 반영돼요."
+        title="매장 설정"
+        description="매장 정보와 답글 작성에 사용할 기본 설정을 관리합니다."
       />
 
       {error && <Alert>{error}</Alert>}
@@ -105,16 +105,16 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
         as="form"
         onSubmit={saveStore}
         noValidate
-        title="가게 정보"
-        description="답글에 쓰일 가게 이름과 업종이에요."
+        title="매장 정보"
+        description="매장명과 업종을 설정합니다."
         footer={
           <PrimaryButton type="submit" icon="save" loading={busy === 'store'}>
-            {store ? '가게 정보 저장' : '가게 등록'}
+            {store ? '설정 저장' : '매장 등록'}
           </PrimaryButton>
         }
       >
         <div className="grid-2">
-          <FormInput id="storeName" label="가게 이름" ref={nameRef} value={name} placeholder="예: 리플라이 커피"
+          <FormInput id="storeName" label="매장명" ref={nameRef} value={name} placeholder="예: 리플라이 커피"
                      maxLength={100} error={nameError}
                      onChange={(e) => { setName(e.target.value); if (nameError) setNameError(null); }} />
           <FormSelect id="storeCategory" label="업종" value={category} options={CATEGORIES}
@@ -125,18 +125,18 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
       {store && (
         <SectionCard
           title="예시 답글"
-          description={`예전에 직접 쓴 답글을 ${MIN_SAMPLES}~${MAX_SAMPLES}개 넣어 주세요. 말투 분석에만 쓰여요.`}
+          description={`기존 답글을 등록하면 AI가 매장의 응대 스타일을 반영합니다. (${MIN_SAMPLES}~${MAX_SAMPLES}개)`}
           aside={<span className="hint">{filledSamples.length} / {MAX_SAMPLES}개</span>}
           footerStart={
             <SecondaryButton icon="add" disabled={samples.length >= MAX_SAMPLES}
                              onClick={() => setSamples([...samples, ''])}>
-              예시 추가
+              예시 답글 추가
             </SecondaryButton>
           }
           footer={
             <PrimaryButton icon="analyze" onClick={extract} loading={busy === 'extract'} loadingText="분석 중"
                            disabled={filledSamples.length < MIN_SAMPLES}>
-              말투 분석하기
+              답글 스타일 분석
             </PrimaryButton>
           }
         >
@@ -159,17 +159,17 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
 
       {store && tone && (
         <SectionCard
-          title="톤 프로필"
-          description="분석 결과예요. 직접 고친 뒤 저장할 수 있어요."
+          title="답글 스타일"
+          description="분석 결과입니다. 항목별로 수정한 뒤 저장할 수 있습니다."
           footerStart={
-            <span className="hint">{store.toneProfile ? '저장된 톤 프로필이 있어요' : '아직 저장하지 않았어요'}</span>
+            <span className="hint">{store.toneProfile ? '저장된 스타일 있음' : '저장 전'}</span>
           }
           footer={
             <>
               {store.toneProfile && (
-                <SecondaryButton tone="neutral" onClick={() => go('input')}>리뷰 입력하러 가기</SecondaryButton>
+                <SecondaryButton tone="neutral" onClick={() => go('input')}>리뷰 입력으로 이동</SecondaryButton>
               )}
-              <PrimaryButton icon="save" onClick={saveTone} loading={busy === 'tone'}>톤 프로필 저장</PrimaryButton>
+              <PrimaryButton icon="save" onClick={saveTone} loading={busy === 'tone'}>스타일 저장</PrimaryButton>
             </>
           }
         >
@@ -187,7 +187,7 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
           <div className="field">
             <label className="label" htmlFor="newPhrase">자주 쓰는 표현</label>
             <div className="tags">
-              {tone.phrases.length === 0 && <span className="hint">아직 없어요</span>}
+              {tone.phrases.length === 0 && <span className="hint">등록된 표현 없음</span>}
               {tone.phrases.map((p) => (
                 <span className="tag" key={p}>
                   {p}
@@ -203,7 +203,7 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
               <SecondaryButton tone="neutral" icon="add" onClick={addPhrase} disabled={!newPhrase.trim()}>추가</SecondaryButton>
             </div>
           </div>
-          <FormInput id="closing" label="마무리 인사" value={tone.closing} placeholder="없으면 비워 두세요"
+          <FormInput id="closing" label="마무리 인사" value={tone.closing} placeholder="선택 입력"
                      onChange={(e) => updateTone({ closing: e.target.value })} />
           <div className="field">
             <span className="label">미리보기</span>

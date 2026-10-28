@@ -1,5 +1,7 @@
 package com.replyboss.review;
 
+import com.replyboss.review.ReviewDtos.DuplicateCheckRequest;
+import com.replyboss.review.ReviewDtos.DuplicateCheckResponse;
 import com.replyboss.review.ReviewDtos.ReviewBatchRequest;
 import com.replyboss.review.ReviewDtos.ReviewResponse;
 import jakarta.validation.Valid;
@@ -30,6 +32,12 @@ public class ReviewController {
     @ResponseStatus(HttpStatus.CREATED)
     public List<ReviewResponse> create(@PathVariable Long storeId, @Valid @RequestBody ReviewBatchRequest request) {
         return reviewService.createBatch(storeId, request);
+    }
+
+    /** 일괄 등록 전 중복 확인 (저장하지 않음) */
+    @PostMapping("/api/stores/{storeId}/reviews/duplicate-check")
+    public DuplicateCheckResponse duplicateCheck(@PathVariable Long storeId, @Valid @RequestBody DuplicateCheckRequest request) {
+        return new DuplicateCheckResponse(reviewService.findDuplicates(storeId, request));
     }
 
     @GetMapping("/api/stores/{storeId}/reviews")

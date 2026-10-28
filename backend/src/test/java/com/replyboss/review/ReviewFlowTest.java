@@ -5,6 +5,8 @@ import com.replyboss.ai.LlmClient;
 import com.replyboss.ai.LlmException;
 import com.replyboss.ai.LlmRequest;
 import com.replyboss.reply.ReplyTone;
+import com.replyboss.review.ReviewDtos.DuplicateCheckItem;
+import com.replyboss.review.ReviewDtos.DuplicateCheckRequest;
 import com.replyboss.review.ReviewDtos.ReviewBatchRequest;
 import com.replyboss.review.ReviewDtos.ReviewItem;
 import com.replyboss.review.ReviewDtos.ReviewResponse;
@@ -131,5 +133,33 @@ class ReviewFlowTest {
         assertThat(reviewService.list(storeId, LocalDate.now(), ReviewType.PRAISE)).hasSize(1);
         assertThat(reviewService.list(storeId, LocalDate.now().minusDays(1), null)).isEmpty();
         verify(llmClient, times(1)).generateJson(any());
+    }
+
+    @Test
+    void 작성일을_함께_저장하고_돌려준다() {
+        LocalDate written = LocalDate.now().minusDays(3);
+        ReviewResponse r = reviewService.createBatch(storeId, new ReviewBatchRequest(
+                Platform.YOGIYO, List.of(new ReviewItem(4, "", written)))).get(0);
+
+        assertThat(r.writtenAt()).isEqualTo(written);
+        assertThat(reviewService.list(storeId, LocalDate.now(), null).get(0).writtenAt()).isEqualTo(written);
+    }
+
+    @Test
+    void 이미_등록된_본문은_마스킹_후_같은_출처에서만_중복으로_찾는다() throws Exception {
+        when(llmClient.generateJson(any())).thenReturn(mapper.readTree("""
+                {"type":"COMPLAINT","sentiment":"NEGATIVE","keywords":["배달"],"confidence":0.9}
+                """));
+        reviewService.createBatch(storeId, new ReviewBatchRequest(Platform.BAEMIN, List.of(
+                new ReviewItem(2, "배달이 늦었어요 010-1111-2222"),
+                new ReviewItem(5, ""))));
+
+        List<Integer> dup = reviewService.findDuplicates(storeId, new DuplicateCheckRequest(List.of(
+                new DuplicateCheckItem(Platform.BAEMIN, "배달이 늦었어요 010-3333-4444"), // 마스킹하면 같은 본문
+                new DuplicateCheckItem(Platform.COUPANG_EATS, "배달이 늦었어요 010-1111-2222"), // 출처가 다름
+                new DuplicateCheckItem(Platform.BAEMIN, ""), // 별점만은 구별 불가 → 중복 아님
+                new DuplicateCheckItem(Platform.BAEMIN, "처음 보는 리뷰"))));
+
+        assertThat(dup).containsExactly(0);
     }
 }

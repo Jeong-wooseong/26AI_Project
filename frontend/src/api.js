@@ -17,7 +17,7 @@ async function request(method, path, body) {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new ApiError('NETWORK', '서버에 연결할 수 없어요. 백엔드가 실행 중인지 확인해주세요.', 0);
+    throw new ApiError('NETWORK', '서버에 연결할 수 없습니다. 백엔드 실행 상태를 확인하십시오.', 0);
   }
   const text = await res.text();
   let data = null;
@@ -25,10 +25,10 @@ async function request(method, path, body) {
     data = text ? JSON.parse(text) : null;
   } catch {
     // 백엔드가 꺼져 있으면 개발 서버 프록시가 JSON 이 아닌 오류를 돌려준다
-    throw new ApiError('NETWORK', '서버에 연결할 수 없어요. 백엔드가 실행 중인지 확인해주세요.', res.status);
+    throw new ApiError('NETWORK', '서버에 연결할 수 없습니다. 백엔드 실행 상태를 확인하십시오.', res.status);
   }
   if (!res.ok) {
-    throw new ApiError(data?.code ?? 'UNKNOWN', data?.message ?? `요청에 실패했어요 (${res.status})`, res.status);
+    throw new ApiError(data?.code ?? 'UNKNOWN', data?.message ?? `요청 실패 (${res.status})`, res.status);
   }
   return data;
 }

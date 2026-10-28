@@ -54,21 +54,21 @@ public class StoreService {
     }
 
     public Store get(Long id) {
-        return storeRepository.findById(id).orElseThrow(() -> ApiException.notFound("가게"));
+        return storeRepository.findById(id).orElseThrow(() -> ApiException.notFound("매장"));
     }
 
     private void validate(ToneProfile tone) {
         if (!ToneProfile.FORMALITIES.contains(tone.formality())) {
-            throw ApiException.badRequest("INVALID_TONE", "존댓말 수준은 " + ToneProfile.FORMALITIES + " 중 하나여야 해요.");
+            throw ApiException.badRequest("INVALID_TONE", "존댓말 수준은 " + ToneProfile.FORMALITIES + " 중 하나여야 합니다.");
         }
         if (!ToneProfile.EMOJI_LEVELS.contains(tone.emojiLevel())) {
-            throw ApiException.badRequest("INVALID_TONE", "이모지 빈도는 " + ToneProfile.EMOJI_LEVELS + " 중 하나여야 해요.");
+            throw ApiException.badRequest("INVALID_TONE", "이모지 빈도는 " + ToneProfile.EMOJI_LEVELS + " 중 하나여야 합니다.");
         }
         if (!ToneProfile.LENGTHS.contains(tone.length())) {
-            throw ApiException.badRequest("INVALID_TONE", "문장 길이는 " + ToneProfile.LENGTHS + " 중 하나여야 해요.");
+            throw ApiException.badRequest("INVALID_TONE", "문장 길이는 " + ToneProfile.LENGTHS + " 중 하나여야 합니다.");
         }
         if (tone.phrases().size() > 8) {
-            throw ApiException.badRequest("INVALID_TONE", "자주 쓰는 표현은 8개까지 저장할 수 있어요.");
+            throw ApiException.badRequest("INVALID_TONE", "자주 쓰는 표현은 최대 8개까지 저장할 수 있습니다.");
         }
     }
 

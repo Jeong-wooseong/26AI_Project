@@ -64,7 +64,7 @@ export default function ReviewList({ store, toast, go }) {
     <>
       <PageHeader
         title={isToday ? '오늘의 리뷰' : '지난 리뷰'}
-        description="리뷰를 유형별로 나누고 답글 초안을 준비했어요. 확인한 뒤 복사해서 배달앱에 붙여 넣어 주세요."
+        description="등록된 리뷰의 분류 결과와 답글 초안을 확인합니다."
         actions={<PrimaryButton icon="add" onClick={() => go('input')}>리뷰 입력</PrimaryButton>}
       />
 
@@ -72,8 +72,8 @@ export default function ReviewList({ store, toast, go }) {
         <FormInput id="reviewDate" label="날짜" hideLabel type="date" icon="calendar" fieldClassName="filter-date"
                    value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)}
                    onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* 지원하지 않는 브라우저는 직접 입력 */ } }} />
-        <FormSelect id="platformFilter" label="플랫폼" hideLabel value={platform}
-                    options={[['ALL', '전체 플랫폼'], ...usedPlatforms]} onChange={(e) => setPlatform(e.target.value)} />
+        <FormSelect id="platformFilter" label="리뷰 출처" hideLabel value={platform}
+                    options={[['ALL', '전체 출처'], ...usedPlatforms]} onChange={(e) => setPlatform(e.target.value)} />
         <FormSelect id="typeFilter" label="유형" hideLabel value={filter} options={typeOptions}
                     onChange={(e) => setFilter(e.target.value)} />
       </div>
@@ -96,18 +96,18 @@ export default function ReviewList({ store, toast, go }) {
       {reviews === null && !error && <EmptyState loading description="불러오는 중" />}
       {reviews && reviews.length === 0 && (
         <EmptyState
-          title={isToday ? '아직 입력한 리뷰가 없어요' : '이날은 리뷰가 없어요'}
-          description="배달앱이나 지도에서 리뷰를 복사해 붙여 넣으면 유형별로 나눠 드려요."
-          action={<PrimaryButton icon="add" onClick={() => go('input')}>리뷰 입력하기</PrimaryButton>}
+          title={isToday ? '등록된 리뷰 없음' : '해당 날짜의 리뷰 없음'}
+          description="리뷰 입력 메뉴에서 리뷰를 등록하면 유형별로 분류됩니다."
+          action={<PrimaryButton icon="add" onClick={() => go('input')}>리뷰 등록</PrimaryButton>}
         />
       )}
-      {all.length > 0 && visible.length === 0 && <EmptyState description="조건에 맞는 리뷰가 없어요." />}
+      {all.length > 0 && visible.length === 0 && <EmptyState description="조건에 맞는 리뷰가 없습니다." />}
 
       {visible.length > 0 && (
         <div className="review-table" role="table" aria-label="리뷰 목록">
           <div className="rt-row rt-head" role="row">
             <span role="columnheader">번호</span>
-            <span role="columnheader">플랫폼</span>
+            <span role="columnheader">출처</span>
             <span role="columnheader">별점</span>
             <span role="columnheader">리뷰 내용</span>
             <span role="columnheader">분류</span>
@@ -160,7 +160,7 @@ function Ticket({ no, review: r, onUpdated, toast }) {
     setRetryError(null);
     try {
       onUpdated(await api.reclassify(r.id));
-      toast.show('다시 분류했어요');
+      toast.show('재분류 완료');
     } catch (e) {
       setRetryError(e.message);
     } finally {
@@ -178,7 +178,7 @@ function Ticket({ no, review: r, onUpdated, toast }) {
 
       <div className="rt-content" role="cell">
         <p className={`review-text ${r.maskedContent ? '' : 'is-empty'}`}>
-          {r.maskedContent ? <Masked text={r.maskedContent} /> : '본문 없이 별점만 남긴 리뷰'}
+          {r.maskedContent ? <Masked text={r.maskedContent} /> : '(본문 없음 · 별점만 등록)'}
         </p>
         <p className="meta">
           <time dateTime={r.createdAt}>{timeOf(r.createdAt)}</time>
@@ -195,7 +195,7 @@ function Ticket({ no, review: r, onUpdated, toast }) {
       <span className="rt-type" role="cell">
         <span className="cell-label">분류</span>
         {failed
-          ? <StatusIndicator tone="danger">실패</StatusIndicator>
+          ? <StatusIndicator tone="danger">미분류</StatusIndicator>
           : <StatusIndicator tone={TYPE_TONE[r.type]}>{TYPE_LABEL[r.type]}</StatusIndicator>}
       </span>
       <span className="rt-status" role="cell">
@@ -205,14 +205,14 @@ function Ticket({ no, review: r, onUpdated, toast }) {
       {failed && (
         <div className="rt-actions" role="cell">
           <IconButton icon={retrying ? 'loading' : 'retry'} className={retrying ? 'is-loading' : undefined}
-                      label="다시 분류" onClick={retry} disabled={retrying} />
+                      label="재분류" onClick={retry} disabled={retrying} />
         </div>
       )}
       {failed && (
         <p className="rt-error">
           {r.failureCode === 'LLM_NOT_CONFIGURED'
-            ? 'OpenAI API 키가 설정되지 않아 분류하지 못했어요. backend/.env 의 OPENAI_API_KEY 를 확인해 주세요.'
-            : retryError ?? 'AI 응답을 받지 못해 분류하지 못했어요. 오른쪽 버튼으로 다시 분류해 주세요.'}
+            ? 'OpenAI API 키 미설정. backend/.env의 OPENAI_API_KEY를 확인하십시오.'
+            : retryError ?? 'AI 응답 수신 실패. 재분류 버튼으로 다시 시도할 수 있습니다.'}
         </p>
       )}
 
@@ -225,10 +225,10 @@ function Ticket({ no, review: r, onUpdated, toast }) {
       ))}
 
       {!failed && r.type === 'MALICIOUS' && (
-        <p className="rt-reply hint">바로 답하지 말고 대응 방향부터 정해요. 악성 리뷰 대응 가이드는 다음 업데이트에서 열려요.</p>
+        <p className="rt-reply hint">악성 리뷰: 즉시 답글보다 대응 방향 검토를 권장합니다. (대응 가이드 준비 중)</p>
       )}
       {!failed && ['PRAISE', 'COMPLAINT', 'INQUIRY'].includes(r.type) && r.replies.length === 0 && (
-        <p className="rt-reply hint">가게 말투로 쓴 답글 초안 3종은 다음 업데이트에서 열려요.</p>
+        <p className="rt-reply hint">맞춤 답글 초안 생성 기능 준비 중</p>
       )}
     </div>
   );
@@ -246,9 +246,9 @@ function TemplateReply({ reply, toast, onCopied }) {
   async function copy() {
     try {
       await navigator.clipboard.writeText(text);
-      toast.show('답글을 복사했어요');
+      toast.show('복사 완료');
     } catch {
-      toast.show('복사가 막혀 있어요. 답글을 직접 선택해 복사해 주세요');
+      toast.show('클립보드 접근이 차단되었습니다. 답글을 직접 선택해 복사하십시오.');
     }
     setCopied(true);
     setEditing(false);
@@ -263,13 +263,13 @@ function TemplateReply({ reply, toast, onCopied }) {
   return (
     <>
       <div className="rt-actions" role="cell">
-        <IconButton icon={editing ? 'confirm' : 'edit'} label={editing ? '답글 수정 완료' : '답글 수정'}
+        <IconButton icon={editing ? 'confirm' : 'edit'} label={editing ? '수정 완료' : '답글 수정'}
                     aria-pressed={editing} onClick={() => setEditing(!editing)} />
         <IconButton icon={copied ? 'confirm' : 'copy'} tone={copied ? 'success' : undefined}
-                    label={copied ? '답글 다시 복사 (복사함)' : '답글 복사'} onClick={copy} />
+                    label={copied ? '복사 완료 · 다시 복사' : '답글 복사'} onClick={copy} />
       </div>
       <div className="rt-reply">
-        <span className="ai-label">AI 답글 초안 · 별점 템플릿, 확인 후 사용</span>
+        <span className="ai-label">AI 답글 초안 · 별점 템플릿 (게시 전 확인 필요)</span>
         {editing ? (
           <div className="rt-edit">
             <FormInput multiline aria-label="답글 수정" value={text} rows={3} onChange={(e) => setText(e.target.value)} />

@@ -15,23 +15,23 @@ public final class StoreDtos {
     }
 
     public record StoreRequest(
-            @NotBlank(message = "가게 이름을 입력해주세요.")
-            @Size(max = 100, message = "가게 이름은 100자 이내로 입력해주세요.")
+            @NotBlank(message = "매장명을 입력하십시오.")
+            @Size(max = 100, message = "매장명은 100자 이내여야 합니다.")
             String name,
-            @Size(max = 50, message = "업종은 50자 이내로 입력해주세요.")
+            @Size(max = 50, message = "업종은 50자 이내여야 합니다.")
             String category
     ) {
     }
 
     public record ToneExtractRequest(
-            @NotNull(message = "예시 답글을 입력해주세요.")
-            @Size(min = 3, max = 5, message = "예시 답글은 3~5개 입력해주세요.")
-            List<@NotBlank(message = "비어 있는 예시 답글이 있어요.") String> sampleReplies
+            @NotNull(message = "예시 답글을 입력하십시오.")
+            @Size(min = 3, max = 5, message = "예시 답글은 3~5개가 필요합니다.")
+            List<@NotBlank(message = "비어 있는 예시 답글이 있습니다.") String> sampleReplies
     ) {
     }
 
     public record ToneUpdateRequest(
-            @NotNull(message = "톤 프로필이 없어요.") @Valid ToneProfile toneProfile,
+            @NotNull(message = "답글 스타일 정보가 없습니다.") @Valid ToneProfile toneProfile,
             List<String> sampleReplies
     ) {
     }

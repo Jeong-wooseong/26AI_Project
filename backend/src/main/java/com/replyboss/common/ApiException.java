@@ -17,7 +17,7 @@ public class ApiException extends RuntimeException {
     }
 
     public static ApiException notFound(String what) {
-        return new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", what + "을(를) 찾을 수 없어요.");
+        return new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", what + "을(를) 찾을 수 없습니다.");
     }
 
     public static ApiException badRequest(String code, String message) {

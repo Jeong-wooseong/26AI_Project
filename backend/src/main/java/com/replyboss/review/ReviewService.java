@@ -7,6 +7,8 @@ import com.replyboss.masking.MaskingService;
 import com.replyboss.reply.RatingOnlyReplyService;
 import com.replyboss.reply.Reply;
 import com.replyboss.reply.ReplyRepository;
+import com.replyboss.review.ReviewDtos.DuplicateCheckItem;
+import com.replyboss.review.ReviewDtos.DuplicateCheckRequest;
 import com.replyboss.review.ReviewDtos.ReviewBatchRequest;
 import com.replyboss.review.ReviewDtos.ReviewItem;
 import com.replyboss.review.ReviewDtos.ReviewResponse;
@@ -69,7 +71,9 @@ public class ReviewService {
 
     private ReviewResponse createOne(Store store, ToneProfile tone, Platform platform, ReviewItem item) {
         String masked = maskingService.mask(item.content());
-        Review review = reviewRepository.save(new Review(store, platform, item.rating(), masked));
+        Review newReview = new Review(store, platform, item.rating(), masked);
+        newReview.recordWrittenOn(item.writtenAt());
+        Review review = reviewRepository.save(newReview);
 
         if (!review.hasContent()) {
             review.markRatingOnly();
@@ -99,7 +103,7 @@ public class ReviewService {
     public ReviewResponse reclassify(Long reviewId) {
         Review review = reviewRepository.findById(reviewId).orElseThrow(() -> ApiException.notFound("리뷰"));
         if (!review.hasContent()) {
-            throw ApiException.badRequest("RATING_ONLY", "본문이 없는 리뷰는 별점 규칙으로 분류돼요.");
+            throw ApiException.badRequest("RATING_ONLY", "본문이 없는 리뷰는 별점 규칙으로 분류됩니다.");
         }
         try {
             review.applyClassification(classificationService.classify(review.getRating(), review.getMaskedContent()));
@@ -110,6 +114,25 @@ public class ReviewService {
         }
         reviewRepository.save(review);
         return ReviewResponse.from(review, replyRepository.findByReview_IdInOrderByIdAsc(List.of(reviewId)));
+    }
+
+    /**
+     * 일괄 등록 전에 이미 저장된 리뷰와 겹치는 항목을 찾는다.
+     * 저장할 때와 같은 마스킹을 거친 본문으로 비교하며, 본문이 없는(별점만) 항목은 구별할 수 없으므로 중복으로 보지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public List<Integer> findDuplicates(Long storeId, DuplicateCheckRequest request) {
+        storeService.get(storeId);
+        List<Integer> duplicates = new ArrayList<>();
+        List<DuplicateCheckItem> items = request.items();
+        for (int i = 0; i < items.size(); i++) {
+            String masked = maskingService.mask(items.get(i).content());
+            if (!masked.isBlank()
+                    && reviewRepository.existsByStore_IdAndPlatformAndMaskedContent(storeId, items.get(i).platform(), masked)) {
+                duplicates.add(i);
+            }
+        }
+        return duplicates;
     }
 
     /** 날짜(없으면 전체)와 유형으로 거른 리뷰 목록. 최신순. */

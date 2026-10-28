@@ -8,7 +8,7 @@ import Icon from './components/Icon.jsx';
 import { EmptyState, PrimaryButton, SecondaryButton } from './components/ui.jsx';
 
 const VIEWS = [
-  ['setup', '가게 설정'],
+  ['setup', '매장 설정'],
   ['input', '리뷰 입력'],
   ['reviews', '오늘의 리뷰'],
 ];
@@ -72,7 +72,7 @@ export default function App() {
   } else if (loadError) {
     page = (
       <EmptyState
-        title="서버에 연결하지 못했어요"
+        title="서버에 연결할 수 없습니다"
         description={loadError}
         action={<SecondaryButton tone="neutral" icon="retry" onClick={loadStore}>다시 불러오기</SecondaryButton>}
       />
@@ -82,9 +82,9 @@ export default function App() {
   } else if (needsSetup) {
     page = (
       <EmptyState
-        title="가게 말투부터 정해 주세요"
-        description="예전에 직접 쓴 답글 3~5개를 넣으면 그 말투로 답글 초안을 만들어 드려요."
-        action={<PrimaryButton icon="store" onClick={() => go('setup')}>가게 설정하기</PrimaryButton>}
+        title="답글 스타일 설정 필요"
+        description="기존 답글 3~5개를 등록하면 매장의 응대 스타일로 답글 초안을 작성합니다."
+        action={<PrimaryButton icon="store" onClick={() => go('setup')}>매장 설정으로 이동</PrimaryButton>}
       />
     );
   } else if (active === 'input') {
@@ -100,7 +100,7 @@ export default function App() {
           <div className="brand">
             <span className="brand-name">ReplyBoss</span>
             <span className="brand-divider" aria-hidden="true" />
-            <span className="brand-store">{store?.name ?? '가게를 등록해 주세요'}</span>
+            <span className="brand-store">{store?.name ?? '매장 미등록'}</span>
           </div>
           <nav className="nav" aria-label="화면">
             {VIEWS.map(([key, label]) => (
