@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../api.js';
 import { CATEGORIES, EMOJI_LEVELS, FORMALITIES, LENGTHS } from '../labels.js';
 import Spinner from '../components/Spinner.jsx';
+import { previewText } from '../tonePreview.js';
 
 const MIN_SAMPLES = 3;
 const MAX_SAMPLES = 5;
@@ -225,17 +226,4 @@ function ToneSelect({ id, label, value, options, onChange }) {
       </select>
     </div>
   );
-}
-
-/** 톤 설정이 어떻게 보일지 감을 잡기 위한 고정 예문 (AI 호출 없음) */
-function previewText(tone) {
-  const first = {
-    하십시오체: '맛있게 드셔주셔서 감사드립니다.',
-    해요체: '맛있게 드셨다니 기뻐요!',
-    '반말 섞임': '맛있게 먹었다니 기뻐요!',
-  }[tone.formality] ?? '맛있게 드셨다니 기뻐요!';
-  const middle = tone.length === '1~2문장' ? '' : ` ${tone.phrases[0] ?? '다음에도 정성껏 준비할게요'}.`;
-  const emoji = tone.emojiLevel !== '없음' && tone.emojiExamples[0] ? ` ${tone.emojiExamples[0]}` : '';
-  const closing = tone.closing ? ` ${tone.closing}` : '';
-  return first + middle + emoji + closing;
 }

@@ -60,7 +60,8 @@ public class RatingOnlyReplyService {
         if (rating >= 4 && tone.usesEmoji()) {
             sb.append(' ').append(tone.emojiExamples().get(0));
         }
-        if (rating >= 3 && !tone.closing().isEmpty() && !base.contains(tone.closing())) {
+        // 템플릿에 이미 같은 뜻의 인사(감사·좋은 하루 등)가 있으면 마무리 인사를 붙이지 않는다
+        if (rating >= 3 && !Greetings.overlaps(base, tone.closing())) {
             sb.append(' ').append(tone.closing());
         }
         return sb.toString();
