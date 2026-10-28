@@ -97,11 +97,12 @@ export default function FilePanel({ store, platform, rows, setRows, toast, go })
   const width = Math.max(0, ...table.slice(0, 50).map((r) => r.length));
   const header = table[0] ?? [];
   const columnOptions = [[-1, '사용 안 함'], ...Array.from({ length: width }, (_, i) => [i, hasHeader && String(header[i] ?? '').trim()
-    ? `${colName(i)}열 · ${String(header[i]).trim().slice(0, 20)}`
+    ? `${colName(i)}열: ${String(header[i]).trim().slice(0, 20)}`
     : `${colName(i)}열`])];
 
   return (
     <div className="import-panel">
+      <p className="panel-note">파일에 플랫폼 열이 없거나 비어 있으면 선택한 리뷰 출처를 적용합니다.</p>
       <label
         className={`dropzone ${dragging ? 'is-dragging' : ''}`}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -111,11 +112,11 @@ export default function FilePanel({ store, platform, rows, setRows, toast, go })
         <input ref={inputRef} type="file" accept={ACCEPT} className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
         <Icon name="upload" size={20} />
         <span className="dropzone-title">CSV 또는 XLSX 파일 선택</span>
-        <span className="hint">클릭하거나 파일을 끌어다 놓습니다 · 최대 {MAX_FILE_BYTES / 1024 / 1024}MB, {MAX_BULK_ROWS}행 · 파일은 서버에 업로드되지 않습니다</span>
+        <span className="hint">클릭하거나 파일을 끌어다 놓습니다. 최대 {MAX_FILE_BYTES / 1024 / 1024}MB, {MAX_BULK_ROWS}행까지 읽으며 파일은 서버에 업로드되지 않습니다.</span>
       </label>
       <div className="import-actions">
         <SecondaryButton tone="neutral" size="sm" icon="download" onClick={downloadTemplate}>양식 받기 (CSV)</SecondaryButton>
-        <span className="hint">필수 열: 별점 · 선택 열: 리뷰 내용, 플랫폼, 작성일, 작성자</span>
+        <span className="hint">필수 열은 별점, 선택 열은 리뷰 내용·플랫폼·작성일·작성자입니다.</span>
       </div>
 
       {error && <Alert>{error}</Alert>}
@@ -126,7 +127,7 @@ export default function FilePanel({ store, platform, rows, setRows, toast, go })
             <Icon name="file" />
             <strong>{file.name}</strong>
             <span className="hint">
-              {file.kind.toUpperCase()}{file.encoding ? ` · ${file.encoding}` : ''} · {Math.max(0, table.length - (hasHeader ? 1 : 0))}행
+              {file.kind.toUpperCase()}{file.encoding ? ` (${file.encoding})` : ''}, {Math.max(0, table.length - (hasHeader ? 1 : 0))}행
             </span>
           </div>
           <div className="mapping-options">
@@ -147,7 +148,7 @@ export default function FilePanel({ store, platform, rows, setRows, toast, go })
                           onChange={(e) => { setMapping({ ...mapping, [f.key]: Number(e.target.value) }); setRows([]); }} />
             ))}
           </div>
-          <p className="hint">플랫폼 열이 없거나 비어 있으면 위에서 선택한 리뷰 출처를 사용합니다. 작성자는 확인용으로만 표시하며 저장하지 않습니다.</p>
+          <p className="hint">작성자는 미리보기에서 확인용으로만 표시하며 저장하지 않습니다.</p>
           <div className="import-actions">
             <SecondaryButton icon="analyze" onClick={buildPreview}>검증 및 미리보기</SecondaryButton>
           </div>

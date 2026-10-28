@@ -6,11 +6,21 @@ import { api } from '../api.js';
 import { PLATFORMS, todayISO } from '../labels.js';
 import { CHUNK_SIZE, batchDuplicates, isRegistrable, rowStatus } from '../import/rows.js';
 import { MAX_CONTENT_LENGTH } from '../import/normalize.js';
-import { Alert, FormInput, FormSelect, IconButton, PrimaryButton, SecondaryButton, StatusIndicator } from './ui.jsx';
+import {
+  Alert, DataTable, DataTableHead, DataTableRow, FormInput, FormSelect, IconButton, PrimaryButton, SecondaryButton, StatusIndicator,
+} from './ui.jsx';
 
 const RATING_OPTIONS = [5, 4, 3, 2, 1].map((n) => [n, `${n}점`]);
 const STATUS_TONE = { done: 'success', excluded: 'neutral', error: 'danger', duplicate: 'complaint', warn: 'neutral', ready: 'inquiry' };
 const STATUS_ICON = { done: 'confirm', error: 'error' };
+const COLUMNS = [
+  { label: '번호', className: 'bulk-no-head' },
+  { label: '출처' },
+  { label: '별점' },
+  { label: '리뷰 내용' },
+  { label: '상태' },
+  { label: '제외', className: 'bulk-act' },
+];
 const VIEWS = [
   ['ALL', '전체'],
   ['error', '확인 필요'],
@@ -147,20 +157,13 @@ export default function BulkPreview({ store, rows, setRows, batchId, toast, go, 
       {checkError && <Alert>이미 등록된 리뷰와의 중복을 확인하지 못했습니다: {checkError}</Alert>}
       {error && <Alert>{error}</Alert>}
 
-      <div className="bulk-table" role="table" aria-label="등록할 리뷰 미리보기">
-        <div className="bulk-row bulk-row-head" role="row">
-          <span role="columnheader">번호</span>
-          <span role="columnheader">출처</span>
-          <span role="columnheader">별점</span>
-          <span role="columnheader">리뷰 내용</span>
-          <span role="columnheader">상태</span>
-          <span role="columnheader" className="bulk-act">등록</span>
-        </div>
-        {shown.length === 0 && <p className="bulk-empty">해당하는 행이 없습니다.</p>}
+      <DataTable label="등록할 리뷰 미리보기" className="bulk-table" scroll>
+        <DataTableHead columns={COLUMNS} />
+        {shown.length === 0 && <p className="dt-empty">해당하는 행이 없습니다.</p>}
         {shown.map(({ row: r, no, status }) => {
           const locked = r.state === 'done' || busy;
           return (
-            <div key={r.id} role="row" className={`bulk-row is-${status.key}`}>
+            <DataTableRow key={r.id} className={`bulk-row is-${status.key}`}>
               <span className="bulk-no" role="cell">{no}<small>{r.source}</small></span>
               <div role="cell" className="bulk-platform">
                 <FormSelect aria-label={`${no}번 출처`} value={r.platform ?? ''} disabled={locked}
@@ -174,14 +177,14 @@ export default function BulkPreview({ store, rows, setRows, batchId, toast, go, 
               </div>
               <div role="cell" className="bulk-content">
                 <FormInput multiline aria-label={`${no}번 리뷰 내용`} value={r.content} disabled={locked}
-                           rows={Math.min(4, Math.max(1, r.content.split('\n').length))} placeholder="(본문 없음 · 별점만 등록)"
+                           rows={Math.min(4, Math.max(1, r.content.split('\n').length))} placeholder="(본문 없음, 별점만 등록)"
                            error={r.content.length > MAX_CONTENT_LENGTH ? `${MAX_CONTENT_LENGTH}자 초과` : null}
                            onChange={(e) => patch(r.id, { content: e.target.value, serverDup: false })} />
                 <div className="bulk-meta">
                   <FormInput type="date" aria-label={`${no}번 작성일`} value={r.writtenAt ?? ''} disabled={locked}
                              fieldClassName="bulk-date" max={todayISO()}
                              onChange={(e) => patch(r.id, { writtenAt: e.target.value || null })} />
-                  {r.author && <span>작성자 {r.author} <em>(확인용 · 저장 안 함)</em></span>}
+                  {r.author && <span>작성자 {r.author} <em>(확인용, 저장 안 함)</em></span>}
                   {r.raw && (
                     <details className="bulk-raw">
                       <summary>원문</summary>
@@ -208,13 +211,13 @@ export default function BulkPreview({ store, rows, setRows, batchId, toast, go, 
                               onClick={() => patch(r.id, { excluded: !r.excluded })} />
                 )}
               </span>
-            </div>
+            </DataTableRow>
           );
         })}
-      </div>
+      </DataTable>
 
       <div className="bulk-foot">
-        <span className="hint">확인 필요·중복·제외 행은 등록되지 않습니다. 출처별 {CHUNK_SIZE}건 단위로 나눠 등록합니다.</span>
+        <span className="hint">확인 필요, 중복, 제외 행은 등록되지 않습니다. 출처별로 {CHUNK_SIZE}건씩 나눠 등록합니다.</span>
         <div className="end">
           <SecondaryButton tone="neutral" onClick={onReset} disabled={busy}>{resetLabel}</SecondaryButton>
           <PrimaryButton icon="classify" onClick={register} disabled={!registrable.length || checking} loading={busy}

@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react';
 import { api } from '../api.js';
 import { CATEGORIES, EMOJI_LEVELS, FORMALITIES, LENGTHS } from '../labels.js';
-import { Alert, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton, SecondaryButton, SectionCard } from '../components/ui.jsx';
+import {
+  Alert, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton, SecondaryButton, SettingsSection, StatusIndicator,
+} from '../components/ui.jsx';
 import { previewText } from '../tonePreview.js';
 
 const MIN_SAMPLES = 3;
@@ -92,125 +94,135 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
     setNewPhrase('');
   }
 
+  const sampleReady = filledSamples.length >= MIN_SAMPLES;
+  let toneStatus = <StatusIndicator tone="neutral">분석 전</StatusIndicator>;
+  if (store?.toneProfile) toneStatus = <StatusIndicator tone="success" icon="confirm">저장됨</StatusIndicator>;
+  else if (tone) toneStatus = <StatusIndicator tone="complaint">분석 완료, 저장 전</StatusIndicator>;
+
   return (
     <>
-      <PageHeader
-        title="매장 설정"
-        description="매장 정보와 답글 작성에 사용할 기본 설정을 관리합니다."
-      />
+      <PageHeader title="매장 설정" description="매장 정보와 답글 작성에 사용할 기본 설정을 관리합니다." />
 
       {error && <Alert>{error}</Alert>}
 
-      <SectionCard
-        as="form"
-        onSubmit={saveStore}
-        noValidate
-        title="매장 정보"
-        description="매장명과 업종을 설정합니다."
-        footer={
-          <PrimaryButton type="submit" icon="save" loading={busy === 'store'}>
-            {store ? '설정 저장' : '매장 등록'}
-          </PrimaryButton>
-        }
-      >
-        <div className="grid-2">
-          <FormInput id="storeName" label="매장명" ref={nameRef} value={name} placeholder="예: 리플라이 커피"
-                     maxLength={100} error={nameError}
-                     onChange={(e) => { setName(e.target.value); if (nameError) setNameError(null); }} />
-          <FormSelect id="storeCategory" label="업종" value={category} options={CATEGORIES}
-                      onChange={(e) => setCategory(e.target.value)} />
-        </div>
-      </SectionCard>
+      <div className="settings">
+        <SettingsSection
+          as="form"
+          onSubmit={saveStore}
+          noValidate
+          title="매장 정보"
+          description="답글과 리포트에 표시되는 매장명과 업종입니다."
+          status={store
+            ? <StatusIndicator tone="success" icon="confirm">등록됨</StatusIndicator>
+            : <StatusIndicator tone="neutral">미등록</StatusIndicator>}
+          actions={(
+            <PrimaryButton type="submit" icon="save" loading={busy === 'store'}>
+              {store ? '설정 저장' : '매장 등록'}
+            </PrimaryButton>
+          )}
+        >
+          <div className="grid-2">
+            <FormInput id="storeName" label="매장명" ref={nameRef} value={name} placeholder="예: 리플라이 커피"
+                       maxLength={100} error={nameError}
+                       onChange={(e) => { setName(e.target.value); if (nameError) setNameError(null); }} />
+            <FormSelect id="storeCategory" label="업종" value={category} options={CATEGORIES}
+                        onChange={(e) => setCategory(e.target.value)} />
+          </div>
+        </SettingsSection>
 
-      {store && (
-        <SectionCard
+        <SettingsSection
           title="예시 답글"
-          description={`기존 답글을 등록하면 AI가 매장의 응대 스타일을 반영합니다. (${MIN_SAMPLES}~${MAX_SAMPLES}개)`}
-          aside={<span className="hint">{filledSamples.length} / {MAX_SAMPLES}개</span>}
-          footerStart={
-            <SecondaryButton icon="add" disabled={samples.length >= MAX_SAMPLES}
-                             onClick={() => setSamples([...samples, ''])}>
+          description={`기존에 작성한 답글을 ${MIN_SAMPLES}~${MAX_SAMPLES}개 등록하면 AI가 매장의 응대 스타일을 분석합니다. 분석에만 사용됩니다.`}
+          status={store && (
+            <StatusIndicator tone={sampleReady ? 'success' : 'neutral'} icon={sampleReady ? 'confirm' : undefined}>
+              {filledSamples.length} / {MAX_SAMPLES}개 입력
+            </StatusIndicator>
+          )}
+          actionsStart={store && (
+            <SecondaryButton icon="add" disabled={samples.length >= MAX_SAMPLES} onClick={() => setSamples([...samples, ''])}>
               예시 답글 추가
             </SecondaryButton>
-          }
-          footer={
+          )}
+          actions={store && (
             <PrimaryButton icon="analyze" onClick={extract} loading={busy === 'extract'} loadingText="분석 중"
-                           disabled={filledSamples.length < MIN_SAMPLES}>
+                           disabled={!sampleReady}>
               답글 스타일 분석
             </PrimaryButton>
-          }
-        >
-          <div className="sample-list">
-            {samples.map((s, i) => (
-              <div className="sample" key={i}>
-                <label className="sample-no" htmlFor={`sample${i}`}>예시 {i + 1}</label>
-                <FormInput id={`sample${i}`} multiline rows={3} value={s} counter={`${s.length}자`}
-                           placeholder="예: 찾아주셔서 감사합니다! 다음에도 맛있는 커피로 보답할게요."
-                           onChange={(e) => setSamples(samples.map((v, j) => (j === i ? e.target.value : v)))} />
-                {samples.length > MIN_SAMPLES ? (
-                  <IconButton icon="delete" tone="danger" label={`예시 ${i + 1} 삭제`}
-                              onClick={() => setSamples(samples.filter((_, j) => j !== i))} />
-                ) : <span aria-hidden="true" />}
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      )}
-
-      {store && tone && (
-        <SectionCard
-          title="답글 스타일"
-          description="분석 결과입니다. 항목별로 수정한 뒤 저장할 수 있습니다."
-          footerStart={
-            <span className="hint">{store.toneProfile ? '저장된 스타일 있음' : '저장 전'}</span>
-          }
-          footer={
-            <>
-              {store.toneProfile && (
-                <SecondaryButton tone="neutral" onClick={() => go('input')}>리뷰 입력으로 이동</SecondaryButton>
-              )}
-              <PrimaryButton icon="save" onClick={saveTone} loading={busy === 'tone'}>스타일 저장</PrimaryButton>
-            </>
-          }
-        >
-          <div className="grid-3">
-            <FormSelect id="formality" label="존댓말" value={tone.formality} options={FORMALITIES}
-                        onChange={(e) => updateTone({ formality: e.target.value })} />
-            <FormSelect id="emojiLevel" label="이모지" value={tone.emojiLevel} options={EMOJI_LEVELS}
-                        onChange={(e) => updateTone({ emojiLevel: e.target.value })} />
-            <FormSelect id="length" label="문장 길이" value={tone.length} options={LENGTHS}
-                        onChange={(e) => updateTone({ length: e.target.value })} />
-          </div>
-          {tone.emojiExamples.length > 0 && (
-            <p className="hint">자주 쓰는 이모지: {tone.emojiExamples.join(' ')}</p>
           )}
-          <div className="field">
-            <label className="label" htmlFor="newPhrase">자주 쓰는 표현</label>
-            <div className="tags">
-              {tone.phrases.length === 0 && <span className="hint">등록된 표현 없음</span>}
-              {tone.phrases.map((p) => (
-                <span className="tag" key={p}>
-                  {p}
-                  <IconButton icon="remove" size="sm" tone="danger" label={`${p} 삭제`}
-                              onClick={() => updateTone({ phrases: tone.phrases.filter((x) => x !== p) })} />
-                </span>
+        >
+          {!store ? (
+            <p className="hint">매장을 등록하면 입력할 수 있습니다.</p>
+          ) : (
+            <div className="sample-list">
+              {samples.map((s, i) => (
+                <div className="sample" key={i}>
+                  <label className="sample-no" htmlFor={`sample${i}`}><span className="sr-only">예시 답글 </span>{i + 1}</label>
+                  <FormInput id={`sample${i}`} multiline rows={2} value={s} counter={`${s.length}자`}
+                             placeholder="예: 찾아주셔서 감사합니다. 다음에도 맛있는 커피로 보답하겠습니다."
+                             onChange={(e) => setSamples(samples.map((v, j) => (j === i ? e.target.value : v)))} />
+                  {samples.length > MIN_SAMPLES ? (
+                    <IconButton icon="delete" tone="danger" label={`예시 ${i + 1} 삭제`}
+                                onClick={() => setSamples(samples.filter((_, j) => j !== i))} />
+                  ) : <span aria-hidden="true" />}
+                </div>
               ))}
             </div>
-            <div className="inline-add">
-              <FormInput id="newPhrase" placeholder="표현 입력 후 Enter" value={newPhrase}
-                         onChange={(e) => setNewPhrase(e.target.value)}
-                         onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); addPhrase(); } }} />
-              <SecondaryButton tone="neutral" icon="add" onClick={addPhrase} disabled={!newPhrase.trim()}>추가</SecondaryButton>
-            </div>
-          </div>
-          <FormInput id="closing" label="마무리 인사" value={tone.closing} placeholder="선택 입력"
-                     onChange={(e) => updateTone({ closing: e.target.value })} />
-          <div className="field">
-            <span className="label">미리보기</span>
-            <p className="ai-text">{previewText(tone)}</p>
-          </div>
-        </SectionCard>
-      )}
+          )}
+        </SettingsSection>
+
+        <SettingsSection
+          title="답글 스타일"
+          description="분석된 높임말, 이모지, 문장 길이, 자주 쓰는 표현입니다. 항목별로 수정한 뒤 저장합니다."
+          status={store && toneStatus}
+          actionsStart={store && tone && store.toneProfile && (
+            <SecondaryButton tone="neutral" onClick={() => go('input')}>리뷰 입력으로 이동</SecondaryButton>
+          )}
+          actions={store && tone && (
+            <PrimaryButton icon="save" onClick={saveTone} loading={busy === 'tone'}>스타일 저장</PrimaryButton>
+          )}
+        >
+          {!store && <p className="hint">매장을 등록하고 예시 답글을 분석하면 결과가 표시됩니다.</p>}
+          {store && !tone && <p className="hint">예시 답글로 답글 스타일 분석을 실행하면 결과가 표시됩니다.</p>}
+          {store && tone && (
+            <>
+              <div className="grid-3">
+                <FormSelect id="formality" label="높임말" value={tone.formality} options={FORMALITIES}
+                            onChange={(e) => updateTone({ formality: e.target.value })} />
+                <FormSelect id="emojiLevel" label="이모지" value={tone.emojiLevel} options={EMOJI_LEVELS}
+                            hint={tone.emojiExamples.length > 0 ? `자주 쓰는 이모지 ${tone.emojiExamples.join(' ')}` : undefined}
+                            onChange={(e) => updateTone({ emojiLevel: e.target.value })} />
+                <FormSelect id="length" label="문장 길이" value={tone.length} options={LENGTHS}
+                            onChange={(e) => updateTone({ length: e.target.value })} />
+              </div>
+              <div className="field">
+                <label className="label" htmlFor="newPhrase">자주 쓰는 표현</label>
+                <div className="tags">
+                  {tone.phrases.length === 0 && <span className="hint">등록된 표현 없음</span>}
+                  {tone.phrases.map((p) => (
+                    <span className="tag" key={p}>
+                      {p}
+                      <IconButton icon="remove" size="sm" tone="danger" label={`${p} 삭제`}
+                                  onClick={() => updateTone({ phrases: tone.phrases.filter((x) => x !== p) })} />
+                    </span>
+                  ))}
+                </div>
+                <div className="inline-add">
+                  <FormInput id="newPhrase" placeholder="표현 입력 후 Enter" value={newPhrase}
+                             onChange={(e) => setNewPhrase(e.target.value)}
+                             onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); addPhrase(); } }} />
+                  <SecondaryButton tone="neutral" icon="add" onClick={addPhrase} disabled={!newPhrase.trim()}>추가</SecondaryButton>
+                </div>
+              </div>
+              <FormInput id="closing" label="마무리 인사" value={tone.closing} placeholder="선택 입력"
+                         onChange={(e) => updateTone({ closing: e.target.value })} />
+              <div className="preview-block">
+                <span className="label">미리보기</span>
+                <p className="ai-text">{previewText(tone)}</p>
+              </div>
+            </>
+          )}
+        </SettingsSection>
+      </div>
     </>
   );
 }

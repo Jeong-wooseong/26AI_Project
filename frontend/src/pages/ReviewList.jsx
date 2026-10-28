@@ -3,10 +3,20 @@ import { api } from '../api.js';
 import { PLATFORMS, PLATFORM_LABEL, SENTIMENT_LABEL, TYPES, TYPE_LABEL, todayISO } from '../labels.js';
 import Icon from '../components/Icon.jsx';
 import {
-  Alert, EmptyState, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton, SecondaryButton, StatusIndicator,
+  Alert, DataTable, DataTableHead, DataTableRow, EmptyState, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton,
+  SecondaryButton, StatusIndicator, Toolbar,
 } from '../components/ui.jsx';
 
 const PAGE_SIZE = 10;
+const COLUMNS = [
+  { label: '번호' },
+  { label: '출처' },
+  { label: '별점' },
+  { label: '리뷰 내용' },
+  { label: '분류' },
+  { label: '답글 상태' },
+  { label: '관리', className: 'rt-actions-head' },
+];
 const TYPE_TONE = { PRAISE: 'praise', COMPLAINT: 'complaint', MALICIOUS: 'malicious', INQUIRY: 'inquiry', RATING_ONLY: 'rating' };
 
 /** 화면 ③ 오늘의 리뷰: 날짜별 리뷰를 표로 보고, 분류 결과와 답글 초안을 확인·복사한다. */
@@ -68,29 +78,27 @@ export default function ReviewList({ store, toast, go }) {
         actions={<PrimaryButton icon="add" onClick={() => go('input')}>리뷰 입력</PrimaryButton>}
       />
 
-      <div className="filters" role="group" aria-label="리뷰 거르기">
-        <FormInput id="reviewDate" label="날짜" hideLabel type="date" icon="calendar" fieldClassName="filter-date"
-                   value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)}
-                   onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* 지원하지 않는 브라우저는 직접 입력 */ } }} />
-        <FormSelect id="platformFilter" label="리뷰 출처" hideLabel value={platform}
-                    options={[['ALL', '전체 출처'], ...usedPlatforms]} onChange={(e) => setPlatform(e.target.value)} />
-        <FormSelect id="typeFilter" label="유형" hideLabel value={filter} options={typeOptions}
-                    onChange={(e) => setFilter(e.target.value)} />
-      </div>
+      <Toolbar
+        className="filters"
+        role="group"
+        aria-label="리뷰 거르기"
+        start={(
+          <>
+            <FormInput id="reviewDate" label="날짜" hideLabel type="date" icon="calendar" fieldClassName="filter-date"
+                       value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)}
+                       onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* 지원하지 않는 브라우저는 직접 입력 */ } }} />
+            <FormSelect id="platformFilter" label="리뷰 출처" hideLabel value={platform}
+                        options={[['ALL', '전체 출처'], ...usedPlatforms]} onChange={(e) => setPlatform(e.target.value)} />
+            <FormSelect id="typeFilter" label="유형" hideLabel value={filter} options={typeOptions}
+                        onChange={(e) => setFilter(e.target.value)} />
+          </>
+        )}
+      />
 
       {error && (
         <Alert action={<SecondaryButton tone="neutral" size="sm" icon="retry" onClick={load}>다시 불러오기</SecondaryButton>}>
           {error}
         </Alert>
-      )}
-
-      {reviews && reviews.length > 0 && (
-        <dl className="summary" aria-label="요약">
-          <div><dt>전체 리뷰</dt><dd>{list.length}<small>개</small></dd></div>
-          <div><dt>답글 완료</dt><dd>{done}<small>개</small></dd></div>
-          <div><dt>답글 대기</dt><dd>{list.length - done}<small>개</small></dd></div>
-          <div><dt>분류 실패</dt><dd>{failedCount}<small>개</small></dd></div>
-        </dl>
       )}
 
       {reviews === null && !error && <EmptyState loading description="불러오는 중" />}
@@ -101,23 +109,33 @@ export default function ReviewList({ store, toast, go }) {
           action={<PrimaryButton icon="add" onClick={() => go('input')}>리뷰 등록</PrimaryButton>}
         />
       )}
-      {all.length > 0 && visible.length === 0 && <EmptyState description="조건에 맞는 리뷰가 없습니다." />}
 
-      {visible.length > 0 && (
-        <div className="review-table" role="table" aria-label="리뷰 목록">
-          <div className="rt-row rt-head" role="row">
-            <span role="columnheader">번호</span>
-            <span role="columnheader">출처</span>
-            <span role="columnheader">별점</span>
-            <span role="columnheader">리뷰 내용</span>
-            <span role="columnheader">분류</span>
-            <span role="columnheader">답글 상태</span>
-            <span role="columnheader" className="rt-actions-head">관리</span>
+      {all.length > 0 && (
+        <DataTable label="리뷰 목록" className="review-table">
+          <div className="dt-caption">
+            <dl className="summary" aria-label="요약 (선택한 출처 기준)">
+              <div><dt>전체</dt><dd>{list.length}</dd></div>
+              <div className="is-done"><dt>답글 완료</dt><dd>{done}</dd></div>
+              <div><dt>답글 대기</dt><dd>{list.length - done}</dd></div>
+              <div className={failedCount ? 'is-fail' : ''}><dt>분류 실패</dt><dd>{failedCount}</dd></div>
+            </dl>
+            {visible.length > 0 && (
+              <span className="page-range">
+                {visible.length}건 중 {(current - 1) * PAGE_SIZE + 1}–{Math.min(current * PAGE_SIZE, visible.length)}
+              </span>
+            )}
           </div>
-          {paged.map((r, i) => (
-            <Ticket key={r.id} no={(current - 1) * PAGE_SIZE + i + 1} review={r} onUpdated={replace} toast={toast} />
-          ))}
-        </div>
+          {visible.length === 0 ? (
+            <p className="dt-empty">조건에 맞는 리뷰가 없습니다.</p>
+          ) : (
+            <>
+              <DataTableHead columns={COLUMNS} />
+              {paged.map((r, i) => (
+                <Ticket key={r.id} no={(current - 1) * PAGE_SIZE + i + 1} review={r} onUpdated={replace} toast={toast} />
+              ))}
+            </>
+          )}
+        </DataTable>
       )}
 
       {pageCount > 1 && (
@@ -169,7 +187,7 @@ function Ticket({ no, review: r, onUpdated, toast }) {
   }
 
   return (
-    <div className={`rt-row rt-item ${failed ? 'is-failed' : ''}`} role="row">
+    <DataTableRow className={`rt-item ${failed ? 'is-failed' : ''}`}>
       <span className="rt-no" role="cell">{no}</span>
       <span className="rt-platform" role="cell"><span className="platform">{PLATFORM_LABEL[r.platform]}</span></span>
       <span className="rt-rating" role="cell">
@@ -178,7 +196,7 @@ function Ticket({ no, review: r, onUpdated, toast }) {
 
       <div className="rt-content" role="cell">
         <p className={`review-text ${r.maskedContent ? '' : 'is-empty'}`}>
-          {r.maskedContent ? <Masked text={r.maskedContent} /> : '(본문 없음 · 별점만 등록)'}
+          {r.maskedContent ? <Masked text={r.maskedContent} /> : '(본문 없음, 별점만 등록)'}
         </p>
         <p className="meta">
           <time dateTime={r.createdAt} title="등록 시각">{timeOf(r.createdAt)}</time>
@@ -228,10 +246,7 @@ function Ticket({ no, review: r, onUpdated, toast }) {
       {!failed && r.type === 'MALICIOUS' && (
         <p className="rt-reply hint">악성 리뷰: 즉시 답글보다 대응 방향 검토를 권장합니다. (대응 가이드 준비 중)</p>
       )}
-      {!failed && ['PRAISE', 'COMPLAINT', 'INQUIRY'].includes(r.type) && r.replies.length === 0 && (
-        <p className="rt-reply hint">맞춤 답글 초안 생성 기능 준비 중</p>
-      )}
-    </div>
+    </DataTableRow>
   );
 }
 
@@ -267,10 +282,10 @@ function TemplateReply({ reply, toast, onCopied }) {
         <IconButton icon={editing ? 'confirm' : 'edit'} label={editing ? '수정 완료' : '답글 수정'}
                     aria-pressed={editing} onClick={() => setEditing(!editing)} />
         <IconButton icon={copied ? 'confirm' : 'copy'} tone={copied ? 'success' : undefined}
-                    label={copied ? '복사 완료 · 다시 복사' : '답글 복사'} onClick={copy} />
+                    label={copied ? '복사 완료, 다시 복사' : '답글 복사'} onClick={copy} />
       </div>
       <div className="rt-reply">
-        <span className="ai-label">AI 답글 초안 · 별점 템플릿 (게시 전 확인 필요)</span>
+        <span className="ai-label">AI 답글 초안<small>별점 템플릿 기반, 게시 전 확인 필요</small></span>
         {editing ? (
           <div className="rt-edit">
             <FormInput multiline aria-label="답글 수정" value={text} rows={3} onChange={(e) => setText(e.target.value)} />

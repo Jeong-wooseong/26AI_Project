@@ -173,27 +173,96 @@ export function FormSelect({ id: idProp, label, hideLabel, options, icon, error,
  * 제목·설명 머리, 본문, 하단 액션 영역으로 이뤄진 카드.
  * footer: 오른쪽 정렬 액션, footerStart: 왼쪽 요소. as="form" 으로 폼 카드도 된다.
  */
-export function SectionCard({ as: Tag = 'section', title, description, aside, footer, footerStart, className, children, ...rest }) {
+export function SectionCard({ as: Tag = 'section', title, description, aside, header, footer, footerStart, stickyFooter, className, children, ...rest }) {
   const headingId = useId();
   return (
     <Tag className={cls('section', className)} aria-labelledby={title ? headingId : undefined} {...rest}>
       {title && (
         <div className="section-head">
-          <div>
+          <div className="section-heading">
             <h2 id={headingId}>{title}</h2>
             {description && <p>{description}</p>}
           </div>
           {aside}
         </div>
       )}
+      {header && <div className="section-toolbar">{header}</div>}
       <div className="section-body">{children}</div>
       {(footer || footerStart) && (
-        <div className="section-foot">
+        <div className={cls('section-foot', stickyFooter && 'is-sticky')}>
           {footerStart ?? <span />}
           {footer && <div className="end">{footer}</div>}
         </div>
       )}
     </Tag>
+  );
+}
+
+/**
+ * 설정 화면의 한 구역: 왼쪽에 제목·설명·상태, 오른쪽에 입력 항목과 그 구역의 저장 버튼.
+ * status: 지금 데이터 기준의 진행 상태 (예: 저장됨, 3/5개) — 화면에 이미 있는 값만 넣는다.
+ */
+export function SettingsSection({ as: Tag = 'section', title, description, status, actions, actionsStart, children, ...rest }) {
+  const headingId = useId();
+  return (
+    <Tag className="settings-section" aria-labelledby={headingId} {...rest}>
+      <div className="settings-aside">
+        <h2 id={headingId}>{title}</h2>
+        {description && <p>{description}</p>}
+        {status && <div className="settings-status">{status}</div>}
+      </div>
+      <div className="settings-main">
+        {children}
+        {(actions || actionsStart) && (
+          <div className="settings-actions">
+            {actionsStart ?? <span />}
+            {actions && <div className="end">{actions}</div>}
+          </div>
+        )}
+      </div>
+    </Tag>
+  );
+}
+
+/** 표 위의 도구 줄: 왼쪽(필터 등)과 오른쪽(보조 정보·액션) */
+export function Toolbar({ start, end, className, ...rest }) {
+  return (
+    <div className={cls('toolbar', className)} {...rest}>
+      <div className="toolbar-start">{start}</div>
+      {end && <div className="toolbar-end">{end}</div>}
+    </div>
+  );
+}
+
+/* ── 데이터 표 ─────────────────────────────────────── */
+/**
+ * 세 화면의 표(리뷰 입력·미리보기·리뷰 목록)가 같은 머리줄·행 간격·구분선을 쓰도록 하는 틀.
+ * 열 너비는 표마다 CSS 변수 --dt-cols 로 정한다. scroll 이면 높이를 제한하고 머리줄을 고정한다.
+ */
+export function DataTable({ label, className, scroll, children, ...rest }) {
+  return (
+    <div className={cls('dt', scroll && 'dt-scroll', className)} role="table" aria-label={label} {...rest}>
+      {children}
+    </div>
+  );
+}
+
+/** columns: [{ label, className }] */
+export function DataTableHead({ columns }) {
+  return (
+    <div className="dt-row dt-head" role="row">
+      {columns.map((c) => (
+        <span key={c.label} role="columnheader" className={c.className}>{c.label}</span>
+      ))}
+    </div>
+  );
+}
+
+export function DataTableRow({ className, children, ...rest }) {
+  return (
+    <div role="row" className={cls('dt-row', className)} {...rest}>
+      {children}
+    </div>
   );
 }
 

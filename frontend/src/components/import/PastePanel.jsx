@@ -34,8 +34,8 @@ export default function PastePanel({ store, platform, rows, setRows, toast, go }
     const limited = items.slice(0, MAX_BULK_ROWS);
     setRows(rowsFromParsed(limited, platform));
     setBatchId((n) => n + 1);
-    const modeLabel = { 'blank-line': '빈 줄 기준', line: '한 줄 = 리뷰 하나', 'rating-line': '별점 줄 기준(추정)' }[mode];
-    setInfo(`${parser.label} · ${modeLabel} · ${items.length}건 추출${items.length > MAX_BULK_ROWS ? ` (최대 ${MAX_BULK_ROWS}건까지 표시)` : ''}`);
+    const modeLabel = { 'blank-line': '빈 줄로 구분', line: '한 줄에 리뷰 하나', 'rating-line': '별점 줄로 구분(추정)' }[mode];
+    setInfo(`${items.length}건 추출 (${parser.label}, ${modeLabel})${items.length > MAX_BULK_ROWS ? `. 앞의 ${MAX_BULK_ROWS}건만 표시합니다.` : ''}`);
   }
 
   function reset() {
@@ -45,9 +45,10 @@ export default function PastePanel({ store, platform, rows, setRows, toast, go }
 
   return (
     <div className="import-panel">
+      <p className="panel-note">선택한 리뷰 출처가 추출한 리뷰 전체에 적용되며, 미리보기에서 행별로 바꿀 수 있습니다.</p>
       <FormInput id="pasteText" label="리뷰 텍스트" multiline rows={10} value={text} maxLength={MAX_PASTE_CHARS}
                  placeholder={PLACEHOLDER} error={error}
-                 hint="리뷰 사이는 빈 줄로 구분합니다. 한 줄에 리뷰 하나씩 입력해도 됩니다. 별점 표기: ★★★★☆, 별점 4, 4점, 4/5"
+                 hint="리뷰 사이는 빈 줄로 구분하거나, 한 줄에 리뷰 하나씩 입력합니다. 인식하는 별점 표기는 ★★★★☆, 별점 4, 4점, 4/5입니다."
                  onChange={(e) => { setText(e.target.value); if (error) setError(null); }} />
       <div className="import-actions">
         <SecondaryButton icon="analyze" onClick={extract} disabled={!text.trim()}>리뷰 추출</SecondaryButton>
@@ -56,7 +57,7 @@ export default function PastePanel({ store, platform, rows, setRows, toast, go }
       </div>
       <p className="notice notice-info">
         <Icon name="info" />
-        <span>플랫폼 전용 파서는 실제 복사 형식 확인 후 추가 예정입니다. 현재는 범용 파서로 추출하며, 확실하지 않은 별점은 비워 두므로 등록 전 미리보기에서 확인해야 합니다.</span>
+        <span>현재는 범용 파서로 추출합니다. 플랫폼 전용 파서는 실제 복사 형식을 확인한 뒤 추가되며, 확정할 수 없는 별점은 비워 두므로 등록 전에 미리보기를 확인해야 합니다.</span>
       </p>
       <BulkPreview store={store} rows={rows} setRows={setRows} batchId={batchId} toast={toast} go={go} onReset={reset}
                    resetLabel="미리보기 닫기" />
