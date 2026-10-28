@@ -1,0 +1,30 @@
+# backend/.env 파일이 있으면 그 값을 먼저 읽습니다 (저장소에는 커밋하지 않음, .env.example 참고)
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/replyboss?serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
+    username: ${DB_USERNAME:replyboss}
+    password: ${DB_PASSWORD:replyboss}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Seoul
+
+server:
+  port: 8080
+
+claude:
+  api-key: ${ANTHROPIC_API_KEY:}
+  base-url: https://api.anthropic.com
+  api-version: "2023-06-01"
+  # 분류·톤 추출처럼 짧고 정해진 형식의 작업은 빠르고 저렴한 모델
+  classify-model: ${CLAUDE_CLASSIFY_MODEL:claude-haiku-5-5}
+  # 답글 생성(3주차)처럼 문장 품질이 중요한 작업
+  generate-model: ${CLAUDE_GENERATE_MODEL:claude-sonnet-5-5}
+  timeout-seconds: 30
+  max-retries: 1

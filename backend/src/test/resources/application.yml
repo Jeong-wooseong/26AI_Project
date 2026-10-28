@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:replyboss;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+
+claude:
+  api-key: test-key
+  base-url: http://localhost:0
+  api-version: "2023-06-01"
+  classify-model: test-classify-model
+  generate-model: test-generate-model
+  timeout-seconds: 1
+  max-retries: 0

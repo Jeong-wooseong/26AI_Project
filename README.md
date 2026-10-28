@@ -5,7 +5,7 @@
 - **저장소**: https://github.com/Jeong-wooseong/26AI_Project (Public)
 - **과목**: 생성형 AI 활용 — 팀/개인 프로젝트
 - **개발 기간**: 6주 (2026.10.05 ~ 2026.11.11)
-- **상태**: 개발 중
+- **상태**: 개발 중 (1·2주차 범위 구현, 아래 [진행 현황](#진행-현황) 참고)
 
 ---
 
@@ -139,8 +139,8 @@ flowchart LR
     LLM["LlmClient / EmbeddingClient"]
     REPO["JPA Repository"]
   end
-  DB[("MySQL / PostgreSQL")]
-  AI["LLM API"]
+  DB[("MySQL")]
+  AI["Claude API"]
   EMB["임베딩 API"]
   EXT --> WEB
   WEB -->|"HTTPS · JSON"| API
@@ -166,10 +166,10 @@ flowchart LR
 
 | 구분 | 기술 |
 | --- | --- |
-| Frontend | React |
-| Backend | Spring Boot (Java), Spring Data JPA |
-| Database | MySQL 또는 PostgreSQL (pgvector 선택) |
-| AI | LLM API (JSON 구조화 출력), 임베딩 API |
+| Frontend | React 18, Vite |
+| Backend | Spring Boot 3.5 (Java 17), Spring Data JPA |
+| Database | MySQL 8 (테스트는 H2) |
+| AI | Claude API (구조화 출력): 분류·톤 추출 `claude-haiku-5-5`, 답글 생성 `claude-sonnet-5-5` / 임베딩 API (4주차, 미정) |
 | 기타 | Chrome Extension (선택), GitHub |
 
 ## 8. 데이터베이스 설계
@@ -225,7 +225,8 @@ erDiagram
 ```
 
 - 리뷰는 **마스킹본만 저장**하고 원문은 저장하지 않습니다.
-- 답글 임베딩은 MySQL에서는 JSON 배열로 저장해 앱에서 유사도를 계산하고, PostgreSQL에서는 pgvector를 사용할 수 있습니다.
+- 답글 임베딩은 JSON 배열로 저장하고, 최근 답글 5~10개와의 코사인 유사도는 앱에서 계산합니다.
+- JSON 성격의 컬럼(키워드, 톤 프로필)은 테스트용 H2 와 호환되도록 TEXT 에 JSON 문자열로 저장합니다.
 
 ## 9. API 명세
 
@@ -290,61 +291,111 @@ erDiagram
 ## 11. 프로젝트 구조
 
 ```
-ReplyBoss/
-├─ frontend/                 # React
-│  └─ src/
-│     ├─ pages/              # StoreSetup, ReviewInput, ReviewList, MaliciousGuide, History, WeeklyReport
-│     ├─ components/         # ReviewCard, ReplyTabs, ToneProfileForm, TypeBadge
-│     └─ api/
-├─ backend/                  # Spring Boot
-│  └─ src/main/java/com/replyboss/
-│     ├─ store/  review/  reply/  report/  template/
-│     ├─ ai/                 # LlmClient, EmbeddingClient, PromptTemplates
-│     ├─ masking/
-│     └─ common/
-├─ prompts/                  # 프롬프트 버전 관리
-├─ eval/                     # 라벨링 데이터, 정확도·중복률 측정 스크립트
-├─ extension/                # (선택) 크롬 확장
-└─ docs/                     # ERD, API 명세, 발표 자료
+26AI_Project/
+├─ backend/                         # Spring Boot 3.5 (Java 17)
+│  ├─ src/main/java/com/replyboss/
+│  │  ├─ ai/                        # ClaudeLlmClient(구조화 출력), Schemas, PromptTemplates
+│  │  ├─ masking/                   # MaskingService (전화번호·이메일·주소·주문번호)
+│  │  ├─ store/                     # 가게, 톤 프로필 추출·저장
+│  │  ├─ review/                    # 리뷰 입력·분류·재시도, 평가용 분류 API
+│  │  ├─ reply/                     # 답글, 평점만 템플릿 풀
+│  │  └─ common/                    # 예외 처리, JSON 컬럼 도우미
+│  ├─ src/main/resources/prompts/   # 프롬프트 버전 관리 (classify_v1, tone_extract_v1)
+│  └─ .env.example
+├─ frontend/                        # React 18 + Vite
+│  └─ src/pages/                    # StoreSetup, ReviewInput, ReviewList
+├─ eval/                            # 라벨링 리뷰 셋, 분류 정확도 측정 스크립트
+├─ docker-compose.yml               # 로컬 MySQL
+└─ .github/workflows/ci.yml         # 백엔드 빌드·테스트, 프론트 빌드
 ```
 
 ## 12. 실행 방법
 
-> 개발 진행에 따라 업데이트 예정입니다.
+필요한 것: JDK 17 이상, Node.js 18 이상, MySQL 8 (또는 Docker), Claude API 키
 
-### 저장소 받기
+### 1) 저장소 받기
 
 ```bash
 git clone https://github.com/Jeong-wooseong/26AI_Project.git
 cd 26AI_Project
 ```
 
-### 환경 변수
+### 2) MySQL 준비
 
-`backend/.env` (저장소에 커밋하지 않음)
+Docker 를 쓰면:
 
-```
-LLM_API_KEY=your-llm-api-key
-EMBEDDING_API_KEY=your-embedding-api-key
-DB_URL=jdbc:mysql://localhost:3306/replyboss
-DB_USERNAME=root
-DB_PASSWORD=your-password
+```bash
+docker compose up -d
 ```
 
-### 백엔드
+MySQL 을 직접 설치했다면 `replyboss` 데이터베이스와 사용자를 만든다 (테이블은 첫 실행 때 자동 생성).
+
+```sql
+CREATE DATABASE replyboss DEFAULT CHARACTER SET utf8mb4;
+CREATE USER 'replyboss'@'localhost' IDENTIFIED BY 'replyboss';
+GRANT ALL ON replyboss.* TO 'replyboss'@'localhost';
+```
+
+### 3) 환경 변수
+
+`backend/.env.example` 을 `backend/.env` 로 복사하고 값을 채운다. `.env` 는 저장소에 올리지 않는다.
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+DB_URL=jdbc:mysql://localhost:3306/replyboss?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+DB_USERNAME=replyboss
+DB_PASSWORD=replyboss
+```
+
+### 4) 백엔드 (http://localhost:8080)
 
 ```bash
 cd backend
-./gradlew bootRun
+./gradlew bootRun        # Windows: gradlew.bat bootRun
+./gradlew test           # 테스트 (H2 메모리 DB, LLM 은 가짜로 대체)
 ```
 
-### 프론트엔드
+### 5) 프론트엔드 (http://localhost:5173)
 
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+
+개발 서버가 `/api` 요청을 백엔드(8080)로 넘겨준다.
+
+### 6) 분류 정확도 측정
+
+백엔드를 켠 상태에서 프로젝트 루트에서 실행한다. 자세한 내용은 [eval/README.md](eval/README.md).
+
+```bash
+node eval/classify_eval.mjs
+```
+
+## 진행 현황
+
+| 주차 | 범위 | 상태 |
+| --- | --- | --- |
+| 1주차 | 기능 정의, 와이어프레임, ERD, API 명세, 개발 환경, 분류 프롬프트 v1, 라벨링 셋 50개 | 완료 |
+| 2주차 | 가게 등록, 톤 프로필 추출·수정·저장, 리뷰 입력, 마스킹, 분류 API, 평점만 분기 + 템플릿 풀, 정확도 측정 스크립트 | 완료 (정확도 1차 측정 필요) |
+| 3주차 | 답글 3톤 생성, 톤 주입, 안전 규칙, 편집·복사, 이력 조회 | 예정 |
+| 4주차 | 임베딩, 중복 방지 3단, 악성 리뷰 가이드, 예외 처리 | 예정 |
+| 5주차 | 주간 리포트, (선택) 크롬 확장, 1차 테스트 | 예정 |
+
+### 현재 동작하는 API
+
+| 메서드 | 엔드포인트 | 설명 |
+| --- | --- | --- |
+| POST / GET | `/api/stores` | 가게 등록 / 목록 |
+| GET / PUT | `/api/stores/{id}` | 가게 조회 / 수정 |
+| POST | `/api/stores/{id}/tone-profile/extract` | 예시 답글 3~5개로 톤 추출 (저장 안 함) |
+| PUT | `/api/stores/{id}/tone-profile` | 톤 프로필 저장 |
+| POST | `/api/stores/{id}/reviews` | 리뷰 일괄 입력 → 마스킹·분류 (평점만 리뷰는 템플릿 답글까지) |
+| GET | `/api/stores/{id}/reviews?date=&type=` | 날짜·유형별 리뷰 목록 |
+| POST | `/api/reviews/{id}/classify` | 분류 다시 시도 |
+| PATCH | `/api/replies/{id}/select` | 복사한 답글 기록 (수정본 포함) |
+| POST | `/api/eval/classify` | 정확도 측정용 분류 (저장 안 함) |
 
 ## 13. 성공 지표
 
