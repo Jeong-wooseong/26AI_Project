@@ -19,3 +19,6 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 *.log
+
+# local 프로필 H2 데이터
+backend/data/

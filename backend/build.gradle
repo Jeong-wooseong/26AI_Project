@@ -22,9 +22,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
     runtimeOnly 'com.mysql:mysql-connector-j'
+    // local 프로필(MySQL 없이 실행)과 테스트에서 쓰는 파일·메모리 DB
+    runtimeOnly 'com.h2database:h2'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testRuntimeOnly 'com.h2database:h2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
@@ -35,4 +36,13 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+// MySQL 없이 바로 실행: gradlew.bat bootRunLocal (데이터는 backend/data 에 파일로 저장)
+tasks.register('bootRunLocal', org.springframework.boot.gradle.tasks.run.BootRun) {
+    group = 'application'
+    description = 'MySQL 없이 H2 파일 DB(local 프로필)로 실행합니다.'
+    mainClass = 'com.replyboss.ReplyBossApplication'
+    classpath = sourceSets.main.runtimeClasspath
+    systemProperty 'spring.profiles.active', 'local'
 }

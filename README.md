@@ -168,7 +168,7 @@ flowchart LR
 | --- | --- |
 | Frontend | React 18, Vite |
 | Backend | Spring Boot 3.5 (Java 17), Spring Data JPA |
-| Database | MySQL 8 (테스트는 H2) |
+| Database | MySQL 8 (설치 없이 실행·테스트할 때는 H2) |
 | AI | OpenAI API (Chat Completions 구조화 출력, strict json_schema): 분류·톤 추출 `gpt-6-luna`, 답글 생성 `gpt-6.1-sol` / 임베딩 `text-embedding-3-small` (4주차) |
 | 기타 | Chrome Extension (선택), GitHub |
 
@@ -320,9 +320,11 @@ git clone https://github.com/Jeong-wooseong/26AI_Project.git
 cd 26AI_Project
 ```
 
-### 2) MySQL 준비
+### 2) DB 준비
 
-Docker 를 쓰면:
+**바로 실행해보려면 (설치 없음)**: 4단계에서 `bootRunLocal` 로 실행하면 MySQL 대신 H2 파일 DB(`backend/data/`)를 쓴다. 이 단계는 건너뛴다.
+
+**MySQL 로 실행하려면** Docker(Windows 는 WSL2 필요)를 쓰거나:
 
 ```bash
 docker compose up -d
@@ -351,9 +353,12 @@ DB_PASSWORD=replyboss
 
 ```bash
 cd backend
-./gradlew bootRun        # Windows: gradlew.bat bootRun
+./gradlew bootRunLocal   # MySQL 없이 실행 (Windows: gradlew.bat bootRunLocal)
+./gradlew bootRun        # MySQL 로 실행   (Windows: gradlew.bat bootRun)
 ./gradlew test           # 테스트 (H2 메모리 DB, LLM 은 가짜로 대체)
 ```
+
+`bootRunLocal` 로 켰을 때는 http://localhost:8080/h2-console 에서 저장된 데이터를 볼 수 있다 (JDBC URL `jdbc:h2:file:./data/replyboss`, 사용자 `sa`, 비밀번호 없음).
 
 ### 5) 프론트엔드 (http://localhost:5173)
 
