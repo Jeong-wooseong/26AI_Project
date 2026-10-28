@@ -4,12 +4,15 @@ import StoreSetup from './pages/StoreSetup.jsx';
 import ReviewInput from './pages/ReviewInput.jsx';
 import ReviewList from './pages/ReviewList.jsx';
 import { Toast, useToast } from './components/Toast.jsx';
+import Icon from './components/Icon.jsx';
+import Spinner from './components/Spinner.jsx';
 
 const VIEWS = [
   ['setup', '가게 설정'],
   ['input', '리뷰 입력'],
   ['reviews', '오늘의 리뷰'],
 ];
+const VIEW_ICON = { setup: 'store', input: 'input', reviews: 'reviews' };
 
 function currentView() {
   const v = window.location.hash.slice(1);
@@ -65,22 +68,34 @@ export default function App() {
 
   let page;
   if (loading) {
-    page = <div className="empty-state">불러오는 중…</div>;
+    page = (
+      <div className="section empty">
+        <Spinner />
+        <p>불러오는 중…</p>
+      </div>
+    );
   } else if (loadError) {
     page = (
-      <div className="empty-state">
-        <p className="error-text">{loadError}</p>
-        <button className="btn" onClick={loadStore}>다시 불러오기</button>
+      <div className="section empty">
+        <h2>서버에 연결하지 못했어요</h2>
+        <p>{loadError}</p>
+        <button className="btn" onClick={loadStore}>
+          <Icon name="retry" />
+          다시 불러오기
+        </button>
       </div>
     );
   } else if (active === 'setup') {
     page = <StoreSetup store={store} onSaved={setStore} toast={toast} go={go} />;
   } else if (needsSetup) {
     page = (
-      <div className="empty-state">
-        <h2 className="display">가게 말투부터 정해요</h2>
-        <p>예전에 직접 쓴 답글 3~5개를 넣으면 그 말투로 답글을 만들어드려요.</p>
-        <button className="btn primary" onClick={() => go('setup')}>가게 설정하기</button>
+      <div className="section empty">
+        <h2>가게 말투부터 정해 주세요</h2>
+        <p>예전에 직접 쓴 답글 3~5개를 넣으면 그 말투로 답글 초안을 만들어 드려요.</p>
+        <button className="btn btn-primary" onClick={() => go('setup')}>
+          <Icon name="store" />
+          가게 설정하기
+        </button>
       </div>
     );
   } else if (active === 'input') {
@@ -91,15 +106,17 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="topbar-inner">
+      <header className="header">
+        <div className="header-inner">
           <div className="brand">
             <span className="brand-name">ReplyBoss</span>
-            <span className="brand-store">{store?.name ?? '가게를 등록해주세요'}</span>
+            <span className="brand-divider" aria-hidden="true" />
+            <span className="brand-store">{store?.name ?? '가게를 등록해 주세요'}</span>
           </div>
-          <nav className="tabs-nav" aria-label="화면">
+          <nav className="nav" aria-label="화면">
             {VIEWS.map(([key, label]) => (
               <a key={key} href={`#${key}`} aria-current={active === key ? 'page' : undefined}>
+                <Icon name={VIEW_ICON[key]} />
                 {label}
               </a>
             ))}

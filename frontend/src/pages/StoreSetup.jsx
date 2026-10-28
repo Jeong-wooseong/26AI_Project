@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../api.js';
 import { CATEGORIES, EMOJI_LEVELS, FORMALITIES, LENGTHS } from '../labels.js';
 import Spinner from '../components/Spinner.jsx';
+import Icon from '../components/Icon.jsx';
 import { previewText } from '../tonePreview.js';
 
 const MIN_SAMPLES = 3;
@@ -92,122 +93,162 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
     <>
       <div className="page-head">
         <div className="page-title">
-          <h1 className="display">가게 설정</h1>
-          <p>예전에 직접 쓴 답글로 가게 말투를 만들어요. 한 번 저장하면 모든 답글에 반영돼요.</p>
+          <h1>가게 설정</h1>
+          <p>예전에 직접 쓴 답글로 가게 말투를 만들어요. 한 번 저장하면 모든 답글 초안에 반영돼요.</p>
         </div>
       </div>
 
-      {error && <div className="error-box" role="alert"><span>{error}</span></div>}
+      {error && (
+        <div className="alert" role="alert">
+          <Icon name="error" />
+          <span>{error}</span>
+        </div>
+      )}
 
-      <form className="panel" onSubmit={saveStore}>
-        <h2>가게 정보</h2>
-        <div className="row">
-          <div className="field">
-            <label className="label" htmlFor="storeName">가게 이름</label>
-            <input id="storeName" type="text" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
-          </div>
-          <div className="field">
-            <label className="label" htmlFor="storeCategory">업종</label>
-            <select id="storeCategory" value={category} onChange={(e) => setCategory(e.target.value)}>
-              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-            </select>
+      <form className="section" onSubmit={saveStore}>
+        <div className="section-head">
+          <div>
+            <h2>가게 정보</h2>
+            <p>답글에 쓰일 가게 이름과 업종이에요.</p>
           </div>
         </div>
-        <div className="actions">
-          <span />
-          <button className="btn primary" type="submit" disabled={busy === 'store'}>
-            {busy === 'store' && <Spinner />}
-            {store ? '가게 정보 저장' : '가게 등록'}
-          </button>
+        <div className="section-body">
+          <div className="grid-2">
+            <div className="field">
+              <label className="label" htmlFor="storeName">가게 이름</label>
+              <input id="storeName" className="input" type="text" value={name} placeholder="예: 리플라이 커피"
+                     onChange={(e) => setName(e.target.value)} maxLength={100} />
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="storeCategory">업종</label>
+              <select id="storeCategory" className="select" value={category} onChange={(e) => setCategory(e.target.value)}>
+                {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="section-foot">
+          <div className="end">
+            <button className="btn btn-primary" type="submit" disabled={busy === 'store'}>
+              {busy === 'store' ? <Spinner /> : <Icon name="save" />}
+              {store ? '가게 정보 저장' : '가게 등록'}
+            </button>
+          </div>
         </div>
       </form>
 
       {store && (
-        <section className="panel">
-          <h2>예시 답글 <span className="note">{MIN_SAMPLES}~{MAX_SAMPLES}개</span></h2>
-          {samples.map((s, i) => (
-            <div className="field" key={i}>
-              <div className="row between">
-                <label className="label" htmlFor={`sample${i}`}>예시 {i + 1}</label>
-                {samples.length > MIN_SAMPLES && (
-                  <button type="button" className="link-btn"
-                          onClick={() => setSamples(samples.filter((_, j) => j !== i))}>
-                    삭제
-                  </button>
-                )}
-              </div>
-              <textarea id={`sample${i}`} value={s}
-                        onChange={(e) => setSamples(samples.map((v, j) => (j === i ? e.target.value : v)))} />
+        <section className="section">
+          <div className="section-head">
+            <div>
+              <h2>예시 답글</h2>
+              <p>예전에 직접 쓴 답글을 {MIN_SAMPLES}~{MAX_SAMPLES}개 넣어 주세요. 말투 분석에만 쓰여요.</p>
             </div>
-          ))}
-          <div className="actions">
-            <button type="button" className="btn" disabled={samples.length >= MAX_SAMPLES}
+            <span className="hint">{filledSamples.length} / {MAX_SAMPLES}</span>
+          </div>
+          <div className="section-body">
+            <div className="sample-list">
+              {samples.map((s, i) => (
+                <div className="sample" key={i}>
+                  <label className="sample-no" htmlFor={`sample${i}`}>예시 {i + 1}</label>
+                  <div className="sample-input">
+                    <textarea id={`sample${i}`} className="textarea" value={s} rows={3}
+                              placeholder="예: 찾아주셔서 감사합니다! 다음에도 맛있는 커피로 보답할게요."
+                              onChange={(e) => setSamples(samples.map((v, j) => (j === i ? e.target.value : v)))} />
+                    <span className="counter">{s.length}자</span>
+                  </div>
+                  {samples.length > MIN_SAMPLES ? (
+                    <button type="button" className="icon-btn danger" aria-label={`예시 ${i + 1} 삭제`}
+                            onClick={() => setSamples(samples.filter((_, j) => j !== i))}>
+                      <Icon name="delete" />
+                    </button>
+                  ) : <span aria-hidden="true" />}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="section-foot">
+            <button type="button" className="btn btn-outline" disabled={samples.length >= MAX_SAMPLES}
                     onClick={() => setSamples([...samples, ''])}>
+              <Icon name="add" />
               예시 추가
             </button>
-            <button type="button" className="btn primary" onClick={extract}
-                    disabled={busy === 'extract' || filledSamples.length < MIN_SAMPLES}>
-              {busy === 'extract' && <Spinner />}
-              {busy === 'extract' ? '분석 중' : '말투 분석하기'}
-            </button>
+            <div className="end">
+              <button type="button" className="btn btn-primary" onClick={extract}
+                      disabled={busy === 'extract' || filledSamples.length < MIN_SAMPLES}>
+                {busy === 'extract' ? <Spinner /> : <Icon name="analyze" />}
+                {busy === 'extract' ? '분석 중' : '말투 분석하기'}
+              </button>
+            </div>
           </div>
         </section>
       )}
 
       {store && tone && (
-        <section className="panel">
-          <h2>톤 프로필 <span className="note">직접 수정할 수 있어요</span></h2>
-          <div className="tone-grid">
-            <ToneSelect id="formality" label="존댓말" value={tone.formality} options={FORMALITIES}
-                        onChange={(v) => updateTone({ formality: v })} />
-            <ToneSelect id="emojiLevel" label="이모지" value={tone.emojiLevel} options={EMOJI_LEVELS}
-                        onChange={(v) => updateTone({ emojiLevel: v })} />
-            <ToneSelect id="length" label="문장 길이" value={tone.length} options={LENGTHS}
-                        onChange={(v) => updateTone({ length: v })} />
-          </div>
-          {tone.emojiExamples.length > 0 && (
-            <p className="note">자주 쓰는 이모지: {tone.emojiExamples.join(' ')}</p>
-          )}
-          <div className="field">
-            <span className="label">자주 쓰는 표현</span>
-            <div className="tags">
-              {tone.phrases.length === 0 && <span className="note">아직 없어요</span>}
-              {tone.phrases.map((p) => (
-                <span className="tag" key={p}>
-                  {p}
-                  <button type="button" aria-label={`${p} 삭제`}
-                          onClick={() => updateTone({ phrases: tone.phrases.filter((x) => x !== p) })}>×</button>
-                </span>
-              ))}
-            </div>
-            <div className="row">
-              <input type="text" id="newPhrase" placeholder="표현 추가" value={newPhrase}
-                     onChange={(e) => setNewPhrase(e.target.value)}
-                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPhrase(); } }}
-                     style={{ flex: '1 1 160px' }} />
-              <button type="button" className="btn small" onClick={addPhrase}>추가</button>
+        <section className="section">
+          <div className="section-head">
+            <div>
+              <h2>톤 프로필</h2>
+              <p>분석 결과예요. 직접 고친 뒤 저장할 수 있어요.</p>
             </div>
           </div>
-          <div className="field">
-            <label className="label" htmlFor="closing">마무리 인사</label>
-            <input id="closing" type="text" value={tone.closing}
-                   onChange={(e) => updateTone({ closing: e.target.value })} placeholder="없으면 비워두세요" />
+          <div className="section-body">
+            <div className="grid-3">
+              <ToneSelect id="formality" label="존댓말" value={tone.formality} options={FORMALITIES}
+                          onChange={(v) => updateTone({ formality: v })} />
+              <ToneSelect id="emojiLevel" label="이모지" value={tone.emojiLevel} options={EMOJI_LEVELS}
+                          onChange={(v) => updateTone({ emojiLevel: v })} />
+              <ToneSelect id="length" label="문장 길이" value={tone.length} options={LENGTHS}
+                          onChange={(v) => updateTone({ length: v })} />
+            </div>
+            {tone.emojiExamples.length > 0 && (
+              <p className="hint">자주 쓰는 이모지: {tone.emojiExamples.join(' ')}</p>
+            )}
+            <div className="field">
+              <label className="label" htmlFor="newPhrase">자주 쓰는 표현</label>
+              <div className="tags">
+                {tone.phrases.length === 0 && <span className="hint">아직 없어요</span>}
+                {tone.phrases.map((p) => (
+                  <span className="tag" key={p}>
+                    {p}
+                    <button type="button" className="icon-btn" aria-label={`${p} 삭제`}
+                            onClick={() => updateTone({ phrases: tone.phrases.filter((x) => x !== p) })}>
+                      <Icon name="remove" size={16} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="inline-add">
+                <input type="text" id="newPhrase" className="input" placeholder="표현 입력 후 Enter" value={newPhrase}
+                       onChange={(e) => setNewPhrase(e.target.value)}
+                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPhrase(); } }} />
+                <button type="button" className="btn" onClick={addPhrase}>
+                  <Icon name="add" />
+                  추가
+                </button>
+              </div>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="closing">마무리 인사</label>
+              <input id="closing" className="input" type="text" value={tone.closing}
+                     onChange={(e) => updateTone({ closing: e.target.value })} placeholder="없으면 비워 두세요" />
+            </div>
+            <div className="field">
+              <span className="label">미리보기</span>
+              <p className="ai-text">{previewText(tone)}</p>
+            </div>
           </div>
-          <div className="field">
-            <span className="label">미리보기</span>
-            <p className="preview">{previewText(tone)}</p>
-          </div>
-          <div className="actions">
-            <span className="note">
+          <div className="section-foot">
+            <span className="hint">
               {store.toneProfile ? '저장된 톤 프로필이 있어요' : '아직 저장하지 않았어요'}
             </span>
-            <div className="row">
+            <div className="end">
               {store.toneProfile && (
                 <button type="button" className="btn" onClick={() => go('input')}>리뷰 입력하러 가기</button>
               )}
-              <button type="button" className="btn primary" onClick={saveTone} disabled={busy === 'tone'}>
-                {busy === 'tone' && <Spinner />}
-                저장
+              <button type="button" className="btn btn-primary" onClick={saveTone} disabled={busy === 'tone'}>
+                {busy === 'tone' ? <Spinner /> : <Icon name="save" />}
+                톤 프로필 저장
               </button>
             </div>
           </div>
@@ -221,7 +262,7 @@ function ToneSelect({ id, label, value, options, onChange }) {
   return (
     <div className="field">
       <label className="label" htmlFor={id}>{label}</label>
-      <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+      <select id={id} className="select" value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map((o) => <option key={o}>{o}</option>)}
       </select>
     </div>

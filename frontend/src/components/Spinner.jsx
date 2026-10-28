@@ -1,3 +1,5 @@
+import Icon from './Icon.jsx';
+
 export default function Spinner() {
-  return <span className="spin" aria-hidden="true" />;
+  return <Icon name="loading" className="spin" />;
 }

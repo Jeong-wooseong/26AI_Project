@@ -1,10 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-// 글꼴은 앱에 함께 묶는다 (발표장 네트워크가 불안해도 글꼴이 깨지지 않게)
-import '@fontsource/gothic-a1/400.css';
-import '@fontsource/gothic-a1/500.css';
-import '@fontsource/gothic-a1/700.css';
-import '@fontsource/gothic-a1/800.css';
+// Pretendard 를 앱에 함께 묶는다 (발표장 네트워크가 불안해도 글꼴이 깨지지 않게, 쓰는 글자만 내려받음)
+import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
 import App from './App.jsx';
 import './styles.css';
 

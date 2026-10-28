@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { api } from '../api.js';
 import { PLATFORMS } from '../labels.js';
 import Spinner from '../components/Spinner.jsx';
+import Icon from '../components/Icon.jsx';
 
 const MAX_ROWS = 30;
 const emptyRow = () => ({ key: crypto.randomUUID(), rating: 5, content: '' });
@@ -52,70 +53,87 @@ export default function ReviewInput({ store, toast, go }) {
     <>
       <div className="page-head">
         <div className="page-title">
-          <h1 className="display">리뷰 입력</h1>
-          <p>배달앱·지도에서 오늘 리뷰를 복사해 붙여넣어 주세요. 본문을 비우면 평점만 리뷰로 처리해요.</p>
+          <h1>리뷰 입력</h1>
+          <p>배달앱·지도에서 오늘 리뷰를 복사해 붙여 넣어 주세요. 본문을 비우면 평점만 남긴 리뷰로 처리해요.</p>
         </div>
       </div>
 
-      {error && <div className="error-box" role="alert"><span>{error}</span></div>}
-
-      <form className="panel" onSubmit={submit}>
-        <div className="field" style={{ maxWidth: 240 }}>
-          <label className="label" htmlFor="platform">플랫폼</label>
-          <select id="platform" value={platform} onChange={(e) => setPlatform(e.target.value)}>
-            {PLATFORMS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
+      {error && (
+        <div className="alert" role="alert">
+          <Icon name="error" />
+          <span>{error}</span>
         </div>
+      )}
 
-        <div className="in-row label" aria-hidden="true">
-          <span>별점</span><span>리뷰 본문</span><span />
-        </div>
-        <div className="rows">
-          {rows.map((r, i) => (
-            <div className="in-row" key={r.key}>
-              <select aria-label={`리뷰 ${i + 1} 별점`} value={r.rating}
-                      onChange={(e) => update(r.key, { rating: Number(e.target.value) })}>
-                {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>★ {n}</option>)}
-              </select>
-              <input type="text" aria-label={`리뷰 ${i + 1} 본문`} value={r.content} maxLength={2000}
-                     ref={(el) => { inputs.current[r.key] = el; }}
-                     placeholder="비워두면 평점만 리뷰로 처리돼요"
-                     onChange={(e) => update(r.key, { content: e.target.value })}
-                     onKeyDown={(e) => {
-                       if (e.key === 'Enter' && !e.nativeEvent.isComposing && i === rows.length - 1) {
-                         e.preventDefault();
-                         addRow();
-                       }
-                     }} />
-              <button type="button" className="icon-btn" aria-label={`리뷰 ${i + 1} 삭제`}
-                      disabled={rows.length === 1}
-                      onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <path d="M6 6l12 12M18 6L6 18" />
-                </svg>
-              </button>
+      <form className="section" onSubmit={submit}>
+        <div className="section-body">
+          <div className="field platform-field">
+            <label className="label" htmlFor="platform">플랫폼</label>
+            <select id="platform" className="select" value={platform} onChange={(e) => setPlatform(e.target.value)}>
+              {PLATFORMS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+
+          <div className="entry-table">
+            <div className="entry-row entry-head" aria-hidden="true">
+              <span className="entry-no">번호</span>
+              <span>별점</span>
+              <span>리뷰 내용</span>
+              <span className="entry-act">삭제</span>
             </div>
-          ))}
+            {rows.map((r, i) => (
+              <div className="entry-row" key={r.key}>
+                <span className="entry-no">{i + 1}</span>
+                <div className="cell cell-rating">
+                  <select className="select" aria-label={`리뷰 ${i + 1} 별점`} value={r.rating}
+                          onChange={(e) => update(r.key, { rating: Number(e.target.value) })}>
+                    {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>★ {n}점</option>)}
+                  </select>
+                </div>
+                <div className="cell cell-content">
+                  <input type="text" className="input" aria-label={`리뷰 ${i + 1} 본문`} value={r.content} maxLength={2000}
+                         ref={(el) => { inputs.current[r.key] = el; }}
+                         placeholder="비워 두면 평점만 리뷰로 처리돼요"
+                         onChange={(e) => update(r.key, { content: e.target.value })}
+                         onKeyDown={(e) => {
+                           if (e.key === 'Enter' && !e.nativeEvent.isComposing && i === rows.length - 1) {
+                             e.preventDefault();
+                             addRow();
+                           }
+                         }} />
+                </div>
+                <div className="entry-act">
+                  <button type="button" className="icon-btn danger" aria-label={`리뷰 ${i + 1} 삭제`}
+                          disabled={rows.length === 1}
+                          onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>
+                    <Icon name="remove" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="table-tools">
+            <button type="button" className="btn btn-outline" onClick={addRow} disabled={rows.length >= MAX_ROWS}>
+              <Icon name="add" />
+              리뷰 추가
+            </button>
+            <span className="hint">총 {rows.length}개 · 최대 {MAX_ROWS}개</span>
+          </div>
+
+          <p className="notice">
+            <Icon name="lock" />
+            전화번호·이메일·주소·주문번호는 자동으로 가려진 뒤 AI에 전달되고, 가려진 내용만 저장돼요.
+          </p>
         </div>
 
-        <div className="actions">
-          <button type="button" className="btn" onClick={addRow} disabled={rows.length >= MAX_ROWS}>리뷰 추가</button>
-          <span className="note">총 {rows.length}개 · 한 번에 {MAX_ROWS}개까지</span>
-        </div>
-
-        <p className="privacy">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
-          </svg>
-          전화번호·이메일·주소·주문번호는 자동으로 가려진 뒤 AI에 전달되고, 가려진 내용만 저장돼요.
-        </p>
-
-        <div className="actions">
-          <span />
-          <button className="btn primary" type="submit" disabled={busy}>
-            {busy && <Spinner />}
-            {busy ? '분류 중' : '분류하기'}
-          </button>
+        <div className="section-foot">
+          <div className="end">
+            <button className="btn btn-primary" type="submit" disabled={busy}>
+              {busy ? <Spinner /> : <Icon name="classify" />}
+              {busy ? '분류 중' : '분류하기'}
+            </button>
+          </div>
         </div>
       </form>
     </>

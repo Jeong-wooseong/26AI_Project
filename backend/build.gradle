@@ -38,6 +38,11 @@ tasks.named('test') {
     useJUnitPlatform()
 }
 
+// Windows 콘솔(cp949)에서 한글 로그가 깨지지 않도록 표준 출력을 UTF-8 로 고정
+tasks.withType(org.springframework.boot.gradle.tasks.run.BootRun).configureEach {
+    jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8'
+}
+
 // MySQL 없이 바로 실행: gradlew.bat bootRunLocal (데이터는 backend/data 에 파일로 저장)
 tasks.register('bootRunLocal', org.springframework.boot.gradle.tasks.run.BootRun) {
     group = 'application'
