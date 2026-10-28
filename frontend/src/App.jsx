@@ -5,7 +5,7 @@ import ReviewInput from './pages/ReviewInput.jsx';
 import ReviewList from './pages/ReviewList.jsx';
 import { Toast, useToast } from './components/Toast.jsx';
 import Icon from './components/Icon.jsx';
-import Spinner from './components/Spinner.jsx';
+import { EmptyState, PrimaryButton, SecondaryButton } from './components/ui.jsx';
 
 const VIEWS = [
   ['setup', '가게 설정'],
@@ -68,35 +68,24 @@ export default function App() {
 
   let page;
   if (loading) {
-    page = (
-      <div className="section empty">
-        <Spinner />
-        <p>불러오는 중…</p>
-      </div>
-    );
+    page = <EmptyState loading description="불러오는 중…" />;
   } else if (loadError) {
     page = (
-      <div className="section empty">
-        <h2>서버에 연결하지 못했어요</h2>
-        <p>{loadError}</p>
-        <button className="btn" onClick={loadStore}>
-          <Icon name="retry" />
-          다시 불러오기
-        </button>
-      </div>
+      <EmptyState
+        title="서버에 연결하지 못했어요"
+        description={loadError}
+        action={<SecondaryButton tone="neutral" icon="retry" onClick={loadStore}>다시 불러오기</SecondaryButton>}
+      />
     );
   } else if (active === 'setup') {
     page = <StoreSetup store={store} onSaved={setStore} toast={toast} go={go} />;
   } else if (needsSetup) {
     page = (
-      <div className="section empty">
-        <h2>가게 말투부터 정해 주세요</h2>
-        <p>예전에 직접 쓴 답글 3~5개를 넣으면 그 말투로 답글 초안을 만들어 드려요.</p>
-        <button className="btn btn-primary" onClick={() => go('setup')}>
-          <Icon name="store" />
-          가게 설정하기
-        </button>
-      </div>
+      <EmptyState
+        title="가게 말투부터 정해 주세요"
+        description="예전에 직접 쓴 답글 3~5개를 넣으면 그 말투로 답글 초안을 만들어 드려요."
+        action={<PrimaryButton icon="store" onClick={() => go('setup')}>가게 설정하기</PrimaryButton>}
+      />
     );
   } else if (active === 'input') {
     page = <ReviewInput store={store} toast={toast} go={go} />;

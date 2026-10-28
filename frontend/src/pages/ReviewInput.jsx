@@ -1,10 +1,12 @@
 import { useRef, useState } from 'react';
 import { api } from '../api.js';
 import { PLATFORMS } from '../labels.js';
-import Spinner from '../components/Spinner.jsx';
 import Icon from '../components/Icon.jsx';
+import { Alert, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton, SecondaryButton, SectionCard } from '../components/ui.jsx';
 
 const MAX_ROWS = 30;
+const MAX_LENGTH = 2000; // 리뷰 본문 최대 글자 수 (기존 maxLength 와 동일)
+const RATING_OPTIONS = [5, 4, 3, 2, 1].map((n) => [n, `${n}점`]);
 const emptyRow = () => ({ key: crypto.randomUUID(), rating: 5, content: '' });
 
 /** 화면 ② 리뷰 입력: 별점 + 본문 여러 줄 → 분류하기 */
@@ -24,8 +26,25 @@ export default function ReviewInput({ store, toast, go }) {
     setTimeout(() => inputs.current[row.key]?.focus(), 0);
   }
 
+  // 행 삭제 후에도 키보드 위치를 잃지 않도록 바로 아래(마지막 행이면 위) 행으로 포커스를 옮긴다
+  function removeRow(key) {
+    const i = rows.findIndex((r) => r.key === key);
+    const next = rows[i + 1] ?? rows[i - 1];
+    setRows((rs) => rs.filter((x) => x.key !== key));
+    if (next) setTimeout(() => inputs.current[next.key]?.focus(), 0);
+  }
+
+  // Enter: 다음 행으로 이동, 마지막 행이면 새 행 추가 (폼이 실수로 제출되지 않게)
+  function onContentKeyDown(e, i) {
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    if (i === rows.length - 1) addRow();
+    else inputs.current[rows[i + 1].key]?.focus();
+  }
+
   async function submit(e) {
     e.preventDefault();
+    if (busy) return; // 분류 요청 중 중복 제출 방지
     setBusy(true);
     setError(null);
     try {
@@ -49,93 +68,73 @@ export default function ReviewInput({ store, toast, go }) {
     }
   }
 
+  const full = rows.length >= MAX_ROWS;
+
   return (
     <>
-      <div className="page-head">
-        <div className="page-title">
-          <h1>리뷰 입력</h1>
-          <p>배달앱·지도에서 오늘 리뷰를 복사해 붙여 넣어 주세요. 본문을 비우면 평점만 남긴 리뷰로 처리해요.</p>
-        </div>
-      </div>
+      <PageHeader
+        title="리뷰 입력"
+        description="배달앱·지도에서 오늘 리뷰를 복사해 붙여 넣어 주세요. 본문을 비우면 평점만 남긴 리뷰로 처리해요."
+      />
 
-      {error && (
-        <div className="alert" role="alert">
-          <Icon name="error" />
-          <span>{error}</span>
-        </div>
-      )}
+      {error && <Alert>{error}</Alert>}
 
-      <form className="section" onSubmit={submit}>
-        <div className="section-body">
-          <div className="field platform-field">
-            <label className="label" htmlFor="platform">플랫폼</label>
-            <select id="platform" className="select" value={platform} onChange={(e) => setPlatform(e.target.value)}>
-              {PLATFORMS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
+      <SectionCard
+        as="form"
+        onSubmit={submit}
+        aria-label="리뷰 입력"
+        footer={
+          <PrimaryButton type="submit" icon="classify" loading={busy} loadingText="분류 중">
+            분류하기
+          </PrimaryButton>
+        }
+      >
+        <FormSelect id="platform" label="플랫폼" fieldClassName="platform-field" value={platform}
+                    options={PLATFORMS} onChange={(e) => setPlatform(e.target.value)} />
+
+        <div className="entry-table" role="table" aria-label="입력할 리뷰" aria-rowcount={rows.length + 1}>
+          <div className="entry-row entry-head" role="row">
+            <span className="entry-no" role="columnheader">번호</span>
+            <span role="columnheader">별점</span>
+            <span role="columnheader">리뷰 내용</span>
+            <span className="entry-act" role="columnheader">삭제</span>
           </div>
-
-          <div className="entry-table">
-            <div className="entry-row entry-head" aria-hidden="true">
-              <span className="entry-no">번호</span>
-              <span>별점</span>
-              <span>리뷰 내용</span>
-              <span className="entry-act">삭제</span>
-            </div>
-            {rows.map((r, i) => (
-              <div className="entry-row" key={r.key}>
-                <span className="entry-no">{i + 1}</span>
-                <div className="cell cell-rating">
-                  <select className="select" aria-label={`리뷰 ${i + 1} 별점`} value={r.rating}
-                          onChange={(e) => update(r.key, { rating: Number(e.target.value) })}>
-                    {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>★ {n}점</option>)}
-                  </select>
-                </div>
-                <div className="cell cell-content">
-                  <input type="text" className="input" aria-label={`리뷰 ${i + 1} 본문`} value={r.content} maxLength={2000}
-                         ref={(el) => { inputs.current[r.key] = el; }}
-                         placeholder="비워 두면 평점만 리뷰로 처리돼요"
-                         onChange={(e) => update(r.key, { content: e.target.value })}
-                         onKeyDown={(e) => {
-                           if (e.key === 'Enter' && !e.nativeEvent.isComposing && i === rows.length - 1) {
-                             e.preventDefault();
-                             addRow();
-                           }
-                         }} />
-                </div>
-                <div className="entry-act">
-                  <button type="button" className="icon-btn danger" aria-label={`리뷰 ${i + 1} 삭제`}
-                          disabled={rows.length === 1}
-                          onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>
-                    <Icon name="remove" />
-                  </button>
-                </div>
+          {rows.map((r, i) => (
+            <div className={`entry-row ${r.content.trim() ? 'is-filled' : ''}`} key={r.key} role="row">
+              <span className="entry-no" role="cell">{i + 1}</span>
+              <div className="cell cell-rating" role="cell">
+                <FormSelect icon="star" aria-label={`리뷰 ${i + 1} 별점`} value={r.rating} options={RATING_OPTIONS}
+                            onChange={(e) => update(r.key, { rating: Number(e.target.value) })} />
               </div>
-            ))}
-          </div>
-
-          <div className="table-tools">
-            <button type="button" className="btn btn-outline" onClick={addRow} disabled={rows.length >= MAX_ROWS}>
-              <Icon name="add" />
-              리뷰 추가
-            </button>
-            <span className="hint">총 {rows.length}개 · 최대 {MAX_ROWS}개</span>
-          </div>
-
-          <p className="notice">
-            <Icon name="lock" />
-            전화번호·이메일·주소·주문번호는 자동으로 가려진 뒤 AI에 전달되고, 가려진 내용만 저장돼요.
-          </p>
+              <div className="cell cell-content" role="cell">
+                <FormInput aria-label={`리뷰 ${i + 1} 본문`} value={r.content} maxLength={MAX_LENGTH}
+                           ref={(el) => { inputs.current[r.key] = el; }}
+                           placeholder="비워 두면 평점만 리뷰로 처리돼요"
+                           counter={r.content ? `${r.content.length}/${MAX_LENGTH}` : null} counterInside
+                           onChange={(e) => update(r.key, { content: e.target.value })}
+                           onKeyDown={(e) => onContentKeyDown(e, i)} />
+              </div>
+              <div className="entry-act" role="cell">
+                <IconButton icon="remove" tone="danger" label={`리뷰 ${i + 1} 삭제`}
+                            disabled={rows.length === 1} onClick={() => removeRow(r.key)} />
+              </div>
+            </div>
+          ))}
         </div>
 
-        <div className="section-foot">
-          <div className="end">
-            <button className="btn btn-primary" type="submit" disabled={busy}>
-              {busy ? <Spinner /> : <Icon name="classify" />}
-              {busy ? '분류 중' : '분류하기'}
-            </button>
-          </div>
+        <div className="table-tools">
+          <SecondaryButton icon="add" onClick={addRow} disabled={full}>리뷰 추가</SecondaryButton>
+          <span className="row-count" aria-live="polite">
+            {full && <span className="row-count-full">최대 개수에 도달했어요 · </span>}
+            <strong>{rows.length}</strong> / {MAX_ROWS}개
+          </span>
         </div>
-      </form>
+
+        <p className="notice">
+          <Icon name="lock" />
+          <span>전화번호·이메일·주소·주문번호는 자동으로 가려진 뒤 AI에 전달되고, 가려진 내용만 저장돼요.</span>
+        </p>
+      </SectionCard>
     </>
   );
 }

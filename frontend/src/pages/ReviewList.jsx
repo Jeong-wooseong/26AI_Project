@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { PLATFORMS, PLATFORM_LABEL, SENTIMENT_LABEL, TYPES, TYPE_LABEL, todayISO } from '../labels.js';
-import Spinner from '../components/Spinner.jsx';
 import Icon from '../components/Icon.jsx';
+import {
+  Alert, EmptyState, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton, SecondaryButton, StatusIndicator,
+} from '../components/ui.jsx';
 
 const PAGE_SIZE = 10;
+const TYPE_TONE = { PRAISE: 'praise', COMPLAINT: 'complaint', MALICIOUS: 'malicious', INQUIRY: 'inquiry', RATING_ONLY: 'rating' };
 
 /** 화면 ③ 오늘의 리뷰: 날짜별 리뷰를 표로 보고, 분류 결과와 답글 초안을 확인·복사한다. */
 export default function ReviewList({ store, toast, go }) {
@@ -51,54 +54,34 @@ export default function ReviewList({ store, toast, go }) {
   const paged = visible.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
   const usedPlatforms = PLATFORMS.filter(([v]) => all.some((r) => r.platform === v) || v === platform);
 
+  const typeOptions = [
+    ['ALL', `전체 유형 (${list.length})`],
+    ...TYPES.map(([key, label]) => [key, `${label} (${counts[key] ?? 0})`]),
+    ...(failedCount > 0 || filter === 'FAILED' ? [['FAILED', `분류 실패 (${failedCount})`]] : []),
+  ];
+
   return (
     <>
-      <div className="page-head">
-        <div className="page-title">
-          <h1>{isToday ? '오늘의 리뷰' : '지난 리뷰'}</h1>
-          <p>리뷰를 유형별로 나누고 답글 초안을 준비했어요. 확인한 뒤 복사해서 배달앱에 붙여 넣어 주세요.</p>
-        </div>
-        <button className="btn btn-primary" onClick={() => go('input')}>
-          <Icon name="add" />
-          리뷰 입력
-        </button>
-      </div>
+      <PageHeader
+        title={isToday ? '오늘의 리뷰' : '지난 리뷰'}
+        description="리뷰를 유형별로 나누고 답글 초안을 준비했어요. 확인한 뒤 복사해서 배달앱에 붙여 넣어 주세요."
+        actions={<PrimaryButton icon="add" onClick={() => go('input')}>리뷰 입력</PrimaryButton>}
+      />
 
-      <div className="filters">
-        <label className="date-input">
-          <span className="sr-only">날짜</span>
-          <Icon name="calendar" />
-          <input type="date" className="input" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)}
-                 onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* 지원하지 않는 브라우저는 직접 입력 */ } }} />
-        </label>
-        <div className="field">
-          <label className="sr-only" htmlFor="platformFilter">플랫폼</label>
-          <select id="platformFilter" className="select" value={platform} onChange={(e) => setPlatform(e.target.value)}>
-            <option value="ALL">전체 플랫폼</option>
-            {usedPlatforms.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </div>
-        <div className="field">
-          <label className="sr-only" htmlFor="typeFilter">유형</label>
-          <select id="typeFilter" className="select" value={filter} onChange={(e) => setFilter(e.target.value)}>
-            <option value="ALL">전체 유형 ({list.length})</option>
-            {TYPES.map(([key, label]) => (
-              <option key={key} value={key}>{label} ({counts[key] ?? 0})</option>
-            ))}
-            {(failedCount > 0 || filter === 'FAILED') && <option value="FAILED">분류 실패 ({failedCount})</option>}
-          </select>
-        </div>
+      <div className="filters" role="group" aria-label="리뷰 거르기">
+        <FormInput id="reviewDate" label="날짜" hideLabel type="date" icon="calendar" fieldClassName="filter-date"
+                   value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)}
+                   onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* 지원하지 않는 브라우저는 직접 입력 */ } }} />
+        <FormSelect id="platformFilter" label="플랫폼" hideLabel value={platform}
+                    options={[['ALL', '전체 플랫폼'], ...usedPlatforms]} onChange={(e) => setPlatform(e.target.value)} />
+        <FormSelect id="typeFilter" label="유형" hideLabel value={filter} options={typeOptions}
+                    onChange={(e) => setFilter(e.target.value)} />
       </div>
 
       {error && (
-        <div className="alert" role="alert">
-          <Icon name="error" />
-          <span>{error}</span>
-          <button className="btn btn-sm" onClick={load}>
-            <Icon name="retry" />
-            다시 불러오기
-          </button>
-        </div>
+        <Alert action={<SecondaryButton tone="neutral" size="sm" icon="retry" onClick={load}>다시 불러오기</SecondaryButton>}>
+          {error}
+        </Alert>
       )}
 
       {reviews && reviews.length > 0 && (
@@ -110,22 +93,15 @@ export default function ReviewList({ store, toast, go }) {
         </dl>
       )}
 
-      {reviews === null && !error && (
-        <div className="section empty"><Spinner /><p>불러오는 중</p></div>
-      )}
+      {reviews === null && !error && <EmptyState loading description="불러오는 중" />}
       {reviews && reviews.length === 0 && (
-        <div className="section empty">
-          <h2>{isToday ? '아직 입력한 리뷰가 없어요' : '이날은 리뷰가 없어요'}</h2>
-          <p>배달앱이나 지도에서 리뷰를 복사해 붙여 넣으면 유형별로 나눠 드려요.</p>
-          <button className="btn btn-primary" onClick={() => go('input')}>
-            <Icon name="add" />
-            리뷰 입력하기
-          </button>
-        </div>
+        <EmptyState
+          title={isToday ? '아직 입력한 리뷰가 없어요' : '이날은 리뷰가 없어요'}
+          description="배달앱이나 지도에서 리뷰를 복사해 붙여 넣으면 유형별로 나눠 드려요."
+          action={<PrimaryButton icon="add" onClick={() => go('input')}>리뷰 입력하기</PrimaryButton>}
+        />
       )}
-      {all.length > 0 && visible.length === 0 && (
-        <div className="section empty"><p>조건에 맞는 리뷰가 없어요.</p></div>
-      )}
+      {all.length > 0 && visible.length === 0 && <EmptyState description="조건에 맞는 리뷰가 없어요." />}
 
       {visible.length > 0 && (
         <div className="review-table" role="table" aria-label="리뷰 목록">
@@ -145,7 +121,7 @@ export default function ReviewList({ store, toast, go }) {
       )}
 
       {pageCount > 1 && (
-        <nav className="pagination" aria-label="페이지">
+        <nav className="pagination" aria-label="페이지 이동">
           <button aria-label="이전 페이지" disabled={current === 1} onClick={() => setPage(current - 1)}>
             <Icon name="prev" />
           </button>
@@ -167,10 +143,10 @@ function timeOf(iso) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-function replyStatus(r) {
-  if (r.status === 'FAILED') return ['fail', '분류 실패'];
-  if (r.replies.some((p) => p.selected)) return ['done', '답글 완료'];
-  return ['wait', '답글 대기'];
+function ReplyStatus({ review: r }) {
+  if (r.status === 'FAILED') return <StatusIndicator tone="danger" icon="error">분류 실패</StatusIndicator>;
+  if (r.replies.some((p) => p.selected)) return <StatusIndicator tone="success" icon="confirm">답글 완료</StatusIndicator>;
+  return <StatusIndicator tone="neutral">답글 대기</StatusIndicator>;
 }
 
 /** 리뷰 한 건 = 표의 한 행. 답글 초안은 행 아래에 회색 영역으로 붙는다. */
@@ -178,7 +154,6 @@ function Ticket({ no, review: r, onUpdated, toast }) {
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState(null);
   const failed = r.status === 'FAILED';
-  const [statusKey, statusLabel] = replyStatus(r);
 
   async function retry() {
     setRetrying(true);
@@ -219,17 +194,18 @@ function Ticket({ no, review: r, onUpdated, toast }) {
 
       <span className="rt-type" role="cell">
         <span className="cell-label">분류</span>
-        <span className={`type type-${failed ? 'FAILED' : r.type}`}>{failed ? '실패' : TYPE_LABEL[r.type]}</span>
+        {failed
+          ? <StatusIndicator tone="danger">실패</StatusIndicator>
+          : <StatusIndicator tone={TYPE_TONE[r.type]}>{TYPE_LABEL[r.type]}</StatusIndicator>}
       </span>
       <span className="rt-status" role="cell">
-        <span className={`status status-${statusKey}`}>{statusLabel}</span>
+        <ReplyStatus review={r} />
       </span>
 
       {failed && (
         <div className="rt-actions" role="cell">
-          <button className="icon-btn" onClick={retry} disabled={retrying} aria-label="다시 분류" title="다시 분류">
-            {retrying ? <Spinner /> : <Icon name="retry" />}
-          </button>
+          <IconButton icon={retrying ? 'loading' : 'retry'} className={retrying ? 'is-loading' : undefined}
+                      label="다시 분류" onClick={retry} disabled={retrying} />
         </div>
       )}
       {failed && (
@@ -287,27 +263,19 @@ function TemplateReply({ reply, toast, onCopied }) {
   return (
     <>
       <div className="rt-actions" role="cell">
-        <button className="icon-btn" onClick={() => setEditing(!editing)} aria-pressed={editing}
-                aria-label={editing ? '답글 수정 완료' : '답글 수정'} title={editing ? '수정 완료' : '수정'}>
-          <Icon name={editing ? 'confirm' : 'edit'} />
-        </button>
-        <button className={`icon-btn ${copied ? 'is-done' : ''}`} onClick={copy}
-                aria-label={copied ? '답글 다시 복사' : '답글 복사'} title={copied ? '복사함 · 다시 복사' : '복사'}>
-          <Icon name={copied ? 'confirm' : 'copy'} />
-        </button>
+        <IconButton icon={editing ? 'confirm' : 'edit'} label={editing ? '답글 수정 완료' : '답글 수정'}
+                    aria-pressed={editing} onClick={() => setEditing(!editing)} />
+        <IconButton icon={copied ? 'confirm' : 'copy'} tone={copied ? 'success' : undefined}
+                    label={copied ? '답글 다시 복사 (복사함)' : '답글 복사'} onClick={copy} />
       </div>
       <div className="rt-reply">
         <span className="ai-label">AI 답글 초안 · 별점 템플릿, 확인 후 사용</span>
         {editing ? (
           <div className="rt-edit">
-            <textarea aria-label="답글 수정" className="textarea" value={text} rows={3}
-                      onChange={(e) => setText(e.target.value)} />
+            <FormInput multiline aria-label="답글 수정" value={text} rows={3} onChange={(e) => setText(e.target.value)} />
             <div className="end">
-              <button className="btn btn-sm" onClick={() => setEditing(false)}>수정 완료</button>
-              <button className="btn btn-sm btn-primary" onClick={copy}>
-                <Icon name="copy" size={16} />
-                복사
-              </button>
+              <SecondaryButton tone="neutral" size="sm" onClick={() => setEditing(false)}>수정 완료</SecondaryButton>
+              <PrimaryButton size="sm" icon="copy" onClick={copy}>복사</PrimaryButton>
             </div>
           </div>
         ) : (
