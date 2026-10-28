@@ -92,7 +92,7 @@ public class ReviewService {
             review.applyClassification(classificationService.classify(review.getRating(), review.getMaskedContent()));
         } catch (LlmException e) {
             log.warn("리뷰 {} 분류 실패: {}", review.getId(), e.getMessage());
-            review.markFailed("LLM_FAILED");
+            review.markFailed(e.getReason());
         } catch (ApiException e) {
             review.markFailed(e.getCode());
         }
@@ -108,7 +108,7 @@ public class ReviewService {
         try {
             review.applyClassification(classificationService.classify(review.getRating(), review.getMaskedContent()));
         } catch (LlmException e) {
-            review.markFailed("LLM_FAILED");
+            review.markFailed(e.getReason());
             reviewRepository.save(review);
             throw e;
         }

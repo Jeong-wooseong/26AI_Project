@@ -92,6 +92,19 @@ class ReviewFlowTest {
         ArgumentCaptor<LlmRequest> captor = ArgumentCaptor.forClass(LlmRequest.class);
         verify(llmClient).generateJson(captor.capture());
         assertThat(captor.getValue().user()).contains("[전화번호]").doesNotContain("010-1234-5678");
+        // 분류는 추론을 적게 쓰도록 작업별 설정(기본 low)을 함께 보낸다
+        assertThat(captor.getValue().reasoningEffort()).isEqualTo("low");
+    }
+
+    @Test
+    void 실패_이유_코드를_저장한다() {
+        when(llmClient.generateJson(any())).thenThrow(new com.replyboss.ai.LlmTruncatedException("잘림"));
+
+        ReviewResponse failed = reviewService.createBatch(storeId, new ReviewBatchRequest(
+                Platform.BAEMIN, List.of(new ReviewItem(2, "배달이 늦어서 그런지 맛이 덜했어요")))).get(0);
+
+        assertThat(failed.status()).isEqualTo(ReviewStatus.FAILED);
+        assertThat(failed.failureCode()).isEqualTo("LLM_TRUNCATED");
     }
 
     @Test

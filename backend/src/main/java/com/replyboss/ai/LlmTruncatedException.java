@@ -4,6 +4,6 @@ package com.replyboss.ai;
 public class LlmTruncatedException extends LlmException {
 
     public LlmTruncatedException(String message) {
-        super(message);
+        super(message, null, "LLM_TRUNCATED");
     }
 }

@@ -29,5 +29,7 @@ openai:
   embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
   # 추론 모델이 느리면 low 로 (지원하지 않는 모델이면 비워둘 것)
   reasoning-effort: ${OPENAI_REASONING_EFFORT:}
+  # 분류는 짧은 판단이라 추론을 적게 (추론이 길어져 응답이 잘리거나 시간이 초과되는 것을 막음). 비우면 위 설정을 따름
+  classify-reasoning-effort: ${OPENAI_CLASSIFY_REASONING_EFFORT:low}
   timeout-seconds: 60
   max-retries: 1

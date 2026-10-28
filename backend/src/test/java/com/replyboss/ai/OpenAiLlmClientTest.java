@@ -15,7 +15,7 @@ class OpenAiLlmClientTest {
 
     private OpenAiLlmClient client(String reasoningEffort) {
         return new OpenAiLlmClient(new OpenAiProperties(
-                "key", "http://localhost:1", "m1", "m2", "e1", reasoningEffort, 1, 0), mapper);
+                "key", "http://localhost:1", "m1", "m2", "e1", reasoningEffort, 1, 0, null), mapper);
     }
 
     @Test

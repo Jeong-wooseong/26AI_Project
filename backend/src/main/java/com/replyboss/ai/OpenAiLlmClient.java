@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
@@ -59,6 +60,7 @@ public class OpenAiLlmClient implements LlmClient {
         }
 
         int maxTokens = request.maxTokens();
+        String effort = effortFor(request);
         int attempts = 1 + Math.max(0, props.maxRetries());
         RuntimeException last = null;
 
@@ -67,7 +69,7 @@ public class OpenAiLlmClient implements LlmClient {
                 JsonNode response = restClient.post()
                         .uri("/v1/chat/completions")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .body(buildBody(request, maxTokens))
+                        .body(buildBody(request, maxTokens, effort))
                         .retrieve()
                         .body(JsonNode.class);
                 return extractJson(response);
@@ -84,14 +86,43 @@ public class OpenAiLlmClient implements LlmClient {
                 }
             } catch (RestClientResponseException e) {
                 last = e;
-                log.warn("OpenAI 호출 실패 ({}/{}): HTTP {} {}", i, attempts, e.getStatusCode().value(), abbreviate(e.getResponseBodyAsString()));
+                String body = abbreviate(e.getResponseBodyAsString());
+                log.warn("OpenAI 호출 실패 ({}/{}): HTTP {} {}", i, attempts, e.getStatusCode().value(), body);
+                // 모델이 reasoning_effort 를 지원하지 않으면 빼고 한 번 더 보낸다
+                if (e.getStatusCode().value() == 400 && effort != null && body.contains("reasoning")) {
+                    log.warn("reasoning_effort={} 를 빼고 다시 시도합니다", effort);
+                    effort = null;
+                    if (i == attempts) {
+                        attempts++;
+                    }
+                }
             } catch (RestClientException | LlmException e) {
                 last = e;
                 log.warn("OpenAI 호출 실패 ({}/{}): {}", i, attempts, e.getMessage());
             }
         }
         throw new LlmException("OpenAI 호출이 " + attempts + "회 모두 실패했습니다 (마지막 원인: "
-                + (last == null ? "알 수 없음" : last.getMessage()) + ")", last);
+                + (last == null ? "알 수 없음" : last.getMessage()) + ")", last, reasonOf(last));
+    }
+
+    /** 작업별 설정이 있으면 그것을, 없으면 전역 설정을 쓴다. 빈 문자열은 '보내지 않음' */
+    private String effortFor(LlmRequest request) {
+        String effort = request.reasoningEffort() != null ? request.reasoningEffort() : props.reasoningEffort();
+        return effort == null || effort.isBlank() ? null : effort.strip();
+    }
+
+    /** 마지막 실패 원인 → 화면에 보여줄 이유 코드 */
+    static String reasonOf(Throwable last) {
+        if (last instanceof LlmException e) {
+            return e.getReason();
+        }
+        if (last instanceof RestClientResponseException e) {
+            return "LLM_HTTP_" + e.getStatusCode().value();
+        }
+        if (last instanceof ResourceAccessException) {
+            return "LLM_TIMEOUT";
+        }
+        return "LLM_FAILED";
     }
 
     private static String abbreviate(String text) {
@@ -103,10 +134,10 @@ public class OpenAiLlmClient implements LlmClient {
     }
 
     Map<String, Object> buildBody(LlmRequest request) {
-        return buildBody(request, request.maxTokens());
+        return buildBody(request, request.maxTokens(), effortFor(request));
     }
 
-    Map<String, Object> buildBody(LlmRequest request, int maxTokens) {
+    Map<String, Object> buildBody(LlmRequest request, int maxTokens, String effort) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", request.model());
         body.put("messages", List.of(
@@ -122,8 +153,8 @@ public class OpenAiLlmClient implements LlmClient {
                         "schema", request.schema()
                 )
         ));
-        if (props.reasoningEffort() != null && !props.reasoningEffort().isBlank()) {
-            body.put("reasoning_effort", props.reasoningEffort().strip());
+        if (effort != null) {
+            body.put("reasoning_effort", effort);
         }
         return body;
     }
@@ -135,7 +166,7 @@ public class OpenAiLlmClient implements LlmClient {
         JsonNode choice = response.path("choices").path(0);
         JsonNode message = choice.path("message");
         if (!message.path("refusal").isMissingNode() && !message.path("refusal").isNull()) {
-            throw new LlmException("모델이 응답을 거절했습니다: " + message.path("refusal").asText());
+            throw new LlmException("모델이 응답을 거절했습니다: " + message.path("refusal").asText(), null, "LLM_REFUSED");
         }
         String finishReason = choice.path("finish_reason").asText("");
         if ("length".equals(finishReason)) {
@@ -143,12 +174,12 @@ public class OpenAiLlmClient implements LlmClient {
         }
         String content = message.path("content").asText("");
         if (content.isBlank()) {
-            throw new LlmException("응답 내용이 비어 있습니다");
+            throw new LlmException("응답 내용이 비어 있습니다", null, "LLM_INVALID");
         }
         try {
             return objectMapper.readTree(content);
         } catch (JsonProcessingException e) {
-            throw new LlmException("응답 JSON 을 읽을 수 없습니다", e);
+            throw new LlmException("응답 JSON 을 읽을 수 없습니다", e, "LLM_INVALID");
         }
     }
 }

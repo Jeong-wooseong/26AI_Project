@@ -22,7 +22,8 @@ const TYPE_TONE = { PRAISE: 'praise', COMPLAINT: 'complaint', MALICIOUS: 'malici
 /** 화면 ③ 오늘의 리뷰: 날짜별 리뷰를 표로 보고, 분류 결과와 답글 초안을 확인·복사한다. */
 export default function ReviewList({ store, toast, go }) {
   const [date, setDate] = useState(todayISO());
-  const [filter, setFilter] = useState('ALL');
+  const [filter, setFilter] = useState('ALL'); // 유형
+  const [status, setStatus] = useState('ALL'); // 답글 상태: ALL | done | wait | fail
   const [platform, setPlatform] = useState('ALL');
   const [page, setPage] = useState(1);
   const [reviews, setReviews] = useState(null);
@@ -43,20 +44,24 @@ export default function ReviewList({ store, toast, go }) {
   }, [load]);
 
   // 거르는 조건이 바뀌면 첫 페이지로
-  useEffect(() => setPage(1), [date, filter, platform]);
+  useEffect(() => setPage(1), [date, filter, platform, status]);
 
   const replace = (updated) => setReviews((rs) => rs.map((r) => (r.id === updated.id ? updated : r)));
 
   const all = reviews ?? [];
   const list = all.filter((r) => platform === 'ALL' || r.platform === platform);
-  const counts = list.reduce((m, r) => {
+  // 유형·답글 상태는 서로의 선택을 반영해 개수를 센다 (선택한 조건 안에서 몇 건인지)
+  const byType = list.filter((r) => filter === 'ALL' || r.type === filter);
+  const byStatus = list.filter((r) => status === 'ALL' || statusOf(r) === status);
+  const typeCounts = byStatus.reduce((m, r) => {
     if (r.type) m[r.type] = (m[r.type] ?? 0) + 1;
     return m;
   }, {});
-  const failedCount = list.filter((r) => r.status === 'FAILED').length;
-  const done = list.filter((r) => r.replies.some((p) => p.selected)).length;
-  const visible = list.filter((r) =>
-    filter === 'ALL' ? true : filter === 'FAILED' ? r.status === 'FAILED' : r.type === filter);
+  const statusCounts = byType.reduce((m, r) => {
+    m[statusOf(r)] += 1;
+    return m;
+  }, { done: 0, wait: 0, fail: 0 });
+  const visible = byType.filter((r) => status === 'ALL' || statusOf(r) === status);
   const isToday = date === todayISO();
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
@@ -65,9 +70,14 @@ export default function ReviewList({ store, toast, go }) {
   const usedPlatforms = PLATFORMS.filter(([v]) => all.some((r) => r.platform === v) || v === platform);
 
   const typeOptions = [
-    ['ALL', `전체 유형 (${list.length})`],
-    ...TYPES.map(([key, label]) => [key, `${label} (${counts[key] ?? 0})`]),
-    ...(failedCount > 0 || filter === 'FAILED' ? [['FAILED', `분류 실패 (${failedCount})`]] : []),
+    ['ALL', `전체 유형 (${byStatus.length})`],
+    ...TYPES.map(([key, label]) => [key, `${label} (${typeCounts[key] ?? 0})`]),
+  ];
+  const statusTabs = [
+    ['ALL', '전체', byType.length],
+    ['done', '답글 완료', statusCounts.done],
+    ['wait', '답글 대기', statusCounts.wait],
+    ['fail', '분류 실패', statusCounts.fail],
   ];
 
   return (
@@ -113,12 +123,15 @@ export default function ReviewList({ store, toast, go }) {
       {all.length > 0 && (
         <DataTable label="리뷰 목록" className="review-table">
           <div className="dt-caption">
-            <dl className="summary" aria-label="요약 (선택한 출처 기준)">
-              <div><dt>전체</dt><dd>{list.length}</dd></div>
-              <div className="is-done"><dt>답글 완료</dt><dd>{done}</dd></div>
-              <div><dt>답글 대기</dt><dd>{list.length - done}</dd></div>
-              <div className={failedCount ? 'is-fail' : ''}><dt>분류 실패</dt><dd>{failedCount}</dd></div>
-            </dl>
+            <div className="status-tabs" role="group" aria-label="답글 상태로 거르기">
+              {statusTabs.map(([key, label, count]) => (
+                <button key={key} type="button" aria-pressed={status === key} className={`status-tab is-${key}`}
+                        onClick={() => setStatus(key)}>
+                  {label}
+                  <span className="status-count">{count}</span>
+                </button>
+              ))}
+            </div>
             {visible.length > 0 && (
               <span className="page-range">
                 {visible.length}건 중 {(current - 1) * PAGE_SIZE + 1}–{Math.min(current * PAGE_SIZE, visible.length)}
@@ -155,6 +168,32 @@ export default function ReviewList({ store, toast, go }) {
   );
 }
 
+/** 답글 상태 (서로 겹치지 않음): 분류 실패 → 답글 완료(복사함) → 답글 대기 */
+function statusOf(r) {
+  if (r.status === 'FAILED') return 'fail';
+  if (r.replies.some((p) => p.selected)) return 'done';
+  return 'wait';
+}
+
+const FAILURE_TEXT = {
+  LLM_NOT_CONFIGURED: 'OpenAI API 키가 설정되지 않았습니다. backend/.env의 OPENAI_API_KEY를 확인하십시오.',
+  LLM_TRUNCATED: 'AI 응답이 길이 한도에서 잘렸습니다.',
+  LLM_TIMEOUT: 'AI 응답 시간이 초과되었습니다.',
+  LLM_REFUSED: 'AI가 이 리뷰의 분석을 거절했습니다.',
+  LLM_INVALID: 'AI 응답 형식이 올바르지 않습니다.',
+  LLM_HTTP_400: 'OpenAI가 요청을 거부했습니다 (HTTP 400). 서버 로그를 확인하십시오.',
+  LLM_HTTP_401: 'OpenAI API 키가 유효하지 않습니다. backend/.env를 확인하십시오.',
+  LLM_HTTP_403: 'OpenAI API 키에 권한이 없습니다. backend/.env를 확인하십시오.',
+  LLM_HTTP_429: 'OpenAI 사용 한도를 초과했거나 요청이 많습니다. 결제·사용 한도를 확인하십시오.',
+};
+
+/** 실패 코드 → 안내 문구. 다시 시도해 해결될 수 있는 실패에는 재분류 안내를 붙인다. */
+function failureText(code) {
+  const text = FAILURE_TEXT[code] ?? (code?.startsWith('LLM_HTTP_5') ? 'OpenAI 서버 오류입니다.' : 'AI 응답을 받지 못했습니다.');
+  const retryable = !['LLM_NOT_CONFIGURED', 'LLM_HTTP_401', 'LLM_HTTP_403', 'LLM_REFUSED'].includes(code);
+  return retryable ? `${text} 재분류 버튼으로 다시 시도할 수 있습니다.` : text;
+}
+
 function timeOf(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -180,7 +219,7 @@ function Ticket({ no, review: r, onUpdated, toast }) {
       onUpdated(await api.reclassify(r.id));
       toast.show('재분류 완료');
     } catch (e) {
-      setRetryError(e.message);
+      setRetryError({ code: e.code, message: e.message });
     } finally {
       setRetrying(false);
     }
@@ -229,9 +268,8 @@ function Ticket({ no, review: r, onUpdated, toast }) {
       )}
       {failed && (
         <p className="rt-error">
-          {r.failureCode === 'LLM_NOT_CONFIGURED'
-            ? 'OpenAI API 키 미설정. backend/.env의 OPENAI_API_KEY를 확인하십시오.'
-            : retryError ?? 'AI 응답 수신 실패. 재분류 버튼으로 다시 시도할 수 있습니다.'}
+          {retryError ? retryError.message : failureText(r.failureCode)}
+          <span className="error-code">오류 코드 {retryError?.code ?? r.failureCode ?? 'LLM_FAILED'}</span>
         </p>
       )}
 

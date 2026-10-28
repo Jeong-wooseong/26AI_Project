@@ -55,20 +55,25 @@ public class ClassificationService {
                 "별점: " + rating + "\n본문: " + maskedContent,
                 "review_classification",
                 SCHEMA,
-                2000
+                2000,
+                blankToNull(props.classifyReasoningEffort())
         ));
         return parse(json);
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.strip();
     }
 
     /** 구조화 출력이어도 값 범위는 코드에서 한 번 더 확인한다. */
     static ClassificationResult parse(JsonNode json) {
         ReviewType type = parseEnum(ReviewType.class, json.path("type").asText(""));
         if (type == null || type == ReviewType.RATING_ONLY) {
-            throw new LlmException("알 수 없는 리뷰 유형: " + json.path("type").asText());
+            throw new LlmException("알 수 없는 리뷰 유형: " + json.path("type").asText(), null, "LLM_INVALID");
         }
         Sentiment sentiment = parseEnum(Sentiment.class, json.path("sentiment").asText(""));
         if (sentiment == null) {
-            throw new LlmException("알 수 없는 감정 값: " + json.path("sentiment").asText());
+            throw new LlmException("알 수 없는 감정 값: " + json.path("sentiment").asText(), null, "LLM_INVALID");
         }
 
         Set<String> keywords = new LinkedHashSet<>();
