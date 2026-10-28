@@ -22,6 +22,8 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew build --no-daemon
+      - name: bootRunLocal 태스크 설정 확인 (실행하지 않음)
+        run: ./gradlew bootRunLocal --dry-run --no-daemon
 
   frontend:
     runs-on: ubuntu-latest
