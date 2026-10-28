@@ -140,7 +140,7 @@ flowchart LR
     REPO["JPA Repository"]
   end
   DB[("MySQL")]
-  AI["Claude API"]
+  AI["OpenAI API"]
   EMB["임베딩 API"]
   EXT --> WEB
   WEB -->|"HTTPS · JSON"| API
@@ -169,7 +169,7 @@ flowchart LR
 | Frontend | React 18, Vite |
 | Backend | Spring Boot 3.5 (Java 17), Spring Data JPA |
 | Database | MySQL 8 (테스트는 H2) |
-| AI | Claude API (구조화 출력): 분류·톤 추출 `claude-haiku-5-5`, 답글 생성 `claude-sonnet-5-5` / 임베딩 API (4주차, 미정) |
+| AI | OpenAI API (Chat Completions 구조화 출력, strict json_schema): 분류·톤 추출 `gpt-6-luna`, 답글 생성 `gpt-6.1-sol` / 임베딩 `text-embedding-3-small` (4주차) |
 | 기타 | Chrome Extension (선택), GitHub |
 
 ## 8. 데이터베이스 설계
@@ -294,7 +294,7 @@ erDiagram
 26AI_Project/
 ├─ backend/                         # Spring Boot 3.5 (Java 17)
 │  ├─ src/main/java/com/replyboss/
-│  │  ├─ ai/                        # ClaudeLlmClient(구조화 출력), Schemas, PromptTemplates
+│  │  ├─ ai/                        # OpenAiLlmClient(구조화 출력), Schemas, PromptTemplates
 │  │  ├─ masking/                   # MaskingService (전화번호·이메일·주소·주문번호)
 │  │  ├─ store/                     # 가게, 톤 프로필 추출·저장
 │  │  ├─ review/                    # 리뷰 입력·분류·재시도, 평가용 분류 API
@@ -311,7 +311,7 @@ erDiagram
 
 ## 12. 실행 방법
 
-필요한 것: JDK 17 이상, Node.js 18 이상, MySQL 8 (또는 Docker), Claude API 키
+필요한 것: JDK 17 이상, Node.js 18 이상, MySQL 8 (또는 Docker), OpenAI API 키
 
 ### 1) 저장소 받기
 
@@ -341,7 +341,7 @@ GRANT ALL ON replyboss.* TO 'replyboss'@'localhost';
 `backend/.env.example` 을 `backend/.env` 로 복사하고 값을 채운다. `.env` 는 저장소에 올리지 않는다.
 
 ```
-ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
 DB_URL=jdbc:mysql://localhost:3306/replyboss?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
 DB_USERNAME=replyboss
 DB_PASSWORD=replyboss

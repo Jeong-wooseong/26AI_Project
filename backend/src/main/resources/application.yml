@@ -18,13 +18,16 @@ spring:
 server:
   port: 8080
 
-claude:
-  api-key: ${ANTHROPIC_API_KEY:}
-  base-url: https://api.anthropic.com
-  api-version: "2023-06-01"
-  # 분류·톤 추출처럼 짧고 정해진 형식의 작업은 빠르고 저렴한 모델
-  classify-model: ${CLAUDE_CLASSIFY_MODEL:claude-haiku-5-5}
+openai:
+  api-key: ${OPENAI_API_KEY:}
+  base-url: https://api.openai.com
+  # 분류·톤 추출처럼 짧고 정해진 형식의 작업은 가장 저렴한 모델
+  classify-model: ${OPENAI_CLASSIFY_MODEL:gpt-6-luna}
   # 답글 생성(3주차)처럼 문장 품질이 중요한 작업
-  generate-model: ${CLAUDE_GENERATE_MODEL:claude-sonnet-5-5}
-  timeout-seconds: 30
+  generate-model: ${OPENAI_GENERATE_MODEL:gpt-6.1-sol}
+  # 중복 답글 방지(4주차)
+  embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+  # 추론 모델이 느리면 low 로 (지원하지 않는 모델이면 비워둘 것)
+  reasoning-effort: ${OPENAI_REASONING_EFFORT:}
+  timeout-seconds: 60
   max-retries: 1

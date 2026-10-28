@@ -1,10 +1,10 @@
 package com.replyboss.review;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.replyboss.ai.ClaudeProperties;
 import com.replyboss.ai.LlmClient;
 import com.replyboss.ai.LlmException;
 import com.replyboss.ai.LlmRequest;
+import com.replyboss.ai.OpenAiProperties;
 import com.replyboss.ai.PromptTemplates;
 import org.springframework.stereotype.Service;
 
@@ -40,9 +40,9 @@ public class ClassificationService {
 
     private final LlmClient llmClient;
     private final PromptTemplates prompts;
-    private final ClaudeProperties props;
+    private final OpenAiProperties props;
 
-    public ClassificationService(LlmClient llmClient, PromptTemplates prompts, ClaudeProperties props) {
+    public ClassificationService(LlmClient llmClient, PromptTemplates prompts, OpenAiProperties props) {
         this.llmClient = llmClient;
         this.prompts = prompts;
         this.props = props;
@@ -53,9 +53,9 @@ public class ClassificationService {
                 props.classifyModel(),
                 prompts.render(PROMPT, Map.of()),
                 "별점: " + rating + "\n본문: " + maskedContent,
+                "review_classification",
                 SCHEMA,
-                300,
-                0.0
+                2000
         ));
         return parse(json);
     }

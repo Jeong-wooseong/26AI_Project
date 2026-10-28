@@ -1,9 +1,9 @@
 package com.replyboss.store;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.replyboss.ai.ClaudeProperties;
 import com.replyboss.ai.LlmClient;
 import com.replyboss.ai.LlmRequest;
+import com.replyboss.ai.OpenAiProperties;
 import com.replyboss.ai.PromptTemplates;
 import org.springframework.stereotype.Service;
 
@@ -38,9 +38,9 @@ public class ToneProfileService {
 
     private final LlmClient llmClient;
     private final PromptTemplates prompts;
-    private final ClaudeProperties props;
+    private final OpenAiProperties props;
 
-    public ToneProfileService(LlmClient llmClient, PromptTemplates prompts, ClaudeProperties props) {
+    public ToneProfileService(LlmClient llmClient, PromptTemplates prompts, OpenAiProperties props) {
         this.llmClient = llmClient;
         this.prompts = prompts;
         this.props = props;
@@ -58,9 +58,9 @@ public class ToneProfileService {
                 props.classifyModel(),
                 prompts.render(PROMPT, Map.of()),
                 user.toString(),
+                "tone_profile",
                 SCHEMA,
-                600,
-                0.2
+                2000
         ));
         return sanitize(json, samples);
     }

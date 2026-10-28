@@ -7,8 +7,8 @@ import java.util.Map;
 
 /**
  * 구조화 출력용 JSON Schema 를 짧게 쓰기 위한 도우미.
- * Claude 구조화 출력은 object 에 additionalProperties=false 가 필요하고,
- * minimum/maxLength 같은 수치·길이 제약은 지원하지 않으므로 그런 검사는 코드에서 한다.
+ * OpenAI strict 구조화 출력은 object 의 모든 속성이 required 이고 additionalProperties=false 여야 한다.
+ * 개수·길이·범위 같은 제약은 스키마에 넣지 않고 코드에서 한 번 더 검사한다.
  */
 public final class Schemas {
 

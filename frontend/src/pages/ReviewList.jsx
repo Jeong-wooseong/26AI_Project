@@ -158,7 +158,7 @@ function Ticket({ review: r, onUpdated, toast }) {
         <div className="ticket-alert">
           <span>
             {r.failureCode === 'LLM_NOT_CONFIGURED'
-              ? 'Claude API 키가 설정되지 않아 분류하지 못했어요. backend/.env 를 확인해주세요.'
+              ? 'OpenAI API 키가 설정되지 않아 분류하지 못했어요. backend/.env 의 OPENAI_API_KEY 를 확인해주세요.'
               : retryError ?? 'AI 응답을 받지 못해 분류하지 못했어요.'}
           </span>
           <button className="btn small" onClick={retry} disabled={retrying}>

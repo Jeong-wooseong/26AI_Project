@@ -8,11 +8,12 @@ spring:
       ddl-auto: create-drop
     open-in-view: false
 
-claude:
+openai:
   api-key: test-key
   base-url: http://localhost:0
-  api-version: "2023-06-01"
   classify-model: test-classify-model
   generate-model: test-generate-model
+  embedding-model: test-embedding-model
+  reasoning-effort:
   timeout-seconds: 1
   max-retries: 0
