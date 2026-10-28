@@ -43,6 +43,8 @@ export const api = {
 
   createReviews: (storeId, platform, reviews) =>
     request('POST', `/api/stores/${storeId}/reviews`, { platform, reviews }),
+  // 일괄 등록 전 중복 확인 (저장하지 않음). items: [{ platform, content }]
+  checkDuplicates: (storeId, items) => request('POST', `/api/stores/${storeId}/reviews/duplicate-check`, { items }),
   listReviews: (storeId, { date, type } = {}) => {
     const q = new URLSearchParams();
     if (date) q.set('date', date);

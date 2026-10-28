@@ -6,6 +6,13 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  ClipboardPaste,
+  Download,
+  FileSpreadsheet,
+  Info,
+  Keyboard,
+  Undo2,
+  Upload,
   ClipboardList,
   Copy,
   ListChecks,
@@ -44,6 +51,13 @@ const ICONS = {
   next: ChevronRight,
   loading: LoaderCircle,
   error: CircleAlert,
+  info: Info,
+  manual: Keyboard, // 직접 입력
+  paste: ClipboardPaste, // 여러 리뷰 붙여넣기
+  file: FileSpreadsheet, // 파일 가져오기
+  upload: Upload,
+  download: Download,
+  restore: Undo2,
 };
 
 export default function Icon({ name, size = 18, className = '', ...rest }) {

@@ -181,7 +181,8 @@ function Ticket({ no, review: r, onUpdated, toast }) {
           {r.maskedContent ? <Masked text={r.maskedContent} /> : '(본문 없음 · 별점만 등록)'}
         </p>
         <p className="meta">
-          <time dateTime={r.createdAt}>{timeOf(r.createdAt)}</time>
+          <time dateTime={r.createdAt} title="등록 시각">{timeOf(r.createdAt)}</time>
+          {r.writtenAt && <span>작성일 {r.writtenAt}</span>}
           {!failed && r.keywords.length > 0 && (
             <span className="kw">{r.keywords.map((k) => `#${k}`).join(' ')}</span>
           )}
@@ -289,5 +290,5 @@ function TemplateReply({ reply, toast, onCopied }) {
 /** [전화번호] 같은 가림 표시를 눈에 띄게 */
 function Masked({ text }) {
   const parts = text.split(/(\[(?:전화번호|이메일|주소|주문번호|번호)\])/g);
-  return parts.map((p, i) => (/^\[.+\]$/.test(p) ? <span key={i} className="mask">{p.slice(1, -1)} 가림</span> : p));
+  return parts.map((p, i) => (/^\[.+\]$/.test(p) ? <span key={i} className="mask">{p.slice(1, -1)} 마스킹</span> : p));
 }

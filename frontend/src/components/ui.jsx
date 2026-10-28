@@ -233,3 +233,46 @@ export function StatusIndicator({ tone = 'neutral', icon, children }) {
     </span>
   );
 }
+
+/* ── 탭 (세그먼트 컨트롤) ───────────────────────────── */
+/** tabs: [{ key, label, icon }]. 패널은 TabPanel 로 감싼다. ←/→ 키로 이동한다. */
+export function SegmentedTabs({ tabs, value, onChange, label, idPrefix }) {
+  function onKeyDown(e) {
+    const i = tabs.findIndex((t) => t.key === value);
+    const next = e.key === 'ArrowRight' ? (i + 1) % tabs.length : e.key === 'ArrowLeft' ? (i - 1 + tabs.length) % tabs.length : null;
+    if (next == null) return;
+    e.preventDefault();
+    onChange(tabs[next].key);
+    document.getElementById(`${idPrefix}-tab-${tabs[next].key}`)?.focus();
+  }
+  return (
+    <div className="segmented" role="tablist" aria-label={label}>
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          role="tab"
+          id={`${idPrefix}-tab-${t.key}`}
+          aria-controls={`${idPrefix}-panel-${t.key}`}
+          aria-selected={value === t.key}
+          tabIndex={value === t.key ? 0 : -1}
+          onClick={() => onChange(t.key)}
+          onKeyDown={onKeyDown}
+        >
+          {t.icon && <Icon name={t.icon} />}
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** 탭 패널: 숨겨도 상태가 유지되도록 마운트는 유지하고 hidden 으로만 감춘다 */
+export function TabPanel({ idPrefix, tabKey, active, children }) {
+  return (
+    <div role="tabpanel" id={`${idPrefix}-panel-${tabKey}`} aria-labelledby={`${idPrefix}-tab-${tabKey}`} hidden={!active}
+         className="tab-panel">
+      {children}
+    </div>
+  );
+}

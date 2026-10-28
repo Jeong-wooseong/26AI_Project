@@ -1,12 +1,26 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { PLATFORMS } from '../labels.js';
 import Icon from '../components/Icon.jsx';
-import { Alert, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton, SecondaryButton, SectionCard } from '../components/ui.jsx';
+import {
+  Alert, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton, SecondaryButton, SectionCard, SegmentedTabs, TabPanel,
+} from '../components/ui.jsx';
+import PastePanel from '../components/import/PastePanel.jsx';
+import FilePanel from '../components/import/FilePanel.jsx';
 
 const MAX_ROWS = 30;
 const MAX_LENGTH = 2000; // 리뷰 본문 최대 글자 수 (기존 maxLength 와 동일)
 const RATING_OPTIONS = [5, 4, 3, 2, 1].map((n) => [n, `${n}점`]);
+const MODES = [
+  { key: 'manual', label: '직접 입력', icon: 'manual' },
+  { key: 'paste', label: '여러 리뷰 붙여넣기', icon: 'paste' },
+  { key: 'file', label: '파일 가져오기', icon: 'file' },
+];
+const PLATFORM_HINT = {
+  manual: '리뷰가 등록된 플랫폼을 선택합니다.',
+  paste: '추출한 리뷰 전체에 적용되며, 미리보기에서 행별로 바꿀 수 있습니다.',
+  file: '파일에 플랫폼 열이 없거나 비어 있을 때 적용됩니다.',
+};
 const emptyRow = () => ({ key: crypto.randomUUID(), rating: 5, content: '' });
 
 /** 화면 ② 리뷰 입력: 별점 + 본문 여러 줄 → 분류하기 */
@@ -16,6 +30,17 @@ export default function ReviewInput({ store, toast, go }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const inputs = useRef({});
+  const [mode, setMode] = useState('manual');
+  const [pasteRows, setPasteRows] = useState([]);
+  const [fileRows, setFileRows] = useState([]);
+
+  // 화면에서 고른 출처를 따르는 미리보기 행은 출처를 바꾸면 함께 바뀐다 (파일 값·직접 고른 값은 유지)
+  useEffect(() => {
+    const follow = (rs) => rs.map((r) => (r.platformFrom === 'default' && r.state !== 'done' && r.platform !== platform
+      ? { ...r, platform, serverDup: false } : r));
+    setPasteRows(follow);
+    setFileRows(follow);
+  }, [platform]);
 
   const update = (key, patch) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
 
@@ -56,8 +81,8 @@ export default function ReviewInput({ store, toast, go }) {
       const failed = results.filter((r) => r.status === 'FAILED').length;
       toast.show(
         failed
-          ? `리뷰 ${results.length}개 중 ${failed}개는 분류하지 못했어요. 목록에서 다시 시도해주세요`
-          : `리뷰 ${results.length}개를 분류했어요`,
+          ? `리뷰 ${results.length}건 등록 완료 (분류 실패 ${failed}건, 목록에서 재분류 가능)`
+          : `리뷰 ${results.length}건 등록 및 분류 완료`,
       );
       setRows([emptyRow()]);
       go('reviews');
@@ -72,67 +97,77 @@ export default function ReviewInput({ store, toast, go }) {
 
   return (
     <>
-      <PageHeader
-        title="리뷰 입력"
-        description="배달앱·지도에서 오늘 리뷰를 복사해 붙여 넣어 주세요. 본문을 비우면 평점만 남긴 리뷰로 처리해요."
-      />
+      <PageHeader title="리뷰 입력" description="고객 리뷰를 등록하고 AI로 유형을 분류합니다. 별점만 있는 리뷰에는 답글 초안이 함께 생성됩니다." />
 
       {error && <Alert>{error}</Alert>}
 
+      <SegmentedTabs tabs={MODES} value={mode} onChange={setMode} label="리뷰 입력 방식" idPrefix="input-mode" />
+
       <SectionCard
-        as="form"
-        onSubmit={submit}
         aria-label="리뷰 입력"
-        footer={
-          <PrimaryButton type="submit" icon="classify" loading={busy} loadingText="분류 중">
-            분류하기
+        footer={mode === 'manual' && (
+          <PrimaryButton type="submit" form="manual-review-form" icon="classify" loading={busy} loadingText="처리 중">
+            등록 및 분류
           </PrimaryButton>
-        }
+        )}
       >
-        <FormSelect id="platform" label="플랫폼" fieldClassName="platform-field" value={platform}
+        <FormSelect id="platform" label="리뷰 출처" hint={PLATFORM_HINT[mode]} fieldClassName="platform-field" value={platform}
                     options={PLATFORMS} onChange={(e) => setPlatform(e.target.value)} />
 
-        <div className="entry-table" role="table" aria-label="입력할 리뷰" aria-rowcount={rows.length + 1}>
-          <div className="entry-row entry-head" role="row">
-            <span className="entry-no" role="columnheader">번호</span>
-            <span role="columnheader">별점</span>
-            <span role="columnheader">리뷰 내용</span>
-            <span className="entry-act" role="columnheader">삭제</span>
-          </div>
-          {rows.map((r, i) => (
-            <div className={`entry-row ${r.content.trim() ? 'is-filled' : ''}`} key={r.key} role="row">
-              <span className="entry-no" role="cell">{i + 1}</span>
-              <div className="cell cell-rating" role="cell">
-                <FormSelect icon="star" aria-label={`리뷰 ${i + 1} 별점`} value={r.rating} options={RATING_OPTIONS}
-                            onChange={(e) => update(r.key, { rating: Number(e.target.value) })} />
-              </div>
-              <div className="cell cell-content" role="cell">
-                <FormInput aria-label={`리뷰 ${i + 1} 본문`} value={r.content} maxLength={MAX_LENGTH}
-                           ref={(el) => { inputs.current[r.key] = el; }}
-                           placeholder="비워 두면 평점만 리뷰로 처리돼요"
-                           counter={r.content ? `${r.content.length}/${MAX_LENGTH}` : null} counterInside
-                           onChange={(e) => update(r.key, { content: e.target.value })}
-                           onKeyDown={(e) => onContentKeyDown(e, i)} />
-              </div>
-              <div className="entry-act" role="cell">
-                <IconButton icon="remove" tone="danger" label={`리뷰 ${i + 1} 삭제`}
-                            disabled={rows.length === 1} onClick={() => removeRow(r.key)} />
-              </div>
+        <TabPanel idPrefix="input-mode" tabKey="manual" active={mode === 'manual'}>
+          <form id="manual-review-form" className="tab-form" onSubmit={submit}>
+          <div className="entry-table" role="table" aria-label="입력할 리뷰" aria-rowcount={rows.length + 1}>
+            <div className="entry-row entry-head" role="row">
+              <span className="entry-no" role="columnheader">번호</span>
+              <span role="columnheader">별점</span>
+              <span role="columnheader">리뷰 내용</span>
+              <span className="entry-act" role="columnheader">삭제</span>
             </div>
-          ))}
-        </div>
+            {rows.map((r, i) => (
+              <div className={`entry-row ${r.content.trim() ? 'is-filled' : ''}`} key={r.key} role="row">
+                <span className="entry-no" role="cell">{i + 1}</span>
+                <div className="cell cell-rating" role="cell">
+                  <FormSelect icon="star" aria-label={`리뷰 ${i + 1} 별점`} value={r.rating} options={RATING_OPTIONS}
+                              onChange={(e) => update(r.key, { rating: Number(e.target.value) })} />
+                </div>
+                <div className="cell cell-content" role="cell">
+                  <FormInput aria-label={`리뷰 ${i + 1} 본문`} value={r.content} maxLength={MAX_LENGTH}
+                             ref={(el) => { inputs.current[r.key] = el; }}
+                             placeholder="고객이 작성한 리뷰 내용"
+                             counter={r.content ? `${r.content.length}/${MAX_LENGTH}` : null} counterInside
+                             onChange={(e) => update(r.key, { content: e.target.value })}
+                             onKeyDown={(e) => onContentKeyDown(e, i)} />
+                </div>
+                <div className="entry-act" role="cell">
+                  <IconButton icon="remove" tone="danger" label={`리뷰 ${i + 1} 삭제`}
+                              disabled={rows.length === 1} onClick={() => removeRow(r.key)} />
+                </div>
+              </div>
+            ))}
+          </div>
 
-        <div className="table-tools">
-          <SecondaryButton icon="add" onClick={addRow} disabled={full}>리뷰 추가</SecondaryButton>
-          <span className="row-count" aria-live="polite">
-            {full && <span className="row-count-full">최대 개수에 도달했어요 · </span>}
-            <strong>{rows.length}</strong> / {MAX_ROWS}개
-          </span>
-        </div>
+          <div className="table-tools">
+            <SecondaryButton icon="add" onClick={addRow} disabled={full}>행 추가</SecondaryButton>
+            <span className="row-count" aria-live="polite">
+              {full && <span className="row-count-full">최대 개수 도달 · </span>}
+              <strong>{rows.length}</strong> / {MAX_ROWS}건
+            </span>
+          </div>
+          <p className="hint">리뷰 내용이 없는 경우 별점만 등록됩니다. Enter: 다음 행으로 이동 (마지막 행에서는 행 추가)</p>
+          </form>
+        </TabPanel>
+
+        <TabPanel idPrefix="input-mode" tabKey="paste" active={mode === 'paste'}>
+          <PastePanel store={store} platform={platform} rows={pasteRows} setRows={setPasteRows} toast={toast} go={go} />
+        </TabPanel>
+
+        <TabPanel idPrefix="input-mode" tabKey="file" active={mode === 'file'}>
+          <FilePanel store={store} platform={platform} rows={fileRows} setRows={setFileRows} toast={toast} go={go} />
+        </TabPanel>
 
         <p className="notice">
           <Icon name="lock" />
-          <span>전화번호·이메일·주소·주문번호는 자동으로 가려진 뒤 AI에 전달되고, 가려진 내용만 저장돼요.</span>
+          <span>전화번호, 이메일, 주소 및 주문번호는 자동으로 마스킹 처리되며, 마스킹된 내용만 AI에 전달·저장됩니다.</span>
         </p>
       </SectionCard>
     </>

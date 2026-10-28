@@ -58,6 +58,10 @@ ReplyBoss는 리뷰를 **직접 게시하지 않습니다.** 모든 답글은 �
 - 붙여넣은 리뷰의 **개인정보(전화번호·주소 등)를 마스킹**한 뒤 AI에 전달
 - LLM이 유형(칭찬 / 불만 / 악성 / 문의), 감정, 키워드(메뉴명·불만 주제)를 **JSON으로 구조화**
 - **본문이 없는 평점만 리뷰**는 LLM을 호출하지 않고 규칙으로 처리
+- 입력 방식 3가지: **직접 입력**, **여러 리뷰 붙여넣기**(범용 파서로 리뷰 단위 추출), **파일 가져오기**(CSV·XLSX, 열 연결)
+  - 일괄 등록은 반드시 미리보기에서 확인·수정·제외 후 등록. 별점을 확정할 수 없으면 비워 두고 사용자가 선택
+  - 같은 목록 안 중복, 이미 등록된 리뷰와의 중복(마스킹 후 본문 비교)을 등록 전에 표시
+  - 파일은 브라우저 안에서만 읽고 서버에 업로드하지 않음. 플랫폼 공식 리뷰 API 조사 결과는 [docs/review-api-research.md](docs/review-api-research.md)
 
 | 별점 | 평점만 리뷰 처리 |
 | --- | --- |
@@ -398,6 +402,7 @@ node eval/classify_eval.mjs
 | PUT | `/api/stores/{id}/tone-profile` | 톤 프로필 저장 |
 | POST | `/api/stores/{id}/reviews` | 리뷰 일괄 입력 → 마스킹·분류 (평점만 리뷰는 템플릿 답글까지) |
 | GET | `/api/stores/{id}/reviews?date=&type=` | 날짜·유형별 리뷰 목록 |
+| POST | `/api/stores/{id}/reviews/duplicate-check` | 일괄 등록 전 중복 확인 (저장 안 함) |
 | POST | `/api/reviews/{id}/classify` | 분류 다시 시도 |
 | PATCH | `/api/replies/{id}/select` | 복사한 답글 기록 (수정본 포함) |
 | POST | `/api/eval/classify` | 정확도 측정용 분류 (저장 안 함) |
