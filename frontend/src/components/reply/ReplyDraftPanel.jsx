@@ -9,7 +9,7 @@ import { DRAFT_TYPES, TONE_LABEL, draftsOf, hasFillIn, textOf } from './replyMod
 /**
  * 작성 대기 리뷰의 답글 영역: 초안 확인 → (필요하면 수정) → 하나 선택 → 작성 완료.
  *  - 복사는 클립보드에만 넣는다 (작성 완료로 바뀌지 않음).
- *  - 새로 생성한 초안만 순서대로 타이핑 효과로 보여주고, 다시 열 때는 바로 전체를 보여준다.
+ *  - 새로 생성한 초안만 세 개가 동시에 타이핑 효과로 나타나고, 다시 열 때는 바로 전체를 보여준다.
  *
  * generation: { state: 'idle' | 'loading' | 'error', error?, freshIds? } — 생성 요청 상태는 행(Ticket)이 가진다.
  */
@@ -24,31 +24,22 @@ export default function ReplyDraftPanel({ review: r, generation, onGenerate, onC
   const { copiedKey, copy } = useCopy();
   const textRefs = useRef({});
 
-  // 타이핑 효과: 이번 생성 요청으로 새로 받은 초안만, 하나씩 차례로
+  // 타이핑 효과: 이번 생성 요청으로 새로 받은 초안만, 모두 동시에 시작
   const order = useMemo(() => (generation.freshIds ?? []).filter((id) => drafts.some((d) => d.id === id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [generation.freshIds]);
-  const [current, setCurrent] = useState(0);
+  // 타이핑을 마쳤거나 사용자가 펼친 초안 (전체 표시)
   const [revealed, setRevealed] = useState(() => new Set());
   useEffect(() => {
-    setCurrent(0);
     setRevealed(new Set());
     setTexts({});
     setEditingId(null);
     setSelectedId((id) => (drafts.some((d) => d.id === id) ? id : drafts.length === 1 ? drafts[0].id : null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order]);
-  // 차례가 된 초안을 사용자가 이미 펼쳤으면 다음 차례로 넘긴다
-  useEffect(() => {
-    if (current < order.length && revealed.has(order[current])) setCurrent((c) => c + 1);
-  }, [current, order, revealed]);
 
-  const modeOf = (id) => {
-    const pos = order.indexOf(id);
-    if (pos < 0 || pos < current || revealed.has(id)) return 'full';
-    return pos === current ? 'typing' : 'waiting';
-  };
-  // 수정·선택·복사하면 그 초안은 애니메이션을 멈추고 전체를 보여준다
+  const modeOf = (id) => (order.includes(id) && !revealed.has(id) ? 'typing' : 'full');
+  // 타이핑이 끝나거나, 수정·선택·복사하면 그 초안은 애니메이션을 멈추고 전체를 보여준다
   const reveal = (id) => setRevealed((s) => (s.has(id) ? s : new Set(s).add(id)));
 
   const textFor = (d) => texts[d.id] ?? textOf(d);
@@ -145,7 +136,7 @@ export default function ReplyDraftPanel({ review: r, generation, onGenerate, onC
                                  onChange={(e) => setTexts((t) => ({ ...t, [d.id]: e.target.value }))} />
                     ) : (
                       <ReplyTypingText ref={(el) => { textRefs.current[d.id] = el; }} text={text} mode={modeOf(d.id)}
-                                       onDone={() => setCurrent((c) => c + 1)} />
+                                       onDone={() => reveal(d.id)} />
                     )}
                   </div>
                   <div className="draft-actions">

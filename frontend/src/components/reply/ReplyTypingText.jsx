@@ -16,7 +16,7 @@ const durationOf = (length) => Math.min(1400, Math.max(500, length * 16));
 
 /**
  * 생성이 끝난 답글을 화면에서 순서대로 보여주는 시각 효과 (스트리밍 응답이 아님).
- * mode: 'full'(전체 표시) | 'typing'(입력되는 중) | 'waiting'(차례를 기다리는 중, 자리만 차지)
+ * mode: 'full'(전체 표시) | 'typing'(입력되는 중) | 'waiting'(자리만 차지, 현재 화면에서는 쓰지 않음)
  * 레이아웃이 흔들리지 않도록 전체 문장을 보이지 않게 깔아 높이를 미리 잡는다.
  */
 const ReplyTypingText = forwardRef(function ReplyTypingText({ text, mode = 'full', onDone, className = '' }, ref) {
