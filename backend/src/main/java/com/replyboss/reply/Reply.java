@@ -60,6 +60,10 @@ public class Reply {
     @Column(name = "is_selected", nullable = false)
     private boolean selected;
 
+    /** 악성 리뷰 가이드: 사장님이 확인할 것 (JSON 배열) */
+    @Column(name = "strategy_checklist", columnDefinition = "TEXT")
+    private String strategyChecklist;
+
     /** 4주차: 악성 리뷰 전략 APOLOGY / FACT / HOLD */
     @Column(length = 20)
     private String strategy;
@@ -89,7 +93,11 @@ public class Reply {
     public void markFinal(String finalText) {
         this.selected = true;
         String text = finalText == null ? "" : finalText.strip();
+        String before = getText();
         this.editedContent = text.isEmpty() || text.equals(content) ? null : text;
+        if (!getText().equals(before)) {
+            this.embedding = null; // 문장이 바뀌었으므로 다음 비교 때 다시 계산
+        }
     }
 
     /** 다른 답글이 최종으로 바뀌었을 때 */
@@ -108,6 +116,48 @@ public class Reply {
         if (editedContent != null && !editedContent.isBlank() && !editedContent.strip().equals(content)) {
             this.editedContent = editedContent.strip();
         }
+    }
+
+    /** 중복 방지 3단: 이 답글의 임베딩과, 만들 때 최근 답글과 가장 비슷했던 정도, 다시 생성한 횟수 */
+    public void recordSimilarity(String embedding, Double maxSimilarity, int regenCount) {
+        this.embedding = embedding;
+        this.maxSimilarity = maxSimilarity;
+        this.regenCount = regenCount;
+    }
+
+    public void recordEmbedding(String embedding) {
+        this.embedding = embedding;
+    }
+
+    /** 악성 리뷰 대응 가이드 내용 */
+    public void recordStrategy(String strategy, String reason, String checklistJson) {
+        this.strategy = strategy;
+        this.strategyReason = reason;
+        this.strategyChecklist = checklistJson;
+    }
+
+    public String getEmbedding() {
+        return embedding;
+    }
+
+    public Double getMaxSimilarity() {
+        return maxSimilarity;
+    }
+
+    public int getRegenCount() {
+        return regenCount;
+    }
+
+    public String getStrategy() {
+        return strategy;
+    }
+
+    public String getStrategyReason() {
+        return strategyReason;
+    }
+
+    public String getStrategyChecklist() {
+        return strategyChecklist;
     }
 
     public Long getId() {

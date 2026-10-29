@@ -1,6 +1,7 @@
 package com.replyboss.review;
 
 import com.replyboss.review.ReviewDtos.CompleteReplyRequest;
+import com.replyboss.review.ReviewDtos.GuideRequest;
 import com.replyboss.review.ReviewDtos.DuplicateCheckRequest;
 import com.replyboss.review.ReviewDtos.DuplicateCheckResponse;
 import com.replyboss.review.ReviewDtos.ReviewBatchRequest;
@@ -60,6 +61,12 @@ public class ReviewController {
     @PutMapping("/api/reviews/{reviewId}/final-reply")
     public ReviewResponse completeReply(@PathVariable Long reviewId, @Valid @RequestBody CompleteReplyRequest request) {
         return reviewService.completeReply(reviewId, request);
+    }
+
+    /** 악성 리뷰 대응 가이드. body 의 strategy(APOLOGY|FACT|HOLD) 가 없으면 추천을 받는다 */
+    @PostMapping("/api/reviews/{reviewId}/malicious-guide")
+    public ReviewResponse maliciousGuide(@PathVariable Long reviewId, @RequestBody(required = false) GuideRequest request) {
+        return reviewService.maliciousGuide(reviewId, request == null ? null : request.strategy());
     }
 
     @PostMapping("/api/reviews/{reviewId}/classify")

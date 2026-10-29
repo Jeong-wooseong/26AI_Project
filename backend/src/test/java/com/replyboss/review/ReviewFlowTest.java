@@ -1,11 +1,14 @@
 package com.replyboss.review;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.replyboss.ai.EmbeddingClient;
 import com.replyboss.ai.LlmClient;
 import com.replyboss.ai.LlmException;
 import com.replyboss.ai.LlmRequest;
+import com.replyboss.reply.GuideStrategy;
 import com.replyboss.reply.ReplyTone;
 import com.replyboss.review.ReviewDtos.CompleteReplyRequest;
+import com.replyboss.common.ApiException;
 import com.replyboss.review.ReviewDtos.DuplicateCheckItem;
 import com.replyboss.review.ReviewDtos.DuplicateCheckRequest;
 import com.replyboss.review.ReviewDtos.ReviewBatchRequest;
@@ -24,6 +27,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -49,12 +53,14 @@ class ReviewFlowTest {
 
     @MockitoBean
     LlmClient llmClient;
+    @MockitoBean
+    EmbeddingClient embeddingClient;
 
     Long storeId;
 
     @BeforeEach
     void setUp() {
-        reset(llmClient);
+        reset(llmClient, embeddingClient);
         storeId = storeService.create(new StoreRequest("달빛카페", "카페")).id();
         storeService.updateTone(storeId, new ToneUpdateRequest(
                 new ToneProfile("해요체", "가끔", List.of("😊"), "2~3문장", List.of("감사드려요"), "오늘도 좋은 하루 되세요!"),
@@ -307,5 +313,122 @@ class ReviewFlowTest {
         assertThat(user).contains("[확인된 매장 정보] 주문 후 바로 굽습니다.")
                 .contains("감정: POSITIVE")
                 .contains("[최근 답글").contains("치즈볼을 맛있게 드셔서 기쁩니다.");
+    }
+
+    /** 문장에 따라 정해진 벡터를 돌려주는 가짜 임베딩 */
+    private void embedBy(Function<String, float[]> f) {
+        when(embeddingClient.embed(any())).thenAnswer(inv -> {
+            List<String> texts = inv.getArgument(0);
+            return texts.stream().map(f).toList();
+        });
+    }
+
+    private static float[] vec(float... v) {
+        return v;
+    }
+
+    @Test
+    void 비슷한_리뷰는_같은_묶음으로_묶고_다른_리뷰_수를_알려준다() throws Exception {
+        embedBy(t -> t.contains("치즈볼") ? vec(1, 0, 0, 0) : vec(0, 1, 0, 0));
+        when(llmClient.generateJson(any())).thenReturn(mapper.readTree("""
+                {"type":"PRAISE","sentiment":"POSITIVE","keywords":["치즈볼"],"confidence":0.9}
+                """));
+        ReviewResponse a = reviewService.createBatch(storeId, new ReviewBatchRequest(
+                Platform.BAEMIN, List.of(new ReviewItem(5, "치즈볼 최고예요")))).get(0);
+        List<ReviewResponse> next = reviewService.createBatch(storeId, new ReviewBatchRequest(
+                Platform.BAEMIN, List.of(new ReviewItem(5, "치즈볼 또 시킬게요"), new ReviewItem(4, "라떼가 맛있어요"))));
+
+        assertThat(next.get(0).groupId()).isNotNull();
+        assertThat(next.get(0).similarCount()).isEqualTo(1);
+        assertThat(next.get(1).groupId()).isNull();
+        ReviewResponse listedA = reviewService.list(storeId, null, null).stream().filter(r -> r.id().equals(a.id())).findFirst().orElseThrow();
+        assertThat(listedA.groupId()).isEqualTo(next.get(0).groupId());
+        assertThat(listedA.similarCount()).isEqualTo(1);
+    }
+
+    @Test
+    void 임베딩이_실패해도_리뷰_등록과_초안_생성은_진행된다() throws Exception {
+        when(embeddingClient.embed(any())).thenThrow(new LlmException("임베딩 실패", null, "LLM_TIMEOUT"));
+        ReviewResponse drafted = praiseWithDrafts();
+        assertThat(drafted.groupId()).isNull();
+        assertThat(drafted.replies()).hasSize(3).allSatisfy(r -> assertThat(r.maxSimilarity()).isNull());
+    }
+
+    @Test
+    void 이전_최종_답글과_유사도가_기준_이상이면_다시_생성한다() throws Exception {
+        embedBy(t -> t.contains("같은표현") ? vec(1, 0, 0, 0) : vec(0, 1, 0, 0));
+        when(llmClient.generateJson(any())).thenReturn(
+                mapper.readTree("""
+                        {"type":"PRAISE","sentiment":"POSITIVE","keywords":["치즈볼"],"confidence":0.95}
+                        """),
+                mapper.readTree("""
+                        {"polite":"같은표현 치즈볼 감사합니다. 또 뵙겠습니다.","friendly":"같은표현 치즈볼 고마워요. 또 와요.","concise":"같은표현 치즈볼 감사해요."}
+                        """));
+        ReviewResponse first = reviewService.createBatch(storeId, new ReviewBatchRequest(
+                Platform.BAEMIN, List.of(new ReviewItem(5, "치즈볼 맛있어요")))).get(0);
+        ReviewResponse firstDrafts = reviewService.generateReplies(first.id());
+        reviewService.completeReply(first.id(), new CompleteReplyRequest(firstDrafts.replies().get(0).id(), firstDrafts.replies().get(0).content()));
+
+        reset(llmClient);
+        when(llmClient.generateJson(any())).thenReturn(
+                mapper.readTree("""
+                        {"type":"PRAISE","sentiment":"POSITIVE","keywords":["치즈볼"],"confidence":0.95}
+                        """),
+                mapper.readTree("""
+                        {"polite":"같은표현 치즈볼 감사합니다. 또 뵙겠습니다.","friendly":"같은표현 치즈볼 고마워요. 또 와요.","concise":"같은표현 치즈볼 감사해요."}
+                        """),
+                mapper.readTree(DRAFTS_2));
+        ReviewResponse second = reviewService.createBatch(storeId, new ReviewBatchRequest(
+                Platform.COUPANG_EATS, List.of(new ReviewItem(5, "치즈볼이 바삭해요")))).get(0);
+        ReviewResponse drafted = reviewService.generateReplies(second.id());
+
+        ArgumentCaptor<LlmRequest> captor = ArgumentCaptor.forClass(LlmRequest.class);
+        verify(llmClient, times(3)).generateJson(captor.capture()); // 분류 1 + 생성 2 (유사도 때문에 1번 다시)
+        assertThat(captor.getAllValues().get(2).user()).contains("이전 답글과 너무 비슷함").contains("유사도 1.00");
+        assertThat(drafted.replies()).hasSize(3).allSatisfy(r -> {
+            assertThat(r.content()).doesNotContain("같은표현");
+            assertThat(r.regenCount()).isEqualTo(1);
+            assertThat(r.maxSimilarity()).isLessThan(0.9);
+        });
+    }
+
+    @Test
+    void 악성_리뷰는_전략_근거_확인할_것과_답글을_만들고_확인해야_확정된다() throws Exception {
+        when(llmClient.generateJson(any())).thenReturn(
+                mapper.readTree("""
+                        {"type":"MALICIOUS","sentiment":"NEGATIVE","keywords":["응대 태도"],"confidence":0.9}
+                        """),
+                mapper.readTree("""
+                        {"strategy":"HOLD","reason":"욕설이 포함되어 있습니다.","checklist":["주문 내역 확인","플랫폼 신고 기준 확인"],"reply":"고객님, 이용에 불편을 드렸다면 죄송합니다. 고소를 검토하겠습니다."}
+                        """),
+                mapper.readTree("""
+                        {"strategy":"HOLD","reason":"욕설이 포함되어 있습니다.","checklist":["주문 내역 확인","플랫폼 신고 기준 확인"],"reply":"이용에 불편을 드렸다면 죄송합니다. 말씀하신 내용은 확인해 보겠습니다."}
+                        """));
+        ReviewResponse review = reviewService.createBatch(storeId, new ReviewBatchRequest(
+                Platform.BAEMIN, List.of(new ReviewItem(1, "이 가게 망해라")))).get(0);
+
+        assertThatThrownBy(() -> reviewService.generateReplies(review.id())).isInstanceOf(ApiException.class);
+        ReviewResponse guided = reviewService.maliciousGuide(review.id(), null);
+
+        var guide = guided.replies().get(0);
+        assertThat(guide.tone()).isEqualTo(ReplyTone.GUIDE);
+        assertThat(guide.strategy()).isEqualTo("HOLD");
+        assertThat(guide.strategyReason()).contains("욕설");
+        assertThat(guide.checklist()).containsExactly("주문 내역 확인", "플랫폼 신고 기준 확인");
+        assertThat(guide.content()).doesNotContain("고소"); // 위협성 표현은 다시 생성
+
+        assertThatThrownBy(() -> reviewService.completeReply(review.id(), new CompleteReplyRequest(guide.id(), guide.content())))
+                .isInstanceOf(ApiException.class);
+        assertThat(reviewService.completeReply(review.id(), new CompleteReplyRequest(guide.id(), guide.content(), true)).replyStatus())
+                .isEqualTo("COMPLETED");
+
+        // 다른 전략을 고르면 그 전략으로 다시 만들고, 확정한 답글은 남긴다
+        when(llmClient.generateJson(any())).thenReturn(mapper.readTree("""
+                {"strategy":"APOLOGY","reason":"사실 확인이 필요합니다.","checklist":["주문 내역 확인"],"reply":"말씀하신 상황을 [확인한 사실 입력] 기준으로 다시 살펴보겠습니다."}
+                """));
+        ReviewResponse fact = reviewService.maliciousGuide(review.id(), GuideStrategy.FACT);
+        assertThat(fact.replies()).hasSize(2);
+        assertThat(fact.replies().get(1).strategy()).isEqualTo("FACT");
+        assertThat(fact.finalReplyId()).isEqualTo(guide.id());
     }
 }

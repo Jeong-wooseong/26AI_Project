@@ -66,6 +66,10 @@ public class Review {
     @Column(name = "group_id", length = 40)
     private String groupId;
 
+    /** 본문 임베딩 (비슷한 리뷰 묶기용, "[...]" 문자열). 임베딩을 못 받았으면 null */
+    @Column(columnDefinition = "TEXT")
+    private String embedding;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ReviewStatus status;
@@ -214,6 +218,19 @@ public class Review {
 
     public String getGroupId() {
         return groupId;
+    }
+
+    /** 중복 방지 1단: 비슷한 리뷰 묶음에 넣는다 */
+    public void joinGroup(String groupId) {
+        this.groupId = groupId;
+    }
+
+    public String getEmbedding() {
+        return embedding;
+    }
+
+    public void recordEmbedding(String embedding) {
+        this.embedding = embedding;
     }
 
     public ReviewStatus getStatus() {

@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.replyboss.ai.LlmClient;
 import com.replyboss.ai.LlmException;
 import com.replyboss.ai.LlmRequest;
+import com.replyboss.ai.EmbeddingClient;
 import com.replyboss.ai.OpenAiProperties;
+import com.replyboss.ai.SimilarityProperties;
+import com.replyboss.ai.Vectors;
 import com.replyboss.ai.PromptTemplates;
 import com.replyboss.review.ReviewType;
 import com.replyboss.review.Sentiment;
@@ -25,7 +28,8 @@ import static com.replyboss.ai.Schemas.string;
 
 /**
  * 기능 3. 맞춤형 답글 초안 3종(정중형·친근형·간결형) 생성.
- * 매장 말투와 톤별 문장 수를 주입하고, 생성 후 안전 규칙(약속 금지·가림 표시 금지)과 키워드 반영·문장 수를 코드로 한 번 더 확인한다.
+ * 매장 말투와 톤별 문장 수, 이전 답글(중복 방지 2단)을 주입하고, 생성 후 안전 규칙(약속 금지·가림 표시 금지)과
+ * 키워드 반영·문장 수, 이전 답글과의 임베딩 유사도(중복 방지 3단)를 코드로 다시 확인한다.
  * 규칙을 어긴 초안이 있으면 이유를 알려 주고 한 번 다시 생성한다.
  */
 @Service
@@ -55,45 +59,117 @@ public class ReplyGenerationService {
     private static final int LENGTH_TOLERANCE = 1;
 
     private final LlmClient llmClient;
+    private final EmbeddingClient embeddingClient;
     private final PromptTemplates prompts;
     private final OpenAiProperties props;
+    private final SimilarityProperties similarity;
 
-    public ReplyGenerationService(LlmClient llmClient, PromptTemplates prompts, OpenAiProperties props) {
+    public ReplyGenerationService(LlmClient llmClient, EmbeddingClient embeddingClient, PromptTemplates prompts,
+                                  OpenAiProperties props, SimilarityProperties similarity) {
         this.llmClient = llmClient;
+        this.embeddingClient = embeddingClient;
         this.prompts = prompts;
         this.props = props;
+        this.similarity = similarity;
+    }
+
+    /** 이전에 쓴 최종 답글 (embedding 은 없을 수 있음) */
+    public record PastReply(String text, float[] embedding) {
     }
 
     /**
-     * @param storeInfo     사장님이 적은 매장 소개·운영 방식 (없으면 null). 답글은 여기 적힌 내용만 운영 방식으로 언급한다.
-     * @param recentReplies 이 가게의 최근 최종 답글 (시작·마무리 표현 반복을 피하기 위한 참고)
+     * @param storeInfo   사장님이 적은 매장 소개·운영 방식 (없으면 null). 답글은 여기 적힌 내용만 운영 방식으로 언급한다.
+     * @param pastReplies 피해야 할 이전 답글 (같은 묶음 리뷰의 답글 → 최근 최종 답글 순)
      */
     public record Context(String storeName, String category, String storeInfo, ToneProfile tone,
                           int rating, ReviewType type, Sentiment sentiment, List<String> keywords,
-                          String maskedContent, List<String> recentReplies) {
+                          String maskedContent, List<PastReply> pastReplies) {
+    }
+
+    /** 초안 하나: 문장, 임베딩(못 받았으면 null), 이전 답글과의 최대 유사도(비교 못 했으면 null) */
+    public record Draft(String text, float[] embedding, Double maxSimilarity) {
+    }
+
+    /** 톤별 초안과 다시 생성한 횟수 */
+    public record Result(Map<ReplyTone, Draft> drafts, int regenerations) {
     }
 
     private static final int RECENT_REPLY_MAX_LENGTH = 200;
+    /** 프롬프트에 보여줄 이전 답글 수 (2단) */
+    static final int PROMPT_PAST_REPLY_COUNT = 8;
 
-    /** 톤별 초안. 안전 규칙을 끝까지 어긴 초안은 빠질 수 있다 (모두 빠지면 실패). */
-    public Map<ReplyTone, String> generate(Context ctx) {
+    /**
+     * 톤별 초안을 만든다. 규칙 위반(약속·가림 표시·키워드·문장 수)이나
+     * 이전 답글과의 유사도(3단, 기준 이상)가 있으면 이유를 알려 주고 최대 maxRegenerations 번 다시 만든다.
+     * 여러 번 만든 경우 톤마다 문제가 가장 적고 덜 비슷한 초안을 고른다. 안전 규칙을 끝까지 어긴 초안은 뺀다.
+     */
+    public Result generate(Context ctx) {
         String userMessage = userMessage(ctx);
-        Map<ReplyTone, String> drafts = call(userMessage);
-        List<String> problems = problems(drafts, ctx);
-        if (!problems.isEmpty()) {
-            log.info("답글 초안 규칙 위반으로 다시 생성: {}", problems);
-            drafts = call(userMessage + "\n\n[이전 초안의 문제 — 고쳐서 다시 작성]\n- " + String.join("\n- ", problems));
-        }
-        Map<ReplyTone, String> safe = new EnumMap<>(ReplyTone.class);
-        drafts.forEach((tone, text) -> {
-            if (!PROMISE.matcher(text).find() && !MASK.matcher(text).find()) {
-                safe.put(tone, text);
+        List<float[]> pastVectors = ctx.pastReplies().stream().map(PastReply::embedding).filter(v -> v != null).toList();
+        Map<ReplyTone, Draft> best = new EnumMap<>(ReplyTone.class);
+        Map<ReplyTone, Double> bestScore = new EnumMap<>(ReplyTone.class);
+        String feedback = "";
+        int attempt = 0;
+        int maxAttempts = 1 + Math.max(0, similarity.maxRegenerations());
+        while (true) {
+            Map<ReplyTone, String> texts = call(userMessage + feedback);
+            Map<ReplyTone, Draft> drafts = withSimilarity(texts, pastVectors);
+            List<String> problems = new ArrayList<>();
+            drafts.forEach((tone, draft) -> {
+                List<String> own = problemsOf(tone, draft.text(), ctx);
+                if (draft.maxSimilarity() != null && draft.maxSimilarity() >= similarity.replyThreshold()) {
+                    own.add(FIELD.get(tone) + ": 이전 답글과 너무 비슷함 (유사도 "
+                            + String.format(java.util.Locale.ROOT, "%.2f", draft.maxSimilarity())
+                            + "). 시작 문장, 짚는 내용, 마무리 표현을 바꿀 것");
+                }
+                problems.addAll(own);
+                if (isSafe(draft.text())) {
+                    double score = own.size() * 10 + (draft.maxSimilarity() == null ? 0 : draft.maxSimilarity());
+                    if (!bestScore.containsKey(tone) || score < bestScore.get(tone)) {
+                        bestScore.put(tone, score);
+                        best.put(tone, draft);
+                    }
+                }
+            });
+            attempt++;
+            if (problems.isEmpty() || attempt >= maxAttempts) {
+                if (!problems.isEmpty()) {
+                    log.info("답글 초안 {}회 생성 후에도 남은 문제: {}", attempt, problems);
+                }
+                break;
             }
-        });
-        if (safe.isEmpty()) {
+            log.info("답글 초안 다시 생성 ({}회째): {}", attempt, problems);
+            feedback = "\n\n[이전 초안의 문제 — 고쳐서 다시 작성]\n- " + String.join("\n- ", problems);
+        }
+        if (best.isEmpty()) {
             throw new LlmException("안전 규칙을 지키는 답글 초안을 만들지 못했습니다", null, "LLM_INVALID");
         }
-        return safe;
+        return new Result(best, attempt - 1);
+    }
+
+    static boolean isSafe(String text) {
+        return !PROMISE.matcher(text).find() && !MASK.matcher(text).find();
+    }
+
+    /** 3단: 초안을 임베딩해 이전 답글과의 최대 유사도를 붙인다. 임베딩 실패 시 비교 없이 진행 */
+    private Map<ReplyTone, Draft> withSimilarity(Map<ReplyTone, String> texts, List<float[]> pastVectors) {
+        List<ReplyTone> tones = new ArrayList<>(texts.keySet());
+        List<float[]> vectors = null;
+        try {
+            vectors = embeddingClient.embed(tones.stream().map(texts::get).toList());
+            if (vectors == null || vectors.size() != tones.size() || vectors.contains(null)) {
+                vectors = null;
+            }
+        } catch (RuntimeException e) {
+            log.warn("답글 초안 임베딩 실패, 유사도 비교 없이 진행: {}", e.getMessage());
+        }
+        Map<ReplyTone, Draft> out = new EnumMap<>(ReplyTone.class);
+        for (int i = 0; i < tones.size(); i++) {
+            float[] v = vectors == null ? null : vectors.get(i);
+            Double sim = v == null || pastVectors.isEmpty() ? null : Vectors.maxCosine(v, pastVectors);
+            out.put(tones.get(i), new Draft(texts.get(tones.get(i)), v, sim));
+        }
+        return out;
     }
 
     private Map<ReplyTone, String> call(String userMessage) {
@@ -121,23 +197,27 @@ public class ReplyGenerationService {
     /** 규칙 위반 목록 (다시 생성할 때 모델에 알려준다) */
     static List<String> problems(Map<ReplyTone, String> drafts, Context ctx) {
         List<String> problems = new ArrayList<>();
-        drafts.forEach((tone, text) -> {
-            String name = FIELD.get(tone);
-            if (PROMISE.matcher(text).find()) {
-                problems.add(name + ": 정하지 않은 보상·할인 약속 표현이 있음");
-            }
-            if (MASK.matcher(text).find()) {
-                problems.add(name + ": 개인정보 가림 표시를 그대로 씀");
-            }
-            if (!ctx.keywords().isEmpty() && !mentionsKeyword(text, ctx.keywords())) {
-                problems.add(name + ": 리뷰 키워드(" + String.join(", ", ctx.keywords()) + ")를 언급하지 않음");
-            }
-            int[] range = sentenceRange(ctx.tone(), tone);
-            int count = countSentences(text);
-            if (count < range[0] || count > range[1] + LENGTH_TOLERANCE) {
-                problems.add(name + ": " + count + "문장으로 작성됨 (" + range[0] + "~" + range[1] + "문장으로 맞출 것)");
-            }
-        });
+        drafts.forEach((tone, text) -> problems.addAll(problemsOf(tone, text, ctx)));
+        return problems;
+    }
+
+    static List<String> problemsOf(ReplyTone tone, String text, Context ctx) {
+        List<String> problems = new ArrayList<>();
+        String name = FIELD.get(tone);
+        if (PROMISE.matcher(text).find()) {
+            problems.add(name + ": 정하지 않은 보상·할인 약속 표현이 있음");
+        }
+        if (MASK.matcher(text).find()) {
+            problems.add(name + ": 개인정보 가림 표시를 그대로 씀");
+        }
+        if (!ctx.keywords().isEmpty() && !mentionsKeyword(text, ctx.keywords())) {
+            problems.add(name + ": 리뷰 키워드(" + String.join(", ", ctx.keywords()) + ")를 언급하지 않음");
+        }
+        int[] range = sentenceRange(ctx.tone(), tone);
+        int count = countSentences(text);
+        if (count < range[0] || count > range[1] + LENGTH_TOLERANCE) {
+            problems.add(name + ": " + count + "문장으로 작성됨 (" + range[0] + "~" + range[1] + "문장으로 맞출 것)");
+        }
         return problems;
     }
 
@@ -202,9 +282,9 @@ public class ReplyGenerationService {
         sb.append("- 감정: ").append(ctx.sentiment() == null ? "알 수 없음" : ctx.sentiment().name()).append('\n');
         sb.append("- 키워드: ").append(ctx.keywords().isEmpty() ? "없음" : String.join(", ", ctx.keywords())).append('\n');
         sb.append("- 본문: ").append(ctx.maskedContent());
-        if (!ctx.recentReplies().isEmpty()) {
+        if (!ctx.pastReplies().isEmpty()) {
             sb.append("\n[최근 답글 - 시작·마무리 표현 반복 금지]");
-            for (String r : ctx.recentReplies()) {
+            for (String r : ctx.pastReplies().stream().limit(PROMPT_PAST_REPLY_COUNT).map(PastReply::text).toList()) {
                 String one = r.strip().replaceAll("\\s+", " ");
                 sb.append("\n- ").append(one.length() > RECENT_REPLY_MAX_LENGTH ? one.substring(0, RECENT_REPLY_MAX_LENGTH) + "…" : one);
             }

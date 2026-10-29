@@ -1,5 +1,7 @@
 package com.replyboss.review;
 
+import com.replyboss.common.JsonText;
+import com.replyboss.reply.GuideStrategy;
 import com.replyboss.reply.Reply;
 import com.replyboss.reply.ReplyTone;
 import jakarta.validation.Valid;
@@ -51,11 +53,20 @@ public final class ReviewDtos {
             ReplyTone tone,
             String content,
             String editedContent,
-            boolean selected
+            boolean selected,
+            /** 만들 때 이전 답글과 가장 비슷했던 정도 (비교하지 못했으면 null) */
+            Double maxSimilarity,
+            /** 이전 답글과 비슷하거나 규칙을 어겨 다시 생성한 횟수 */
+            int regenCount,
+            /** 악성 리뷰 가이드: APOLOGY | FACT | HOLD, 근거, 사장님이 확인할 것 */
+            String strategy,
+            String strategyReason,
+            List<String> checklist
     ) {
         public static ReplyResponse from(Reply reply) {
             return new ReplyResponse(reply.getId(), reply.getTone(), reply.getContent(),
-                    reply.getEditedContent(), reply.isSelected());
+                    reply.getEditedContent(), reply.isSelected(), reply.getMaxSimilarity(), reply.getRegenCount(),
+                    reply.getStrategy(), reply.getStrategyReason(), JsonText.readStringList(reply.getStrategyChecklist()));
         }
     }
 
@@ -77,9 +88,16 @@ public final class ReviewDtos {
             Long finalReplyId,
             LocalDateTime completedAt,
             LocalDateTime finalUpdatedAt,
+            /** 비슷한 리뷰 묶음 (없으면 null)과 묶음 안의 다른 리뷰 수 */
+            String groupId,
+            int similarCount,
             List<ReplyResponse> replies
     ) {
         public static ReviewResponse from(Review review, List<Reply> replies) {
+            return from(review, replies, 0);
+        }
+
+        public static ReviewResponse from(Review review, List<Reply> replies, int similarCount) {
             String replyStatus = review.isCompleted() ? "COMPLETED" : replies.isEmpty() ? "NONE" : "DRAFT";
             return new ReviewResponse(
                     review.getId(),
@@ -98,6 +116,8 @@ public final class ReviewDtos {
                     review.getFinalReplyId(),
                     review.getCompletedAt(),
                     review.getFinalUpdatedAt(),
+                    review.getGroupId(),
+                    similarCount,
                     replies.stream().map(ReplyResponse::from).toList()
             );
         }
@@ -109,8 +129,17 @@ public final class ReviewDtos {
             Long replyId,
             @NotBlank(message = "답글 내용을 입력하십시오.")
             @Size(max = 2000, message = "답글은 2000자 이내여야 합니다.")
-            String content
+            String content,
+            /** 악성 리뷰 대응 답글은 사장님 확인(true)이 있어야 확정할 수 있다 */
+            boolean confirmed
     ) {
+        public CompleteReplyRequest(Long replyId, String content) {
+            this(replyId, content, false);
+        }
+    }
+
+    /** 악성 리뷰 가이드 요청: 고른 전략 (없으면 추천) */
+    public record GuideRequest(GuideStrategy strategy) {
     }
 
     public record SelectReplyRequest(

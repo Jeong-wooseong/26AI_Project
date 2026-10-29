@@ -18,3 +18,11 @@ openai:
   classify-reasoning-effort: low
   timeout-seconds: 1
   max-retries: 0
+
+similarity:
+  dimensions: 4
+  review-group-threshold: 0.9
+  reply-threshold: 0.9
+  max-regenerations: 2
+  compare-count: 30
+  review-group-days: 7
