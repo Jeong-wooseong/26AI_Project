@@ -539,9 +539,70 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .done-mark { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-label); line-height: var(--lh-label); font-weight: 500; color: var(--success); white-space: nowrap; }
 .done-sub { font-size: var(--fs-micro); line-height: var(--lh-micro); }
 
+/* ── 11-2. 주간 리포트: 보고서형 (주 선택 → 핵심 수치 → AI 요약 → 근거 표) ── */
+.week-nav { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.week-nav .btn-sm { width: 36px; padding: 0; justify-content: center; }
+.week-label { display: flex; align-items: baseline; gap: var(--s2); min-width: 200px; justify-content: center; }
+.week-label strong { font-size: var(--fs-section); line-height: var(--lh-section); font-weight: 600; font-variant-numeric: tabular-nums; }
+.week-label span { font-size: var(--fs-small); color: var(--primary); font-weight: 600; }
+.report { display: flex; flex-direction: column; gap: var(--s5); }
+.report-figures {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.figure { padding: var(--s4) var(--s5); display: flex; flex-direction: column; gap: 2px; }
+.figure + .figure { border-left: 1px solid var(--border-subtle); }
+.figure dt { font-size: var(--fs-small); line-height: var(--lh-small); color: var(--text-sub); }
+.figure dd { margin: 0; }
+.figure-value { font-size: 26px; line-height: 34px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--text); }
+.figure-unit { margin-left: 6px; font-size: var(--fs-label); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.figure-compare { font-size: var(--fs-small); line-height: var(--lh-small); color: var(--text-sub); font-variant-numeric: tabular-nums; }
+.report-section, .report-insight {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: var(--s5) var(--s6); display: flex; flex-direction: column; gap: var(--s3); min-width: 0;
+}
+.report-insight { border-left: 2px solid var(--primary); }
+.report-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2) var(--s4); flex-wrap: wrap; }
+.report-section-head h2 { font-size: var(--fs-body); line-height: var(--lh-body); font-weight: 600; }
+.report-section-head p { font-size: var(--fs-small); line-height: var(--lh-small); color: var(--text-sub); margin-right: auto; }
+.report-section-head.is-sub { margin-top: var(--s2); padding-top: var(--s3); border-top: 1px solid var(--border-subtle); }
+.report-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--s5); align-items: start; }
+.report-empty { font-size: var(--fs-label); color: var(--text-sub); }
+.topic-table { width: 100%; border-collapse: collapse; font-size: var(--fs-label); line-height: var(--lh-label); }
+.topic-table th, .topic-table td { padding: 10px var(--s2); text-align: left; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
+.topic-table thead th { padding-top: 0; font-size: var(--fs-small); font-weight: 500; color: var(--text-sub); border-bottom-color: var(--border); }
+.topic-table tbody tr:last-child th, .topic-table tbody tr:last-child td { border-bottom: 0; }
+.topic-table tbody th { font-weight: 600; color: var(--text); white-space: nowrap; }
+.topic-table .rank { width: 40px; color: var(--text-sub); font-variant-numeric: tabular-nums; }
+.topic-table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.topic-table td:nth-child(3) { width: 42%; }
+.topic-bar { display: flex; align-items: center; gap: var(--s2); }
+.topic-bar .bar { height: 8px; min-width: 4px; background: var(--primary); border-radius: 0 4px 4px 0; }
+.topic-bar .count { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.change { color: var(--text-sub); }
+.change.is-up, .change.is-new { color: var(--text); font-weight: 600; }
+.type-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.type-list li { display: flex; justify-content: space-between; gap: var(--s3); padding: 6px 0; font-size: var(--fs-label); line-height: var(--lh-label); color: var(--text-muted); }
+.type-list li + li { border-top: 1px solid var(--border-subtle); }
+.type-list strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rep-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.rep-list li { padding: var(--s3) 0; display: flex; flex-direction: column; gap: 4px; }
+.rep-list li + li { border-top: 1px solid var(--border-subtle); }
+.rep-list li:first-child { padding-top: 0; }
+.rep-list li:last-child { padding-bottom: 0; }
+.rep-meta { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; font-size: var(--fs-small); color: var(--text-sub); }
+.rep-meta .rating { font-size: var(--fs-small); }
+.rep-topic { font-weight: 600; color: var(--text); }
+.rep-text { font-size: var(--fs-body); line-height: var(--lh-body); overflow-wrap: anywhere; }
+.insight-summary { font-size: var(--fs-body); line-height: 26px; color: var(--text); }
+.insight-suggestions { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-label); line-height: 22px; color: var(--text-muted); }
+.insight-stale { display: flex; gap: 6px; align-items: flex-start; font-size: var(--fs-small); line-height: var(--lh-small); color: var(--type-complaint); }
+.insight-stale .icon { margin-top: 2px; }
+
 /* ── 12. 반응형 ─────────────────────────────────────── */
 @media (max-width: 960px) {
   :root { --gutter: 24px; }
+  .report-grid { grid-template-columns: minmax(0, 1fr); }
   .settings-section { grid-template-columns: 200px minmax(0, 1fr); gap: var(--s8); padding: var(--s6); }
   .mapping-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .bulk-table { --dt-cols: 48px 116px 100px minmax(0, 1fr) 92px 36px; --dt-gap: 10px; }
@@ -593,6 +654,18 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   .bulk-content { grid-column: 1 / -1; grid-row: 2; }
   .bulk-status { grid-column: 1 / -1; grid-row: 3; padding-top: 0; }
   .dt-scroll { max-height: 70vh; }
+
+  /* 주간 리포트 */
+  .nav a .icon { display: none; }
+  .report-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .figure { padding: var(--s3) var(--s4); }
+  .figure:nth-child(3) { border-left: 0; }
+  .figure:nth-child(n + 3) { border-top: 1px solid var(--border-subtle); }
+  .figure-value { font-size: 22px; line-height: 30px; }
+  .report-section, .report-insight { padding: var(--s4); }
+  .topic-table th:nth-child(4), .topic-table td:nth-child(4) { display: none; }
+  .topic-table .rank { width: 24px; }
+  .topic-table tbody th { white-space: normal; }
 
   /* 오늘의 리뷰: 표 → 세로 목록 */
   .filters .field, .filters .filter-date, .filters .filter-search { flex: 1 1 140px; width: auto; }

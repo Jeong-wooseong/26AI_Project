@@ -2,6 +2,7 @@
 // 같은 기능에는 항상 같은 아이콘을 쓰도록 이 파일에서만 가져온다.
 import {
   Calendar,
+  ChartColumn,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -36,6 +37,7 @@ const ICONS = {
   store: Store, // 가게 설정
   input: MessageSquareText, // 리뷰 입력
   reviews: ClipboardList, // 오늘의 리뷰
+  report: ChartColumn, // 주간 리포트
   add: Plus,
   delete: Trash2,
   remove: X,

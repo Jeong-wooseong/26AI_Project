@@ -61,5 +61,8 @@ export const api = {
   // 악성 리뷰 대응 가이드 (strategy: APOLOGY | FACT | HOLD, 없으면 추천)
   maliciousGuide: (reviewId, strategy) =>
     request('POST', `/api/reviews/${reviewId}/malicious-guide`, strategy ? { strategy } : {}),
+  // 주간 리포트 (week: 그 주의 아무 날짜 YYYY-MM-DD). 수치는 서버 집계, AI 요약은 저장된 것만
+  weeklyReport: (storeId, week) => request('GET', `/api/stores/${storeId}/reports?week=${week}`),
+  generateInsight: (storeId, week) => request('POST', `/api/stores/${storeId}/reports/insight?week=${week}`),
   reclassify: (reviewId) => request('POST', `/api/reviews/${reviewId}/classify`),
 };

@@ -3,6 +3,7 @@ import { api } from './api.js';
 import StoreSetup from './pages/StoreSetup.jsx';
 import ReviewInput from './pages/ReviewInput.jsx';
 import ReviewList from './pages/ReviewList.jsx';
+import WeeklyReport from './pages/WeeklyReport.jsx';
 import { Toast, useToast } from './components/Toast.jsx';
 import Icon from './components/Icon.jsx';
 import { EmptyState, PrimaryButton, SecondaryButton } from './components/ui.jsx';
@@ -11,8 +12,9 @@ const VIEWS = [
   ['setup', '매장 설정'],
   ['input', '리뷰 입력'],
   ['reviews', '오늘의 리뷰'],
+  ['report', '주간 리포트'],
 ];
-const VIEW_ICON = { setup: 'store', input: 'input', reviews: 'reviews' };
+const VIEW_ICON = { setup: 'store', input: 'input', reviews: 'reviews', report: 'report' };
 
 /** '#reviews/wait' → 화면 'reviews', 하위 탭 'wait' */
 function parseHash() {
@@ -93,6 +95,8 @@ export default function App() {
     );
   } else if (active === 'input') {
     page = <ReviewInput store={store} toast={toast} go={go} />;
+  } else if (active === 'report') {
+    page = <WeeklyReport store={store} go={go} />;
   } else {
     page = <ReviewList key={sub ?? 'done'} store={store} toast={toast} go={go} initialTab={sub} />;
   }
