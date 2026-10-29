@@ -5,6 +5,7 @@ import com.replyboss.ai.LlmClient;
 import com.replyboss.ai.LlmException;
 import com.replyboss.ai.LlmRequest;
 import com.replyboss.reply.ReplyTone;
+import com.replyboss.review.ReviewDtos.CompleteReplyRequest;
 import com.replyboss.review.ReviewDtos.DuplicateCheckItem;
 import com.replyboss.review.ReviewDtos.DuplicateCheckRequest;
 import com.replyboss.review.ReviewDtos.ReviewBatchRequest;
@@ -214,5 +215,97 @@ class ReviewFlowTest {
                 Platform.BAEMIN, List.of(new ReviewItem(5, "")))).get(0);
         assertThatThrownBy(() -> reviewService.generateReplies(review.id()))
                 .isInstanceOf(com.replyboss.common.ApiException.class);
+    }
+
+    private static final String DRAFTS = """
+            {"polite":"치즈볼을 맛있게 드셔서 기쁩니다. 다음에도 정성껏 준비하겠습니다.","friendly":"치즈볼 맛있게 드셨다니 기뻐요. 또 들러주세요.","concise":"치즈볼 칭찬 감사드려요."}
+            """;
+    private static final String DRAFTS_2 = """
+            {"polite":"치즈볼 칭찬에 힘이 납니다. 늘 같은 맛으로 준비하겠습니다.","friendly":"치즈볼이 마음에 드셨다니 다행이에요. 다음에도 기다릴게요.","concise":"치즈볼 좋게 봐주셔서 고마워요."}
+            """;
+
+    private ReviewResponse praiseWithDrafts() throws Exception {
+        when(llmClient.generateJson(any())).thenReturn(
+                mapper.readTree("""
+                        {"type":"PRAISE","sentiment":"POSITIVE","keywords":["치즈볼"],"confidence":0.95}
+                        """),
+                mapper.readTree(DRAFTS));
+        ReviewResponse review = reviewService.createBatch(storeId, new ReviewBatchRequest(
+                Platform.BAEMIN, List.of(new ReviewItem(5, "치즈볼이 정말 맛있어요")))).get(0);
+        return reviewService.generateReplies(review.id());
+    }
+
+    @Test
+    void 초안만_있으면_작성_완료가_아니고_확정하면_최종_답글_하나만_남는다() throws Exception {
+        ReviewResponse drafted = praiseWithDrafts();
+        assertThat(drafted.replyStatus()).isEqualTo("DRAFT");
+        assertThat(drafted.finalReplyId()).isNull();
+        assertThat(drafted.completedAt()).isNull();
+
+        Long friendly = drafted.replies().get(1).id();
+        ReviewResponse done = reviewService.completeReply(drafted.id(), new CompleteReplyRequest(friendly, "  치즈볼 맛있게 드셨다니 정말 기뻐요.  "));
+        assertThat(done.replyStatus()).isEqualTo("COMPLETED");
+        assertThat(done.finalReplyId()).isEqualTo(friendly);
+        assertThat(done.completedAt()).isNotNull();
+        assertThat(done.replies()).filteredOn(r -> r.id().equals(friendly)).singleElement()
+                .satisfies(r -> assertThat(r.editedContent()).isEqualTo("치즈볼 맛있게 드셨다니 정말 기뻐요."));
+
+        // 새로고침(목록 다시 조회) 후에도 유지된다
+        ReviewResponse listed = reviewService.list(storeId, null, null).stream().filter(r -> r.id().equals(drafted.id())).findFirst().orElseThrow();
+        assertThat(listed.replyStatus()).isEqualTo("COMPLETED");
+        assertThat(listed.finalReplyId()).isEqualTo(friendly);
+
+        // 다른 답글로 바꾸면 최종 답글은 여전히 하나, 처음 완료 시각은 유지
+        Long polite = drafted.replies().get(0).id();
+        ReviewResponse switched = reviewService.completeReply(drafted.id(), new CompleteReplyRequest(polite, drafted.replies().get(0).content()));
+        assertThat(switched.finalReplyId()).isEqualTo(polite);
+        assertThat(switched.completedAt()).isEqualTo(done.completedAt());
+        assertThat(switched.replies()).filteredOn(r -> r.selected()).extracting(r -> r.id()).containsExactly(polite);
+        assertThat(switched.replies()).filteredOn(r -> r.id().equals(polite)).singleElement()
+                .satisfies(r -> assertThat(r.editedContent()).isNull()); // 고치지 않았으면 수정본 없음
+    }
+
+    @Test
+    void 다시_생성해도_최종_답글은_지우지_않고_나머지_초안만_바꾼다() throws Exception {
+        ReviewResponse drafted = praiseWithDrafts();
+        Long concise = drafted.replies().get(2).id();
+        reviewService.completeReply(drafted.id(), new CompleteReplyRequest(concise, "치즈볼 칭찬 감사드려요!"));
+
+        when(llmClient.generateJson(any())).thenReturn(mapper.readTree(DRAFTS_2));
+        ReviewResponse regenerated = reviewService.generateReplies(drafted.id());
+
+        assertThat(regenerated.replyStatus()).isEqualTo("COMPLETED");
+        assertThat(regenerated.finalReplyId()).isEqualTo(concise);
+        assertThat(regenerated.replies()).hasSize(4); // 최종 1 + 새 초안 3
+        assertThat(regenerated.replies()).filteredOn(r -> r.id().equals(concise)).singleElement()
+                .satisfies(r -> assertThat(r.editedContent()).isEqualTo("치즈볼 칭찬 감사드려요!"));
+    }
+
+    @Test
+    void 다른_리뷰의_답글로는_확정할_수_없다() throws Exception {
+        ReviewResponse a = praiseWithDrafts();
+        ReviewResponse b = reviewService.createBatch(storeId, new ReviewBatchRequest(
+                Platform.BAEMIN, List.of(new ReviewItem(5, "")))).get(0);
+        assertThatThrownBy(() -> reviewService.completeReply(b.id(), new CompleteReplyRequest(a.replies().get(0).id(), "답글")))
+                .isInstanceOf(com.replyboss.common.ApiException.class);
+        // 별점만 리뷰의 템플릿 답글도 확정할 수 있다
+        assertThat(reviewService.completeReply(b.id(), new CompleteReplyRequest(b.replies().get(0).id(), b.replies().get(0).content()))
+                .replyStatus()).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void 새_초안을_만들_때_매장_정보와_최근_최종_답글을_함께_보낸다() throws Exception {
+        storeService.update(storeId, new StoreRequest("달빛카페", "카페", "주문 후 바로 굽습니다."));
+        ReviewResponse first = praiseWithDrafts();
+        reviewService.completeReply(first.id(), new CompleteReplyRequest(first.replies().get(0).id(), "치즈볼을 맛있게 드셔서 기쁩니다. 다음에도 정성껏 준비하겠습니다."));
+
+        reset(llmClient);
+        praiseWithDrafts();
+        ArgumentCaptor<LlmRequest> captor = ArgumentCaptor.forClass(LlmRequest.class);
+        verify(llmClient, times(2)).generateJson(captor.capture());
+        String user = captor.getAllValues().get(1).user();
+        assertThat(user).contains("[확인된 매장 정보] 주문 후 바로 굽습니다.")
+                .contains("감정: POSITIVE")
+                .contains("[최근 답글").contains("치즈볼을 맛있게 드셔서 기쁩니다.");
     }
 }

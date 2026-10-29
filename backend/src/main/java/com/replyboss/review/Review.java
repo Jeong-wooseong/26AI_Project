@@ -81,6 +81,21 @@ public class Review {
     @Column(name = "written_on")
     private LocalDate writtenOn;
 
+    /**
+     * 사장님이 최종 확정한 답글 ID (없으면 아직 작성 전). 리뷰 하나에 최종 답글은 하나뿐이다.
+     * 외부 플랫폼 게시 여부가 아니라, 붙여넣을 답글을 확정했다는 뜻이다.
+     */
+    @Column(name = "final_reply_id")
+    private Long finalReplyId;
+
+    /** 처음 작성 완료한 시각 (최종 답글을 나중에 고쳐도 바뀌지 않음) */
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
+    /** 최종 답글을 마지막으로 저장한 시각 */
+    @Column(name = "final_updated_at")
+    private LocalDateTime finalUpdatedAt;
+
     protected Review() {
     }
 
@@ -126,6 +141,31 @@ public class Review {
     public void markFailed(String code) {
         this.status = ReviewStatus.FAILED;
         this.failureCode = code;
+    }
+
+    /** 답글을 최종 확정(또는 확정한 답글을 수정)한다. */
+    public void completeWith(Long replyId, LocalDateTime now) {
+        this.finalReplyId = replyId;
+        if (completedAt == null) {
+            completedAt = now;
+        }
+        finalUpdatedAt = now;
+    }
+
+    public boolean isCompleted() {
+        return finalReplyId != null;
+    }
+
+    public Long getFinalReplyId() {
+        return finalReplyId;
+    }
+
+    public LocalDateTime getCompletedAt() {
+        return completedAt;
+    }
+
+    public LocalDateTime getFinalUpdatedAt() {
+        return finalUpdatedAt;
     }
 
     public LocalDate getWrittenOn() {

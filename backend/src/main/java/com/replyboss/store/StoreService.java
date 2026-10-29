@@ -21,7 +21,7 @@ public class StoreService {
 
     @Transactional
     public StoreResponse create(StoreRequest request) {
-        Store store = storeRepository.save(new Store(request.name().trim(), trimOrNull(request.category())));
+        Store store = storeRepository.save(new Store(request.name().trim(), trimOrNull(request.category()), trimOrNull(request.info())));
         return StoreResponse.from(store);
     }
 
@@ -39,6 +39,9 @@ public class StoreService {
     public StoreResponse update(Long id, StoreRequest request) {
         Store store = get(id);
         store.rename(request.name().trim(), trimOrNull(request.category()));
+        if (request.info() != null) {
+            store.describe(trimOrNull(request.info()));
+        }
         return StoreResponse.from(store);
     }
 

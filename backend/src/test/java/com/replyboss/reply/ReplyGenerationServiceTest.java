@@ -1,6 +1,7 @@
 package com.replyboss.reply;
 
 import com.replyboss.review.ReviewType;
+import com.replyboss.review.Sentiment;
 import com.replyboss.store.ToneProfile;
 import org.junit.jupiter.api.Test;
 
@@ -12,9 +13,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ReplyGenerationServiceTest {
 
     private final ReplyGenerationService.Context ctx = new ReplyGenerationService.Context(
-            "달빛카페", "카페",
+            "달빛카페", "카페", null,
             new ToneProfile("해요체", "가끔", List.of("😊"), "3~4문장", List.of("보답할게요"), "오늘도 좋은 하루 되세요!"),
-            2, ReviewType.COMPLAINT, List.of("배달 지연"), "배달이 너무 늦었어요 [전화번호]");
+            2, ReviewType.COMPLAINT, Sentiment.NEGATIVE, List.of("배달 지연"), "배달이 너무 늦었어요 [전화번호]", List.of());
 
     @Test
     void 키워드는_낱말_하나만_나와도_언급한_것으로_본다() {
@@ -39,6 +40,7 @@ class ReplyGenerationServiceTest {
         String msg = ReplyGenerationService.userMessage(ctx);
         assertThat(msg).contains("해요체").contains("😊").contains("3~4문장").contains("보답할게요")
                 .contains("오늘도 좋은 하루 되세요!").contains("COMPLAINT").contains("배달 지연").contains("[전화번호]");
+        assertThat(msg).contains("[확인된 매장 정보] 없음").contains("감정: NEGATIVE").doesNotContain("[최근 답글");
         assertThat(msg).contains("[작성 분량]").contains("polite: 3~4문장").contains("friendly: 3~4문장")
                 .contains("concise: 1~2문장");
     }

@@ -25,6 +25,10 @@ public class Store {
     @Column(length = 50)
     private String category;
 
+    /** 사장님이 직접 적은 매장 소개·운영 방식 (선택). 답글에는 여기 적힌 내용만 운영 방식으로 언급한다. */
+    @Column(columnDefinition = "TEXT")
+    private String info;
+
     /** ToneProfile 을 JSON 문자열로 저장 */
     @Column(name = "tone_profile", columnDefinition = "TEXT")
     private String toneProfile;
@@ -47,6 +51,11 @@ public class Store {
         this.category = category;
     }
 
+    public Store(String name, String category, String info) {
+        this(name, category);
+        this.info = info;
+    }
+
     @PrePersist
     void onCreate() {
         createdAt = LocalDateTime.now();
@@ -61,6 +70,10 @@ public class Store {
     public void rename(String name, String category) {
         this.name = name;
         this.category = category;
+    }
+
+    public void describe(String info) {
+        this.info = info;
     }
 
     public void updateTone(String toneProfileJson, String sampleRepliesJson) {
@@ -80,6 +93,10 @@ public class Store {
 
     public String getCategory() {
         return category;
+    }
+
+    public String getInfo() {
+        return info;
     }
 
     public String getToneProfile() {

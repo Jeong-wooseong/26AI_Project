@@ -85,7 +85,24 @@ public class Reply {
         createdAt = LocalDateTime.now();
     }
 
-    /** 사장님이 복사(선택)한 답글. 내용을 고쳤으면 수정본도 남긴다. */
+    /** 최종 답글로 확정한다. 내용을 고쳤으면 수정본으로 남기고, 원래 초안과 같으면 수정본을 지운다. */
+    public void markFinal(String finalText) {
+        this.selected = true;
+        String text = finalText == null ? "" : finalText.strip();
+        this.editedContent = text.isEmpty() || text.equals(content) ? null : text;
+    }
+
+    /** 다른 답글이 최종으로 바뀌었을 때 */
+    public void unmarkFinal() {
+        this.selected = false;
+    }
+
+    /** 사장님이 보는 최종 문장 (수정본이 있으면 수정본) */
+    public String getText() {
+        return editedContent != null ? editedContent : content;
+    }
+
+    /** (이전 방식) 복사한 답글 기록. 화면은 더 이상 쓰지 않으며 확정은 markFinal 로 한다. */
     public void select(String editedContent) {
         this.selected = true;
         if (editedContent != null && !editedContent.isBlank() && !editedContent.strip().equals(content)) {

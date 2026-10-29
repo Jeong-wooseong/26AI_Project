@@ -9,6 +9,7 @@ import com.replyboss.reply.ReplyGenerationService;
 import com.replyboss.reply.ReplyTone;
 import com.replyboss.reply.Reply;
 import com.replyboss.reply.ReplyRepository;
+import com.replyboss.review.ReviewDtos.CompleteReplyRequest;
 import com.replyboss.review.ReviewDtos.DuplicateCheckItem;
 import com.replyboss.review.ReviewDtos.DuplicateCheckRequest;
 import com.replyboss.review.ReviewDtos.ReviewBatchRequest;
@@ -19,10 +20,13 @@ import com.replyboss.store.StoreService;
 import com.replyboss.store.ToneProfile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -141,10 +145,12 @@ public class ReviewService {
     }
 
     private static final List<ReplyTone> DRAFT_TONES = List.of(ReplyTone.POLITE, ReplyTone.FRIENDLY, ReplyTone.CONCISE);
+    /** 새 초안에 참고로 넘기는 최근 최종 답글 수 */
+    private static final int RECENT_REPLY_COUNT = 5;
 
     /**
-     * 기능 3. 칭찬·불만·문의 리뷰에 답글 초안 3종을 만든다. 다시 부르면 복사하지 않은 이전 초안을 새 초안으로 바꾼다.
-     * (복사한 초안은 이력으로 남긴다.) LLM 호출이 끼어 있어 하나의 트랜잭션으로 묶지 않는다.
+     * 기능 3. 칭찬·불만·문의 리뷰에 답글 초안 3종을 만든다. 다시 부르면 이전 초안을 새 초안으로 바꾸되,
+     * 최종 확정한 답글은 그대로 둔다. LLM 호출이 끼어 있어 하나의 트랜잭션으로 묶지 않는다.
      */
     public ReviewResponse generateReplies(Long reviewId) {
         Review review = reviewRepository.findById(reviewId).orElseThrow(() -> ApiException.notFound("리뷰"));
@@ -158,16 +164,45 @@ public class ReviewService {
             throw ApiException.badRequest("NO_TONE", "매장 설정에서 답글 스타일을 먼저 저장하십시오.");
         }
 
+        List<String> recent = replyRepository.findRecentFinals(store.getId(), reviewId, PageRequest.of(0, RECENT_REPLY_COUNT))
+                .stream().map(Reply::getText).toList();
         Map<ReplyTone, String> drafts = replyGenerationService.generate(new ReplyGenerationService.Context(
-                store.getName(), store.getCategory(), tone,
-                review.getRating(), review.getType(), review.getKeywords(), review.getMaskedContent()));
+                store.getName(), store.getCategory(), store.getInfo(), tone,
+                review.getRating(), review.getType(), review.getSentiment(), review.getKeywords(),
+                review.getMaskedContent(), recent));
 
-        replyRepository.deleteAll(replyRepository.findByReview_IdAndToneInAndSelectedFalse(reviewId, DRAFT_TONES));
+        // 생성하는 동안 최종 답글이 바뀌었을 수 있으므로 다시 읽는다. 최종 확정한 답글은 지우지 않는다.
+        Long finalId = reviewRepository.findById(reviewId).map(Review::getFinalReplyId).orElse(null);
+        replyRepository.deleteAll(replyRepository.findByReview_IdAndToneIn(reviewId, DRAFT_TONES).stream()
+                .filter(r -> !r.getId().equals(finalId))
+                .toList());
         for (ReplyTone t : DRAFT_TONES) {
             if (drafts.containsKey(t)) {
                 replyRepository.save(new Reply(review, null, t, drafts.get(t)));
             }
         }
+        Review fresh = reviewRepository.findById(reviewId).orElse(review);
+        return ReviewResponse.from(fresh, replyRepository.findByReview_IdInOrderByIdAsc(List.of(reviewId)));
+    }
+
+    /**
+     * 답글을 최종 확정한다 (작성 완료). 확정한 답글을 고쳐 다시 저장할 때도 쓴다.
+     * 리뷰 하나에 최종 답글은 하나뿐이라, 다른 답글로 바꾸면 이전 답글은 확정에서 빠진다.
+     * 외부 플랫폼에 게시하지 않는다. 사장님이 붙여넣을 답글을 확정해 두는 기능이다.
+     */
+    @Transactional
+    public ReviewResponse completeReply(Long reviewId, CompleteReplyRequest request) {
+        Review review = reviewRepository.findById(reviewId).orElseThrow(() -> ApiException.notFound("리뷰"));
+        Reply reply = replyRepository.findById(request.replyId()).orElseThrow(() -> ApiException.notFound("답글"));
+        if (!reply.getReview().getId().equals(reviewId)) {
+            throw ApiException.badRequest("REPLY_MISMATCH", "이 리뷰의 답글이 아닙니다.");
+        }
+        Long previous = review.getFinalReplyId();
+        if (previous != null && !previous.equals(reply.getId())) {
+            replyRepository.findById(previous).ifPresent(Reply::unmarkFinal);
+        }
+        reply.markFinal(request.content());
+        review.completeWith(reply.getId(), LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS));
         return ReviewResponse.from(review, replyRepository.findByReview_IdInOrderByIdAsc(List.of(reviewId)));
     }
 

@@ -7,6 +7,7 @@ import com.replyboss.ai.LlmRequest;
 import com.replyboss.ai.OpenAiProperties;
 import com.replyboss.ai.PromptTemplates;
 import com.replyboss.review.ReviewType;
+import com.replyboss.review.Sentiment;
 import com.replyboss.store.ToneProfile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,7 +33,7 @@ public class ReplyGenerationService {
 
     private static final Logger log = LoggerFactory.getLogger(ReplyGenerationService.class);
 
-    static final String PROMPT = "reply_generate_v2";
+    static final String PROMPT = "reply_generate_v3";
     static final List<ReviewType> TARGET_TYPES = List.of(ReviewType.PRAISE, ReviewType.COMPLAINT, ReviewType.INQUIRY);
 
     private static final Map<String, Object> SCHEMA = object(props(
@@ -63,9 +64,16 @@ public class ReplyGenerationService {
         this.props = props;
     }
 
-    public record Context(String storeName, String category, ToneProfile tone,
-                          int rating, ReviewType type, List<String> keywords, String maskedContent) {
+    /**
+     * @param storeInfo     사장님이 적은 매장 소개·운영 방식 (없으면 null). 답글은 여기 적힌 내용만 운영 방식으로 언급한다.
+     * @param recentReplies 이 가게의 최근 최종 답글 (시작·마무리 표현 반복을 피하기 위한 참고)
+     */
+    public record Context(String storeName, String category, String storeInfo, ToneProfile tone,
+                          int rating, ReviewType type, Sentiment sentiment, List<String> keywords,
+                          String maskedContent, List<String> recentReplies) {
     }
+
+    private static final int RECENT_REPLY_MAX_LENGTH = 200;
 
     /** 톤별 초안. 안전 규칙을 끝까지 어긴 초안은 빠질 수 있다 (모두 빠지면 실패). */
     public Map<ReplyTone, String> generate(Context ctx) {
@@ -172,6 +180,7 @@ public class ReplyGenerationService {
         ToneProfile t = ctx.tone();
         StringBuilder sb = new StringBuilder();
         sb.append("[매장] ").append(ctx.storeName()).append(" (").append(ctx.category()).append(")\n");
+        sb.append("[확인된 매장 정보] ").append(isBlank(ctx.storeInfo()) ? "없음" : ctx.storeInfo().strip()).append('\n');
         sb.append("[매장 말투]\n");
         sb.append("- 높임말: ").append(t.formality()).append('\n');
         sb.append("- 이모지: ").append(t.emojiLevel());
@@ -190,8 +199,20 @@ public class ReplyGenerationService {
         sb.append("[리뷰]\n");
         sb.append("- 별점: ").append(ctx.rating()).append('\n');
         sb.append("- 유형: ").append(ctx.type().name()).append('\n');
+        sb.append("- 감정: ").append(ctx.sentiment() == null ? "알 수 없음" : ctx.sentiment().name()).append('\n');
         sb.append("- 키워드: ").append(ctx.keywords().isEmpty() ? "없음" : String.join(", ", ctx.keywords())).append('\n');
         sb.append("- 본문: ").append(ctx.maskedContent());
+        if (!ctx.recentReplies().isEmpty()) {
+            sb.append("\n[최근 답글 - 시작·마무리 표현 반복 금지]");
+            for (String r : ctx.recentReplies()) {
+                String one = r.strip().replaceAll("\\s+", " ");
+                sb.append("\n- ").append(one.length() > RECENT_REPLY_MAX_LENGTH ? one.substring(0, RECENT_REPLY_MAX_LENGTH) + "…" : one);
+            }
+        }
         return sb.toString();
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 }

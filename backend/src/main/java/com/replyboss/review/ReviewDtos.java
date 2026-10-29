@@ -5,6 +5,7 @@ import com.replyboss.reply.ReplyTone;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
@@ -71,9 +72,15 @@ public final class ReviewDtos {
             String failureCode,
             LocalDateTime createdAt,
             LocalDate writtenAt,
+            /** COMPLETED(최종 답글 확정) | DRAFT(초안만 있음) | NONE(답글 없음) */
+            String replyStatus,
+            Long finalReplyId,
+            LocalDateTime completedAt,
+            LocalDateTime finalUpdatedAt,
             List<ReplyResponse> replies
     ) {
         public static ReviewResponse from(Review review, List<Reply> replies) {
+            String replyStatus = review.isCompleted() ? "COMPLETED" : replies.isEmpty() ? "NONE" : "DRAFT";
             return new ReviewResponse(
                     review.getId(),
                     review.getPlatform(),
@@ -87,9 +94,23 @@ public final class ReviewDtos {
                     review.getFailureCode(),
                     review.getCreatedAt(),
                     review.getWrittenOn(),
+                    replyStatus,
+                    review.getFinalReplyId(),
+                    review.getCompletedAt(),
+                    review.getFinalUpdatedAt(),
                     replies.stream().map(ReplyResponse::from).toList()
             );
         }
+    }
+
+    /** 작성 완료: 고른 답글과 (수정했으면 수정한) 최종 문장 */
+    public record CompleteReplyRequest(
+            @NotNull(message = "확정할 답글을 선택하십시오.")
+            Long replyId,
+            @NotBlank(message = "답글 내용을 입력하십시오.")
+            @Size(max = 2000, message = "답글은 2000자 이내여야 합니다.")
+            String content
+    ) {
     }
 
     public record SelectReplyRequest(

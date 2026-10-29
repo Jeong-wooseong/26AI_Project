@@ -19,8 +19,14 @@ public final class StoreDtos {
             @Size(max = 100, message = "매장명은 100자 이내여야 합니다.")
             String name,
             @Size(max = 50, message = "업종은 50자 이내여야 합니다.")
-            String category
+            String category,
+            /** 매장 소개·운영 방식 (선택). 보내지 않으면(null) 기존 값을 유지한다. */
+            @Size(max = 500, message = "매장 소개·운영 방식은 500자 이내여야 합니다.")
+            String info
     ) {
+        public StoreRequest(String name, String category) {
+            this(name, category, null);
+        }
     }
 
     public record ToneExtractRequest(
@@ -40,6 +46,7 @@ public final class StoreDtos {
             Long id,
             String name,
             String category,
+            String info,
             ToneProfile toneProfile,
             List<String> sampleReplies,
             LocalDateTime updatedAt
@@ -49,6 +56,7 @@ public final class StoreDtos {
                     store.getId(),
                     store.getName(),
                     store.getCategory(),
+                    store.getInfo(),
                     JsonText.read(store.getToneProfile(), ToneProfile.class),
                     JsonText.readStringList(store.getSampleReplies()),
                     store.getUpdatedAt()

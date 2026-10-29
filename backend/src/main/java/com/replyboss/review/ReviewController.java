@@ -1,5 +1,6 @@
 package com.replyboss.review;
 
+import com.replyboss.review.ReviewDtos.CompleteReplyRequest;
 import com.replyboss.review.ReviewDtos.DuplicateCheckRequest;
 import com.replyboss.review.ReviewDtos.DuplicateCheckResponse;
 import com.replyboss.review.ReviewDtos.ReviewBatchRequest;
@@ -10,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -54,6 +56,12 @@ public class ReviewController {
     }
 
     /** 분류 다시 시도 */
+    /** 작성 완료: 답글 하나를 최종 확정한다 (확정한 답글 수정에도 사용). 외부 플랫폼에는 게시하지 않는다. */
+    @PutMapping("/api/reviews/{reviewId}/final-reply")
+    public ReviewResponse completeReply(@PathVariable Long reviewId, @Valid @RequestBody CompleteReplyRequest request) {
+        return reviewService.completeReply(reviewId, request);
+    }
+
     @PostMapping("/api/reviews/{reviewId}/classify")
     public ReviewResponse reclassify(@PathVariable Long reviewId) {
         return reviewService.reclassify(reviewId);
