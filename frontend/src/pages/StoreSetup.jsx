@@ -8,11 +8,13 @@ import { previewText } from '../tonePreview.js';
 
 const MIN_SAMPLES = 3;
 const MAX_SAMPLES = 5;
+const INFO_MAX = 500;
 
 /** 화면 ① 가게 설정: 가게 정보 + 예시 답글로 톤 프로필 추출 → 수정 → 저장 */
 export default function StoreSetup({ store, onSaved, toast, go }) {
   const [name, setName] = useState(store?.name ?? '');
   const [category, setCategory] = useState(store?.category ?? '카페');
+  const [info, setInfo] = useState(store?.info ?? '');
   const [samples, setSamples] = useState(() => {
     const saved = store?.sampleReplies ?? [];
     return saved.length >= MIN_SAMPLES ? saved : [...saved, ...Array(MIN_SAMPLES - saved.length).fill('')];
@@ -37,7 +39,7 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
     setBusy('store');
     setError(null);
     try {
-      const body = { name: name.trim(), category };
+      const body = { name: name.trim(), category, info: info.trim() };
       const saved = store ? await api.updateStore(store.id, body) : await api.createStore(body);
       onSaved(saved);
       toast.show(store ? '매장 정보가 저장되었습니다.' : '매장이 등록되었습니다. 예시 답글을 등록하십시오.');
@@ -111,7 +113,7 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
           onSubmit={saveStore}
           noValidate
           title="매장 정보"
-          description="답글과 리포트에 표시되는 매장명과 업종입니다."
+          description="매장명과 업종, 답글에 반영할 매장 소개입니다."
           status={store
             ? <StatusIndicator tone="success" icon="confirm">등록됨</StatusIndicator>
             : <StatusIndicator tone="neutral">미등록</StatusIndicator>}
@@ -128,6 +130,11 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
             <FormSelect id="storeCategory" label="업종" value={category} options={CATEGORIES}
                         onChange={(e) => setCategory(e.target.value)} />
           </div>
+          <FormInput id="storeInfo" label="매장 소개·운영 방식 (선택)" multiline rows={3} value={info} maxLength={INFO_MAX}
+                     counter={`${info.length}/${INFO_MAX}`}
+                     placeholder="예: 주문이 들어오면 바로 튀깁니다. 소스는 매장에서 직접 만듭니다."
+                     hint="AI는 여기 적힌 내용만 운영 방식으로 답글에 언급하고, 적히지 않은 재료·조리법은 지어내지 않습니다."
+                     onChange={(e) => setInfo(e.target.value)} />
         </SettingsSection>
 
         <SettingsSection

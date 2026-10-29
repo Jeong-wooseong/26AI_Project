@@ -133,7 +133,7 @@ export default function BulkPreview({ store, rows, setRows, batchId, toast, go, 
       ? `${done}건 등록 완료 (분류 실패 ${classifyFailed}건, 목록에서 재분류 가능)`
       : `${done}건 등록 및 분류 완료`);
     const remaining = rows.filter((r) => r.state === 'pending' && !targets.some((t) => t.id === r.id) && !r.excluded);
-    if (!remaining.length) go('reviews');
+    if (!remaining.length) go('reviews/wait'); // 방금 등록한 리뷰는 작성 대기에서 답글을 만든다
   }
 
   if (!rows.length) return null;

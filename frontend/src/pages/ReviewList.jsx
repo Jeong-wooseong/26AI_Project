@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { PLATFORMS, PLATFORM_LABEL, SENTIMENT_LABEL, TYPES, TYPE_LABEL, todayISO } from '../labels.js';
 import Icon from '../components/Icon.jsx';
@@ -6,9 +6,21 @@ import {
   Alert, DataTable, DataTableHead, DataTableRow, EmptyState, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton,
   SecondaryButton, StatusIndicator, Toolbar,
 } from '../components/ui.jsx';
+import ReplyDraftPanel from '../components/reply/ReplyDraftPanel.jsx';
+import FinalReply from '../components/reply/FinalReply.jsx';
+import { DRAFT_TONES, DRAFT_TYPES, finalReplyOf, formatDateTime, statusOf } from '../components/reply/replyModel.js';
+import { prefersReducedMotion } from '../components/reply/ReplyTypingText.jsx';
 
 const PAGE_SIZE = 10;
-const COLUMNS = [
+// 작성 완료: 리뷰 원문과 최종 답글 중심 / 작성 대기·분류 실패: 분류 결과와 초안 작업
+const DONE_COLUMNS = [
+  { label: '번호' },
+  { label: '출처' },
+  { label: '별점' },
+  { label: '리뷰와 최종 답글' },
+  { label: '상태' },
+];
+const WORK_COLUMNS = [
   { label: '번호' },
   { label: '출처' },
   { label: '별점' },
@@ -17,13 +29,21 @@ const COLUMNS = [
   { label: '답글 상태' },
   { label: '관리', className: 'rt-actions-head' },
 ];
+const TABS = [
+  ['done', '작성 완료'],
+  ['wait', '작성 대기'],
+  ['fail', '분류 실패'],
+];
 const TYPE_TONE = { PRAISE: 'praise', COMPLAINT: 'complaint', MALICIOUS: 'malicious', INQUIRY: 'inquiry', RATING_ONLY: 'rating' };
 
-/** 화면 ③ 오늘의 리뷰: 날짜별 리뷰를 표로 보고, 분류 결과와 답글 초안을 확인·복사한다. */
-export default function ReviewList({ store, toast, go }) {
+/**
+ * 화면 ③ 오늘의 리뷰.
+ * 기본 목록(작성 완료)은 사장님이 확정한 최종 답글만 보여준다. 초안 작업은 '작성 대기'에서 한다.
+ */
+export default function ReviewList({ store, toast, go, initialTab }) {
   const [date, setDate] = useState(todayISO());
   const [filter, setFilter] = useState('ALL'); // 유형
-  const [status, setStatus] = useState('ALL'); // 답글 상태: ALL | done | wait | fail
+  const [status, setStatus] = useState(TABS.some(([k]) => k === initialTab) ? initialTab : 'done');
   const [platform, setPlatform] = useState('ALL');
   const [page, setPage] = useState(1);
   const [reviews, setReviews] = useState(null);
@@ -48,13 +68,19 @@ export default function ReviewList({ store, toast, go }) {
   // 거르는 조건이 바뀌면 첫 페이지로
   useEffect(() => setPage(1), [date, filter, platform, status]);
 
+  function changeTab(key) {
+    setStatus(key);
+    // 새로고침해도 같은 탭이 열리도록 주소에 남긴다
+    window.history.replaceState(null, '', key === 'done' ? '#reviews' : `#reviews/${key}`);
+  }
+
   const replace = (updated) => setReviews((rs) => rs.map((r) => (r.id === updated.id ? updated : r)));
 
   const all = reviews ?? [];
   const list = all.filter((r) => platform === 'ALL' || r.platform === platform);
-  // 유형·답글 상태는 서로의 선택을 반영해 개수를 센다 (선택한 조건 안에서 몇 건인지)
+  // 유형·상태는 서로의 선택을 반영해 개수를 센다. 작성 완료 수에는 확정한 답글만 들어간다 (초안 수와 섞지 않음)
   const byType = list.filter((r) => filter === 'ALL' || r.type === filter);
-  const byStatus = list.filter((r) => status === 'ALL' || statusOf(r) === status);
+  const byStatus = list.filter((r) => statusOf(r) === status);
   const typeCounts = byStatus.reduce((m, r) => {
     if (r.type) m[r.type] = (m[r.type] ?? 0) + 1;
     return m;
@@ -63,17 +89,20 @@ export default function ReviewList({ store, toast, go }) {
     m[statusOf(r)] += 1;
     return m;
   }, { done: 0, wait: 0, fail: 0 });
-  const visible = byType.filter((r) => status === 'ALL' || statusOf(r) === status);
+  const visible = byType.filter((r) => statusOf(r) === status);
   const isToday = date === todayISO();
+  const isDone = status === 'done';
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const current = Math.min(page, pageCount);
   const paged = visible.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
   const usedPlatforms = PLATFORMS.filter(([v]) => all.some((r) => r.platform === v) || v === platform);
 
-  // 초안이 아직 없는 칭찬·불만·문의 리뷰 (지금 보이는 조건 기준)
-  const needDrafts = visible.filter((r) => r.status === 'CLASSIFIED' && DRAFT_TYPES.includes(r.type)
-    && !r.replies.some((p) => p.tone !== 'TEMPLATE'));
+  // 초안이 아직 없는 칭찬·불만·문의 리뷰 (작성 대기 탭의 지금 조건 기준)
+  const needDrafts = status === 'wait'
+    ? visible.filter((r) => r.status === 'CLASSIFIED' && DRAFT_TYPES.includes(r.type)
+      && !r.replies.some((p) => DRAFT_TONES.includes(p.tone)))
+    : [];
 
   // 한 건씩 차례로 생성한다 (동시에 보내면 OpenAI 속도 제한에 걸리기 쉬움). 실패하면 멈추고 이유를 보여준다.
   async function generateAll() {
@@ -100,18 +129,12 @@ export default function ReviewList({ store, toast, go }) {
     ['ALL', `전체 유형 (${byStatus.length})`],
     ...TYPES.map(([key, label]) => [key, `${label} (${typeCounts[key] ?? 0})`]),
   ];
-  const statusTabs = [
-    ['ALL', '전체', byType.length],
-    ['done', '답글 완료', statusCounts.done],
-    ['wait', '답글 대기', statusCounts.wait],
-    ['fail', '분류 실패', statusCounts.fail],
-  ];
 
   return (
     <>
       <PageHeader
         title={isToday ? '오늘의 리뷰' : '지난 리뷰'}
-        description="등록된 리뷰의 분류 결과와 답글 초안을 확인합니다."
+        description="작성 완료한 답글을 확인하고, 작성 대기 중인 리뷰의 답글을 확정합니다."
         actions={<PrimaryButton icon="add" onClick={() => go('input')}>리뷰 입력</PrimaryButton>}
       />
 
@@ -121,7 +144,7 @@ export default function ReviewList({ store, toast, go }) {
         aria-label="리뷰 거르기"
         start={(
           <>
-            <FormInput id="reviewDate" label="날짜" hideLabel type="date" icon="calendar" fieldClassName="filter-date"
+            <FormInput id="reviewDate" label="등록일" hideLabel type="date" icon="calendar" fieldClassName="filter-date"
                        value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)}
                        onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* 지원하지 않는 브라우저는 직접 입력 */ } }} />
             <FormSelect id="platformFilter" label="리뷰 출처" hideLabel value={platform}
@@ -150,14 +173,14 @@ export default function ReviewList({ store, toast, go }) {
       )}
 
       {all.length > 0 && (
-        <DataTable label="리뷰 목록" className="review-table">
+        <DataTable label="리뷰 목록" className={`review-table ${isDone ? 'is-done-view' : ''}`}>
           <div className="dt-caption">
             <div className="status-tabs" role="group" aria-label="답글 상태로 거르기">
-              {statusTabs.map(([key, label, count]) => (
+              {TABS.map(([key, label]) => (
                 <button key={key} type="button" aria-pressed={status === key} className={`status-tab is-${key}`}
-                        onClick={() => setStatus(key)}>
+                        onClick={() => changeTab(key)}>
                   {label}
-                  <span className="status-count">{count}</span>
+                  <span className="status-count">{statusCounts[key]}</span>
                 </button>
               ))}
             </div>
@@ -174,13 +197,16 @@ export default function ReviewList({ store, toast, go }) {
             )}
           </div>
           {visible.length === 0 ? (
-            <p className="dt-empty">조건에 맞는 리뷰가 없습니다.</p>
+            <EmptyTab status={status} waitCount={statusCounts.wait} onShowWait={() => changeTab('wait')} />
           ) : (
             <>
-              <DataTableHead columns={COLUMNS} />
-              {paged.map((r, i) => (
-                <Ticket key={r.id} no={(current - 1) * PAGE_SIZE + i + 1} review={r} onUpdated={replace} toast={toast} />
-              ))}
+              <DataTableHead columns={isDone ? DONE_COLUMNS : WORK_COLUMNS} />
+              {paged.map((r, i) => {
+                const no = (current - 1) * PAGE_SIZE + i + 1;
+                return isDone
+                  ? <CompletedRow key={r.id} no={no} review={r} onUpdated={replace} toast={toast} />
+                  : <Ticket key={r.id} no={no} review={r} onUpdated={replace} toast={toast} />;
+              })}
             </>
           )}
         </DataTable>
@@ -203,50 +229,78 @@ export default function ReviewList({ store, toast, go }) {
   );
 }
 
-/** 답글 상태 (서로 겹치지 않음): 분류 실패 → 답글 완료(복사함) → 답글 대기 */
-function statusOf(r) {
-  if (r.status === 'FAILED') return 'fail';
-  if (r.replies.some((p) => p.selected)) return 'done';
-  return 'wait';
+function EmptyTab({ status, waitCount, onShowWait }) {
+  if (status === 'done') {
+    return (
+      <div className="dt-empty">
+        <p>작성 완료한 답글이 없습니다.</p>
+        {waitCount > 0 && (
+          <p className="dt-empty-sub">
+            작성 대기 {waitCount}건에서 초안을 고르고 작성 완료를 누르면 여기에 표시됩니다.
+            {' '}<button type="button" className="text-btn" onClick={onShowWait}>작성 대기 보기</button>
+          </p>
+        )}
+      </div>
+    );
+  }
+  return <p className="dt-empty">{status === 'wait' ? '작성 대기 중인 리뷰가 없습니다.' : '분류에 실패한 리뷰가 없습니다.'}</p>;
 }
 
-const FAILURE_TEXT = {
-  LLM_NOT_CONFIGURED: 'OpenAI API 키가 설정되지 않았습니다. backend/.env의 OPENAI_API_KEY를 확인하십시오.',
-  LLM_TRUNCATED: 'AI 응답이 길이 한도에서 잘렸습니다.',
-  LLM_TIMEOUT: 'AI 응답 시간이 초과되었습니다.',
-  LLM_REFUSED: 'AI가 이 리뷰의 분석을 거절했습니다.',
-  LLM_INVALID: 'AI 응답 형식이 올바르지 않습니다.',
-  LLM_HTTP_400: 'OpenAI가 요청을 거부했습니다 (HTTP 400). 서버 로그를 확인하십시오.',
-  LLM_HTTP_401: 'OpenAI API 키가 유효하지 않습니다. backend/.env를 확인하십시오.',
-  LLM_HTTP_403: 'OpenAI API 키에 권한이 없습니다. backend/.env를 확인하십시오.',
-  LLM_HTTP_429: 'OpenAI 사용 한도를 초과했거나 요청이 많습니다. 결제·사용 한도를 확인하십시오.',
-  LLM_QUOTA: 'OpenAI 크레딧 또는 사용 한도가 소진되었습니다. platform.openai.com의 Billing과 Limits를 확인하십시오.',
-  LLM_RATE_LIMIT: 'OpenAI 요청 속도 제한에 걸렸습니다. 1분 정도 뒤에 다시 시도하십시오.',
-};
+/** 작성 완료 행: 리뷰 원문 → 최종 답글. 초안은 보여주지 않는다. */
+function CompletedRow({ no, review: r, onUpdated, toast }) {
+  const reply = finalReplyOf(r);
+  // 완료한 뒤 다른 시각(분 단위)에 고쳤을 때만 수정 시각을 따로 보여준다
+  const edited = r.finalUpdatedAt && r.completedAt && formatDateTime(r.finalUpdatedAt) !== formatDateTime(r.completedAt);
 
-/** 실패 코드 → 안내 문구. 다시 시도해 해결될 수 있는 실패에는 재분류 안내를 붙인다. */
-function failureText(code) {
-  const text = FAILURE_TEXT[code] ?? (code?.startsWith('LLM_HTTP_5') ? 'OpenAI 서버 오류입니다.' : 'AI 응답을 받지 못했습니다.');
-  const retryable = !['LLM_NOT_CONFIGURED', 'LLM_HTTP_401', 'LLM_HTTP_403', 'LLM_REFUSED', 'LLM_QUOTA'].includes(code);
-  return retryable ? `${text} 재분류 버튼으로 다시 시도할 수 있습니다.` : text;
+  async function save(text) {
+    try {
+      onUpdated(await api.completeReply(r.id, reply.id, text));
+      toast.show('최종 답글을 저장했습니다.');
+      return true;
+    } catch (e) {
+      toast.show(`저장하지 못했습니다: ${e.message}`);
+      return false;
+    }
+  }
+
+  return (
+    <DataTableRow className="rt-item is-done">
+      <span className="rt-no" role="cell">{no}</span>
+      <span className="rt-platform" role="cell"><span className="platform">{PLATFORM_LABEL[r.platform]}</span></span>
+      <span className="rt-rating" role="cell">
+        <span className="rating" aria-label={`별점 ${r.rating}점`}><Icon name="star" size={16} />{r.rating}</span>
+      </span>
+      <div className="rt-content" role="cell">
+        <p className={`review-text ${r.maskedContent ? '' : 'is-empty'}`}>
+          {r.maskedContent ? <Masked text={r.maskedContent} /> : '(본문 없음, 별점만 등록)'}
+        </p>
+        <p className="meta">
+          <span>{TYPE_LABEL[r.type]}</span>
+          {r.writtenAt && <span>작성일 {r.writtenAt}</span>}
+        </p>
+        {reply && <FinalReply reply={reply} onSave={save} toast={toast} />}
+      </div>
+      <div className="rt-done" role="cell">
+        <span className="done-mark"><Icon name="confirm" size={16} />작성 완료</span>
+        <time dateTime={r.completedAt} title={edited ? `마지막 수정 ${formatDateTime(r.finalUpdatedAt)}` : undefined}>
+          {formatDateTime(r.completedAt)}
+        </time>
+        {edited && <span className="done-sub">수정 {formatDateTime(r.finalUpdatedAt)}</span>}
+      </div>
+    </DataTableRow>
+  );
 }
 
-function timeOf(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-function ReplyStatus({ review: r }) {
-  if (r.status === 'FAILED') return <StatusIndicator tone="danger" icon="error">분류 실패</StatusIndicator>;
-  if (r.replies.some((p) => p.selected)) return <StatusIndicator tone="success" icon="confirm">답글 완료</StatusIndicator>;
-  return <StatusIndicator tone="neutral">답글 대기</StatusIndicator>;
-}
-
-/** 리뷰 한 건 = 표의 한 행. 답글 초안은 행 아래에 회색 영역으로 붙는다. */
+/** 작성 대기·분류 실패 행: 분류 결과와 답글 초안 작업 */
 function Ticket({ no, review: r, onUpdated, toast }) {
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState(null);
+  const [generation, setGeneration] = useState({ state: 'idle' });
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true; // 개발 모드(StrictMode)는 마운트를 두 번 하므로 다시 켠다
+    return () => { mounted.current = false; };
+  }, []);
   const failed = r.status === 'FAILED';
 
   async function retry() {
@@ -261,6 +315,34 @@ function Ticket({ no, review: r, onUpdated, toast }) {
       setRetrying(false);
     }
   }
+
+  async function generate() {
+    if (generation.state === 'loading') return; // 중복 요청 방지
+    const before = new Set(r.replies.map((p) => p.id));
+    setGeneration({ state: 'loading' });
+    try {
+      const updated = await api.generateReplies(r.id);
+      if (!mounted.current) return; // 페이지를 떠났으면 상태를 바꾸지 않는다
+      const fresh = updated.replies.filter((p) => !before.has(p.id) && DRAFT_TONES.includes(p.tone)).map((p) => p.id);
+      onUpdated(updated);
+      setGeneration({ state: 'idle', freshIds: prefersReducedMotion() ? [] : fresh });
+    } catch (e) {
+      if (mounted.current) setGeneration({ state: 'error', error: { code: e.code, message: e.message } });
+    }
+  }
+
+  async function complete(replyId, text) {
+    try {
+      onUpdated(await api.completeReply(r.id, replyId, text));
+      toast.show('작성 완료로 저장했습니다. 작성 완료 탭에서 확인할 수 있습니다.');
+      return true;
+    } catch (e) {
+      toast.show(`저장하지 못했습니다: ${e.message}`);
+      return false;
+    }
+  }
+
+  const hasReplyArea = !failed && (r.replies.length > 0 || DRAFT_TYPES.includes(r.type));
 
   return (
     <DataTableRow className={`rt-item ${failed ? 'is-failed' : ''}`}>
@@ -294,7 +376,7 @@ function Ticket({ no, review: r, onUpdated, toast }) {
           : <StatusIndicator tone={TYPE_TONE[r.type]}>{TYPE_LABEL[r.type]}</StatusIndicator>}
       </span>
       <span className="rt-status" role="cell">
-        <ReplyStatus review={r} />
+        <ReplyStatus review={r} generation={generation} />
       </span>
 
       {failed && (
@@ -310,8 +392,8 @@ function Ticket({ no, review: r, onUpdated, toast }) {
         </p>
       )}
 
-      {!failed && (r.replies.length > 0 || DRAFT_TYPES.includes(r.type)) && (
-        <ReplyDrafts review={r} onUpdated={onUpdated} toast={toast} />
+      {hasReplyArea && (
+        <ReplyDraftPanel review={r} generation={generation} onGenerate={generate} onComplete={complete} toast={toast} />
       )}
 
       {!failed && r.type === 'MALICIOUS' && (
@@ -321,128 +403,42 @@ function Ticket({ no, review: r, onUpdated, toast }) {
   );
 }
 
-const DRAFT_TYPES = ['PRAISE', 'COMPLAINT', 'INQUIRY'];
-const TONE_LABEL = { POLITE: '정중형', FRIENDLY: '친근형', CONCISE: '간결형', TEMPLATE: '별점 템플릿' };
-const FILL_IN = /(\[[^\]\n]{1,30}\])/g;
-
-/**
- * 행 아래 AI 답글 영역: 칭찬·불만·문의는 초안 3종(정중형·친근형·간결형), 별점만 리뷰는 템플릿 답글 1개.
- * 초안이 없으면 생성 버튼, 있으면 다시 생성(복사한 초안은 이력으로 남음).
- */
-function ReplyDrafts({ review: r, onUpdated, toast }) {
-  const [generating, setGenerating] = useState(false);
-  const [error, setError] = useState(null);
-  const canGenerate = DRAFT_TYPES.includes(r.type) && r.status !== 'FAILED';
-  const drafts = r.replies.filter((p) => p.tone !== 'TEMPLATE');
-
-  async function generate() {
-    setGenerating(true);
-    setError(null);
-    try {
-      onUpdated(await api.generateReplies(r.id));
-      toast.show('답글 초안 생성 완료');
-    } catch (e) {
-      setError({ code: e.code, message: e.message });
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  const markCopied = (reply, text) => onUpdated({
-    ...r,
-    replies: r.replies.map((p) => (p.id === reply.id ? { ...p, selected: true, editedContent: text } : p)),
-  });
-
-  return (
-    <div className="rt-reply">
-      <div className="reply-head">
-        <span className="ai-label">
-          AI 답글 초안
-          <small>{drafts.length ? '정중형·친근형·간결형' : r.type === 'RATING_ONLY' ? '별점 템플릿 기반' : '매장 답글 스타일 반영'}, 게시 전 확인 필요</small>
-        </span>
-        {canGenerate && drafts.length > 0 && (
-          <button type="button" className="text-btn" onClick={generate} disabled={generating}>
-            {generating ? '생성 중…' : '다시 생성'}
-          </button>
-        )}
-      </div>
-
-      {r.replies.map((reply) => (
-        <TemplateReply key={reply.id} reply={reply} label={TONE_LABEL[reply.tone] ?? reply.tone} toast={toast}
-                       onCopied={(text) => markCopied(reply, text)} />
-      ))}
-
-      {canGenerate && drafts.length === 0 && (
-        <div className="reply-empty">
-          <SecondaryButton size="sm" icon="analyze" onClick={generate} loading={generating} loadingText="생성 중">
-            답글 초안 3개 생성
-          </SecondaryButton>
-          <span className="hint">매장 답글 스타일과 리뷰 키워드를 반영합니다.</span>
-        </div>
-      )}
-      {error && (
-        <p className="rt-error">
-          {error.message}
-          <span className="error-code">오류 코드 {error.code}</span>
-        </p>
-      )}
-    </div>
-  );
+/** 작성 대기 행의 답글 상태: 생성 중 / 생성 실패 / 초안 n개 / 초안 없음 */
+function ReplyStatus({ review: r, generation }) {
+  if (r.status === 'FAILED') return <StatusIndicator tone="danger" icon="error">분류 실패</StatusIndicator>;
+  if (generation.state === 'loading') return <StatusIndicator tone="inquiry" icon="loading">생성 중</StatusIndicator>;
+  if (generation.state === 'error') return <StatusIndicator tone="danger" icon="error">생성 실패</StatusIndicator>;
+  const drafts = r.replies.filter((p) => p.id !== r.finalReplyId).length;
+  return <StatusIndicator tone="neutral">{drafts ? `초안 ${drafts}개` : '초안 없음'}</StatusIndicator>;
 }
 
-/** 답글 초안 한 개: 복사·수정은 초안 오른쪽 위. [ ] 는 사장님이 채울 자리로 강조한다. */
-function TemplateReply({ reply, label, toast, onCopied }) {
-  const [text, setText] = useState(reply.editedContent ?? reply.content);
-  const [editing, setEditing] = useState(false);
-  const [copied, setCopied] = useState(reply.selected);
-  const hasFillIn = /\[[^\]\n]{1,30}\]/.test(text);
+const FAILURE_TEXT = {
+  LLM_NOT_CONFIGURED: 'OpenAI API 키가 설정되지 않았습니다. backend/.env의 OPENAI_API_KEY를 확인하십시오.',
+  LLM_TRUNCATED: 'AI 응답이 길이 한도에서 잘렸습니다.',
+  LLM_TIMEOUT: 'AI 응답 시간이 초과되었습니다.',
+  LLM_REFUSED: 'AI가 이 리뷰의 분석을 거절했습니다.',
+  LLM_INVALID: 'AI 응답 형식이 올바르지 않습니다.',
+  LLM_HTTP_400: 'OpenAI가 요청을 거부했습니다 (HTTP 400). 서버 로그를 확인하십시오.',
+  LLM_HTTP_401: 'OpenAI API 키가 유효하지 않습니다. backend/.env를 확인하십시오.',
+  LLM_HTTP_403: 'OpenAI API 키에 권한이 없습니다. backend/.env를 확인하십시오.',
+  LLM_HTTP_429: 'OpenAI 사용 한도를 초과했거나 요청이 많습니다. 결제·사용 한도를 확인하십시오.',
+  LLM_QUOTA: 'OpenAI 크레딧 또는 사용 한도가 소진되었습니다. platform.openai.com의 Billing과 Limits를 확인하십시오.',
+  LLM_RATE_LIMIT: 'OpenAI 요청 속도 제한에 걸렸습니다. 1분 정도 뒤에 다시 시도하십시오.',
+};
 
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.show(hasFillIn ? '복사 완료. 채워야 할 [ ] 항목이 남아 있습니다.' : '복사 완료');
-    } catch {
-      toast.show('클립보드 접근이 차단되었습니다. 답글을 직접 선택해 복사하십시오.');
-    }
-    setCopied(true);
-    setEditing(false);
-    onCopied(text);
-    try {
-      await api.selectReply(reply.id, text);
-    } catch {
-      // 기록 실패는 복사에 영향을 주지 않는다
-    }
-  }
-
-  return (
-    <div className={`draft ${copied ? 'is-copied' : ''}`}>
-      <div className="draft-meta">
-        <span className="draft-tone">{label}</span>
-        {copied && <StatusIndicator tone="success" icon="confirm">복사함</StatusIndicator>}
-      </div>
-      <div className="draft-actions">
-        <IconButton icon={editing ? 'confirm' : 'edit'} label={editing ? `${label} 수정 완료` : `${label} 수정`}
-                    aria-pressed={editing} onClick={() => setEditing(!editing)} />
-        <IconButton icon="copy" label={`${label} 복사`} onClick={copy} />
-      </div>
-      {editing ? (
-        <div className="rt-edit">
-          <FormInput multiline aria-label={`${label} 답글 수정`} value={text} rows={3} onChange={(e) => setText(e.target.value)} />
-          <div className="end">
-            <SecondaryButton tone="neutral" size="sm" onClick={() => setEditing(false)}>수정 완료</SecondaryButton>
-            <PrimaryButton size="sm" icon="copy" onClick={copy}>복사</PrimaryButton>
-          </div>
-        </div>
-      ) : (
-        <p className="ai-text">
-          {text.split(FILL_IN).map((part, i) => (part.startsWith('[') && part.endsWith(']')
-            ? <mark key={i} className="fill-in">{part}</mark>
-            : part))}
-        </p>
-      )}
-    </div>
-  );
+/** 실패 코드 → 안내 문구. 다시 시도해 해결될 수 있는 실패에는 재분류 안내를 붙인다. */
+function failureText(code) {
+  const text = FAILURE_TEXT[code] ?? (code?.startsWith('LLM_HTTP_5') ? 'OpenAI 서버 오류입니다.' : 'AI 응답을 받지 못했습니다.');
+  const retryable = !['LLM_NOT_CONFIGURED', 'LLM_HTTP_401', 'LLM_HTTP_403', 'LLM_REFUSED', 'LLM_QUOTA'].includes(code);
+  return retryable ? `${text} 재분류 버튼으로 다시 시도할 수 있습니다.` : text;
 }
+
+function timeOf(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 
 /** [전화번호] 같은 가림 표시를 눈에 띄게 */
 function Masked({ text }) {

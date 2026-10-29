@@ -14,16 +14,19 @@ const VIEWS = [
 ];
 const VIEW_ICON = { setup: 'store', input: 'input', reviews: 'reviews' };
 
-function currentView() {
-  const v = window.location.hash.slice(1);
-  return VIEWS.some(([key]) => key === v) ? v : null;
+/** '#reviews/wait' → 화면 'reviews', 하위 탭 'wait' */
+function parseHash() {
+  const [v, sub = null] = window.location.hash.slice(1).split('/');
+  return VIEWS.some(([key]) => key === v) ? { view: v, sub } : { view: null, sub: null };
 }
+const currentView = () => parseHash().view;
 
 export default function App() {
   const [store, setStore] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [view, setView] = useState(currentView());
+  const [sub, setSub] = useState(parseHash().sub);
   const toast = useToast();
 
   const loadStore = useCallback(async () => {
@@ -53,6 +56,7 @@ export default function App() {
   useEffect(() => {
     const onHash = () => {
       setView(currentView());
+      setSub(parseHash().sub);
       window.scrollTo(0, 0);
     };
     window.addEventListener('hashchange', onHash);
@@ -90,7 +94,7 @@ export default function App() {
   } else if (active === 'input') {
     page = <ReviewInput store={store} toast={toast} go={go} />;
   } else {
-    page = <ReviewList store={store} toast={toast} go={go} />;
+    page = <ReviewList key={sub ?? 'done'} store={store} toast={toast} go={go} initialTab={sub} />;
   }
 
   return (

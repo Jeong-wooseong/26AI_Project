@@ -87,7 +87,7 @@ export default function ReviewInput({ store, toast, go }) {
           : `리뷰 ${results.length}건 등록 및 분류 완료`,
       );
       setRows([emptyRow()]);
-      go('reviews');
+      go('reviews/wait'); // 방금 등록한 리뷰는 작성 대기에서 답글을 만든다
     } catch (err) {
       setError(err.message);
     } finally {
