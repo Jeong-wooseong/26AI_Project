@@ -4,7 +4,7 @@ import { FormInput, PrimaryButton, SecondaryButton } from '../ui.jsx';
 import ReplyGenerationLoader from './ReplyGenerationLoader.jsx';
 import ReplyTypingText from './ReplyTypingText.jsx';
 import { selectTextOf, useCopy } from './useCopy.js';
-import { DRAFT_TYPES, TONE_LABEL, draftsOf, hasFillIn, textOf } from './replyModel.js';
+import { DRAFT_TYPES, SIMILAR_THRESHOLD, TONE_LABEL, draftsOf, hasFillIn, textOf } from './replyModel.js';
 
 /**
  * 작성 대기 리뷰의 답글 영역: 초안 확인 → (필요하면 수정) → 하나 선택 → 작성 완료.
@@ -82,6 +82,8 @@ export default function ReplyDraftPanel({ review: r, generation, onGenerate, onC
   }
 
   const showList = drafts.length > 0 && !loading;
+  // 중복 방지 3단 결과: 이전 답글과 비슷해 다시 만든 횟수 (같은 요청으로 만든 초안은 횟수가 같음)
+  const regenerations = Math.max(0, ...drafts.map((d) => d.regenCount ?? 0));
 
   return (
     <div className="rt-reply">
@@ -116,6 +118,9 @@ export default function ReplyDraftPanel({ review: r, generation, onGenerate, onC
 
       {showList && (
         <>
+          {regenerations > 0 && (
+            <p className="hint regen-note">이전 답글과 겹치거나 작성 규칙을 어긴 초안이 있어 {regenerations}번 다시 만들었습니다.</p>
+          )}
           <div className="draft-list" role="radiogroup" aria-label="최종 답글로 쓸 초안">
             {drafts.map((d) => {
               const label = TONE_LABEL[d.tone] ?? d.tone;
@@ -129,6 +134,9 @@ export default function ReplyDraftPanel({ review: r, generation, onGenerate, onC
                     <input type="radio" name={`final-${r.id}`} checked={isSelected} onChange={() => select(d.id)} />
                     <span className="draft-tone">{label}</span>
                     {texts[d.id] != null && texts[d.id] !== textOf(d) && <span className="draft-edited">수정함</span>}
+                    {d.maxSimilarity != null && d.maxSimilarity >= SIMILAR_THRESHOLD && (
+                      <span className="draft-edited is-warn" title={`이전 답글과 유사도 ${d.maxSimilarity.toFixed(2)}`}>이전 답글과 유사</span>
+                    )}
                   </label>
                   <div className="draft-body" onClick={() => !editing && select(d.id)}>
                     {editing ? (

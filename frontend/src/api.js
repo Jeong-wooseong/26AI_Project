@@ -55,7 +55,11 @@ export const api = {
   // 답글 초안 3종 생성 (다시 부르면 초안을 새로 바꿈. 최종 확정한 답글은 유지)
   generateReplies: (reviewId) => request('POST', `/api/reviews/${reviewId}/replies`),
   // 작성 완료: 답글 하나를 최종 확정 (확정한 답글 수정에도 사용). 외부 플랫폼에는 게시하지 않음
-  completeReply: (reviewId, replyId, content) =>
-    request('PUT', `/api/reviews/${reviewId}/final-reply`, { replyId, content }),
+  // confirmed: 악성 리뷰 대응 답글은 사장님 확인(true)이 있어야 확정됨
+  completeReply: (reviewId, replyId, content, confirmed = false) =>
+    request('PUT', `/api/reviews/${reviewId}/final-reply`, { replyId, content, confirmed }),
+  // 악성 리뷰 대응 가이드 (strategy: APOLOGY | FACT | HOLD, 없으면 추천)
+  maliciousGuide: (reviewId, strategy) =>
+    request('POST', `/api/reviews/${reviewId}/malicious-guide`, strategy ? { strategy } : {}),
   reclassify: (reviewId) => request('POST', `/api/reviews/${reviewId}/classify`),
 };

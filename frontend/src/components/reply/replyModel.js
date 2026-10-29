@@ -6,7 +6,18 @@
 
 export const DRAFT_TYPES = ['PRAISE', 'COMPLAINT', 'INQUIRY'];
 export const DRAFT_TONES = ['POLITE', 'FRIENDLY', 'CONCISE'];
-export const TONE_LABEL = { POLITE: '정중형', FRIENDLY: '친근형', CONCISE: '간결형', TEMPLATE: '별점 템플릿' };
+export const TONE_LABEL = { POLITE: '정중형', FRIENDLY: '친근형', CONCISE: '간결형', TEMPLATE: '별점 템플릿', GUIDE: '대응 답글' };
+
+/** 악성 리뷰 대응 전략 */
+export const STRATEGIES = [
+  ['APOLOGY', '사과 후 마무리'],
+  ['FACT', '사실 관계 설명'],
+  ['HOLD', '응대 보류·신고 검토'],
+];
+export const STRATEGY_LABEL = Object.fromEntries(STRATEGIES);
+
+/** 이 값 이상이면 이전 답글과 비슷한 것으로 본다 (서버 similarity.reply-threshold 와 같음) */
+export const SIMILAR_THRESHOLD = 0.9;
 
 /** 목록 탭 기준 상태 (서로 겹치지 않음): 분류 실패 → 작성 완료 → 작성 대기 */
 export function statusOf(review) {
@@ -20,8 +31,12 @@ export const textOf = (reply) => reply.editedContent ?? reply.content;
 
 export const finalReplyOf = (review) => review.replies.find((p) => p.id === review.finalReplyId) ?? null;
 
-/** 작성 대기 화면에 보여줄 초안: 최종 답글로 확정된 것은 빼고, 템플릿 답글은 포함 */
-export const draftsOf = (review) => review.replies.filter((p) => p.id !== review.finalReplyId);
+/** 작성 대기 화면에 보여줄 초안: 최종 답글로 확정된 것과 악성 리뷰 가이드는 빼고, 템플릿 답글은 포함 */
+export const draftsOf = (review) => review.replies.filter((p) => p.id !== review.finalReplyId && p.tone !== 'GUIDE');
+
+/** 아직 확정하지 않은 최신 악성 리뷰 대응 가이드 */
+export const guideOf = (review) => [...review.replies].reverse()
+  .find((p) => p.tone === 'GUIDE' && p.id !== review.finalReplyId) ?? null;
 
 /** 사장님이 채워야 할 자리 [주차 안내 입력] 등 */
 export const FILL_IN = /(\[[^\]\n]{1,30}\])/g;

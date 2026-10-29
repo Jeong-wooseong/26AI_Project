@@ -8,7 +8,8 @@ import {
 } from '../components/ui.jsx';
 import ReplyDraftPanel from '../components/reply/ReplyDraftPanel.jsx';
 import FinalReply from '../components/reply/FinalReply.jsx';
-import { DRAFT_TONES, DRAFT_TYPES, finalReplyOf, formatDateTime, statusOf } from '../components/reply/replyModel.js';
+import MaliciousGuidePanel from '../components/reply/MaliciousGuidePanel.jsx';
+import { DRAFT_TONES, DRAFT_TYPES, finalReplyOf, formatDateTime, statusOf, textOf } from '../components/reply/replyModel.js';
 import { prefersReducedMotion } from '../components/reply/ReplyTypingText.jsx';
 
 const PAGE_SIZE = 10;
@@ -41,7 +42,8 @@ const TYPE_TONE = { PRAISE: 'praise', COMPLAINT: 'complaint', MALICIOUS: 'malici
  * 기본 목록(작성 완료)은 사장님이 확정한 최종 답글만 보여준다. 초안 작업은 '작성 대기'에서 한다.
  */
 export default function ReviewList({ store, toast, go, initialTab }) {
-  const [date, setDate] = useState(todayISO());
+  const [date, setDate] = useState(todayISO()); // '' 이면 전체 기간 (이력 조회)
+  const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('ALL'); // 유형
   const [status, setStatus] = useState(TABS.some(([k]) => k === initialTab) ? initialTab : 'done');
   const [platform, setPlatform] = useState('ALL');
@@ -54,7 +56,7 @@ export default function ReviewList({ store, toast, go, initialTab }) {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setReviews(await api.listReviews(store.id, { date }));
+      setReviews(await api.listReviews(store.id, { date: date || undefined }));
     } catch (e) {
       setError(e.message);
     }
@@ -66,7 +68,7 @@ export default function ReviewList({ store, toast, go, initialTab }) {
   }, [load]);
 
   // 거르는 조건이 바뀌면 첫 페이지로
-  useEffect(() => setPage(1), [date, filter, platform, status]);
+  useEffect(() => setPage(1), [date, filter, platform, status, query]);
 
   function changeTab(key) {
     setStatus(key);
@@ -77,7 +79,11 @@ export default function ReviewList({ store, toast, go, initialTab }) {
   const replace = (updated) => setReviews((rs) => rs.map((r) => (r.id === updated.id ? updated : r)));
 
   const all = reviews ?? [];
-  const list = all.filter((r) => platform === 'ALL' || r.platform === platform);
+  const q = query.trim().toLowerCase();
+  // 검색: 리뷰 본문, 키워드, 최종 답글 문장
+  const matches = (r) => !q || [r.maskedContent, ...(r.keywords ?? []), finalReplyOf(r) && textOf(finalReplyOf(r))]
+    .some((t) => t && t.toLowerCase().includes(q));
+  const list = all.filter((r) => (platform === 'ALL' || r.platform === platform) && matches(r));
   // 유형·상태는 서로의 선택을 반영해 개수를 센다. 작성 완료 수에는 확정한 답글만 들어간다 (초안 수와 섞지 않음)
   const byType = list.filter((r) => filter === 'ALL' || r.type === filter);
   const byStatus = list.filter((r) => statusOf(r) === status);
@@ -91,6 +97,7 @@ export default function ReviewList({ store, toast, go, initialTab }) {
   }, { done: 0, wait: 0, fail: 0 });
   const visible = byType.filter((r) => statusOf(r) === status);
   const isToday = date === todayISO();
+  const allTime = !date;
   const isDone = status === 'done';
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
@@ -133,7 +140,7 @@ export default function ReviewList({ store, toast, go, initialTab }) {
   return (
     <>
       <PageHeader
-        title={isToday ? '오늘의 리뷰' : '지난 리뷰'}
+        title={allTime ? '전체 리뷰' : isToday ? '오늘의 리뷰' : '지난 리뷰'}
         description="작성 완료한 답글을 확인하고, 작성 대기 중인 리뷰의 답글을 확정합니다."
         actions={<PrimaryButton icon="add" onClick={() => go('input')}>리뷰 입력</PrimaryButton>}
       />
@@ -147,11 +154,19 @@ export default function ReviewList({ store, toast, go, initialTab }) {
             <FormInput id="reviewDate" label="등록일" hideLabel type="date" icon="calendar" fieldClassName="filter-date"
                        value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)}
                        onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* 지원하지 않는 브라우저는 직접 입력 */ } }} />
+            <SecondaryButton tone="neutral" className={`period-btn ${allTime ? 'is-on' : ''}`} aria-pressed={allTime}
+                             onClick={() => setDate(allTime ? todayISO() : '')}>
+              전체 기간
+            </SecondaryButton>
             <FormSelect id="platformFilter" label="리뷰 출처" hideLabel value={platform}
                         options={[['ALL', '전체 출처'], ...usedPlatforms]} onChange={(e) => setPlatform(e.target.value)} />
             <FormSelect id="typeFilter" label="유형" hideLabel value={filter} options={typeOptions}
                         onChange={(e) => setFilter(e.target.value)} />
           </>
+        )}
+        end={(
+          <FormInput id="reviewSearch" label="리뷰·답글 검색" hideLabel type="search" icon="search" fieldClassName="filter-search"
+                     placeholder="리뷰·답글 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
         )}
       />
 
@@ -166,7 +181,7 @@ export default function ReviewList({ store, toast, go, initialTab }) {
       {reviews === null && !error && <EmptyState loading description="불러오는 중" />}
       {reviews && reviews.length === 0 && (
         <EmptyState
-          title={isToday ? '등록된 리뷰 없음' : '해당 날짜의 리뷰 없음'}
+          title={allTime ? '등록된 리뷰 없음' : isToday ? '오늘 등록된 리뷰 없음' : '해당 날짜의 리뷰 없음'}
           description="리뷰 입력 메뉴에서 리뷰를 등록하면 유형별로 분류됩니다."
           action={<PrimaryButton icon="add" onClick={() => go('input')}>리뷰 등록</PrimaryButton>}
         />
@@ -197,7 +212,7 @@ export default function ReviewList({ store, toast, go, initialTab }) {
             )}
           </div>
           {visible.length === 0 ? (
-            <EmptyTab status={status} waitCount={statusCounts.wait} onShowWait={() => changeTab('wait')} />
+            <EmptyTab status={status} searching={!!q} waitCount={statusCounts.wait} onShowWait={() => changeTab('wait')} />
           ) : (
             <>
               <DataTableHead columns={isDone ? DONE_COLUMNS : WORK_COLUMNS} />
@@ -229,7 +244,8 @@ export default function ReviewList({ store, toast, go, initialTab }) {
   );
 }
 
-function EmptyTab({ status, waitCount, onShowWait }) {
+function EmptyTab({ status, searching, waitCount, onShowWait }) {
+  if (searching) return <p className="dt-empty">검색어와 일치하는 리뷰가 없습니다.</p>;
   if (status === 'done') {
     return (
       <div className="dt-empty">
@@ -254,7 +270,8 @@ function CompletedRow({ no, review: r, onUpdated, toast }) {
 
   async function save(text) {
     try {
-      onUpdated(await api.completeReply(r.id, reply.id, text));
+      // 대응 답글은 처음 확정할 때 사장님 확인을 거쳤으므로 그대로 확인 상태로 저장한다
+      onUpdated(await api.completeReply(r.id, reply.id, text, reply.tone === 'GUIDE'));
       toast.show('최종 답글을 저장했습니다.');
       return true;
     } catch (e) {
@@ -277,6 +294,7 @@ function CompletedRow({ no, review: r, onUpdated, toast }) {
         <p className="meta">
           <span>{TYPE_LABEL[r.type]}</span>
           {r.writtenAt && <span>작성일 {r.writtenAt}</span>}
+          {r.similarCount > 0 && <SimilarNote count={r.similarCount} />}
         </p>
         {reply && <FinalReply reply={reply} onSave={save} toast={toast} />}
       </div>
@@ -331,9 +349,22 @@ function Ticket({ no, review: r, onUpdated, toast }) {
     }
   }
 
-  async function complete(replyId, text) {
+  async function generateGuide(strategy) {
+    if (generation.state === 'loading') return; // 중복 요청 방지
+    setGeneration({ state: 'loading', strategy });
     try {
-      onUpdated(await api.completeReply(r.id, replyId, text));
+      const updated = await api.maliciousGuide(r.id, strategy);
+      if (!mounted.current) return;
+      onUpdated(updated);
+      setGeneration({ state: 'idle' });
+    } catch (e) {
+      if (mounted.current) setGeneration({ state: 'error', strategy, error: { code: e.code, message: e.message } });
+    }
+  }
+
+  async function complete(replyId, text, confirmed = false) {
+    try {
+      onUpdated(await api.completeReply(r.id, replyId, text, confirmed));
       toast.show('작성 완료로 저장했습니다. 작성 완료 탭에서 확인할 수 있습니다.');
       return true;
     } catch (e) {
@@ -342,7 +373,8 @@ function Ticket({ no, review: r, onUpdated, toast }) {
     }
   }
 
-  const hasReplyArea = !failed && (r.replies.length > 0 || DRAFT_TYPES.includes(r.type));
+  const malicious = !failed && r.type === 'MALICIOUS';
+  const hasReplyArea = !failed && !malicious && (r.replies.length > 0 || DRAFT_TYPES.includes(r.type));
 
   return (
     <DataTableRow className={`rt-item ${failed ? 'is-failed' : ''}`}>
@@ -366,6 +398,7 @@ function Ticket({ no, review: r, onUpdated, toast }) {
           {!failed && r.type !== 'RATING_ONLY' && r.confidence != null && (
             <span>확신도 {Math.round(r.confidence * 100)}%</span>
           )}
+          {r.similarCount > 0 && <SimilarNote count={r.similarCount} />}
         </p>
       </div>
 
@@ -396,10 +429,19 @@ function Ticket({ no, review: r, onUpdated, toast }) {
         <ReplyDraftPanel review={r} generation={generation} onGenerate={generate} onComplete={complete} toast={toast} />
       )}
 
-      {!failed && r.type === 'MALICIOUS' && (
-        <p className="rt-reply hint">악성 리뷰: 즉시 답글보다 대응 방향 검토를 권장합니다. (대응 가이드 준비 중)</p>
+      {malicious && (
+        <MaliciousGuidePanel review={r} generation={generation} onGenerate={generateGuide} onComplete={complete} toast={toast} />
       )}
     </DataTableRow>
+  );
+}
+
+/** 중복 방지 1단: 최근 7일 안에 내용이 비슷한 리뷰가 있으면 알린다 (답글은 서로 다른 표현으로 생성) */
+function SimilarNote({ count }) {
+  return (
+    <span className="similar-note" title="최근 7일 안에 내용이 비슷한 리뷰입니다. 답글 초안은 그 리뷰의 답글과 겹치지 않게 만듭니다.">
+      비슷한 리뷰 {count}건
+    </span>
   );
 }
 
@@ -409,6 +451,7 @@ function ReplyStatus({ review: r, generation }) {
   if (generation.state === 'loading') return <StatusIndicator tone="inquiry" icon="loading">생성 중</StatusIndicator>;
   if (generation.state === 'error') return <StatusIndicator tone="danger" icon="error">생성 실패</StatusIndicator>;
   const drafts = r.replies.filter((p) => p.id !== r.finalReplyId).length;
+  if (r.type === 'MALICIOUS') return <StatusIndicator tone="neutral">{drafts ? '가이드 확인 전' : '가이드 없음'}</StatusIndicator>;
   return <StatusIndicator tone="neutral">{drafts ? `초안 ${drafts}개` : '초안 없음'}</StatusIndicator>;
 }
 

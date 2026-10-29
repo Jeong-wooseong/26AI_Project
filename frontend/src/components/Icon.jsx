@@ -23,6 +23,8 @@ import {
   Plus,
   RotateCw,
   Save,
+  Search,
+  ShieldAlert,
   ScanText,
   Star,
   Store,
@@ -58,6 +60,8 @@ const ICONS = {
   upload: Upload,
   download: Download,
   restore: Undo2,
+  search: Search,
+  guide: ShieldAlert, // 악성 리뷰 대응 가이드
 };
 
 export default function Icon({ name, size = 18, className = '', ...rest }) {

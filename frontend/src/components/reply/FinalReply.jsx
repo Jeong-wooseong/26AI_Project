@@ -3,7 +3,7 @@ import Icon from '../Icon.jsx';
 import { FormInput, PrimaryButton, SecondaryButton } from '../ui.jsx';
 import { ReplyText } from './ReplyTypingText.jsx';
 import { selectTextOf, useCopy } from './useCopy.js';
-import { TONE_LABEL, hasFillIn, textOf } from './replyModel.js';
+import { STRATEGY_LABEL, TONE_LABEL, hasFillIn, textOf } from './replyModel.js';
 
 /** 작성 완료한 최종 답글 하나: 리뷰 원문과 구분해 보여주고, 복사와 수정을 제공한다. */
 export default function FinalReply({ reply, onSave, toast }) {
@@ -50,7 +50,11 @@ export default function FinalReply({ reply, onSave, toast }) {
     <div className="final">
       <div className="final-head">
         <span className="final-label">최종 답글</span>
-        <span className="final-tone">{TONE_LABEL[reply.tone] ?? reply.tone}{reply.editedContent ? ', 직접 수정' : ''}</span>
+        <span className="final-tone">
+          {TONE_LABEL[reply.tone] ?? reply.tone}
+          {reply.strategy ? ` (${STRATEGY_LABEL[reply.strategy] ?? reply.strategy})` : ''}
+          {reply.editedContent ? ', 직접 수정' : ''}
+        </span>
         {!editing && (
           <div className="final-actions">
             <button type="button" className={`act-btn ${copied ? 'is-copied' : ''}`} onClick={copyFinal}
