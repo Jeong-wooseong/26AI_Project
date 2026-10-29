@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -21,6 +22,13 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     /** 같은 묶음의 다른 리뷰 */
     List<Review> findByStore_IdAndGroupIdAndIdNot(Long storeId, String groupId, Long id);
+
+    /** 주간 리포트: 기간 안의 리뷰. 날짜는 고객 작성일이 있으면 작성일, 없으면 등록일 기준 */
+    @Query("select r from Review r where r.store.id = :storeId and ("
+            + "(r.writtenOn is not null and r.writtenOn >= :from and r.writtenOn < :to)"
+            + " or (r.writtenOn is null and r.createdAt >= :fromTs and r.createdAt < :toTs))")
+    List<Review> findInPeriod(@Param("storeId") Long storeId, @Param("from") LocalDate from, @Param("to") LocalDate to,
+                              @Param("fromTs") LocalDateTime fromTs, @Param("toTs") LocalDateTime toTs);
 
     /** 묶음별 리뷰 수 [groupId, count] */
     @Query("select r.groupId, count(r) from Review r where r.store.id = :storeId and r.groupId in :groups group by r.groupId")
