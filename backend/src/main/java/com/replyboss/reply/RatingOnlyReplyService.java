@@ -80,13 +80,14 @@ public class RatingOnlyReplyService {
 
     /**
      * 3~4문장일 때 덧붙일 한 문장.
-     * 높은 별점은 가게가 자주 쓰는 표현(템플릿과 뜻이 겹치지 않는 것)을 먼저 쓰고, 없으면 별점별 기본 문장.
+     * 높은 별점은 가게가 자주 쓰는 표현(완결된 문장이고 템플릿과 뜻이 겹치지 않는 것)을 먼저 쓰고, 없으면 별점별 기본 문장.
+     * "이용해주셔서" 같은 표현 조각은 한 문장이 되지 않으므로 쓰지 않는다.
      */
     static String extraSentence(String base, int rating, ToneProfile tone) {
         if (rating >= 4) {
             for (String phrase : tone.phrases()) {
                 String p = phrase.strip();
-                if (p.length() >= 4 && !base.contains(p) && !Greetings.overlaps(base, p)
+                if (p.length() >= 4 && isSentence(p) && !base.contains(p) && !Greetings.overlaps(base, p)
                         && !Greetings.overlaps(p, tone.closing())) {
                     return endSentence(p);
                 }
@@ -100,6 +101,11 @@ public class RatingOnlyReplyService {
             return formal ? "다음 방문 때는 더 만족하실 수 있도록 준비하겠습니다." : "다음 방문 때는 더 만족하실 수 있도록 준비할게요.";
         }
         return formal ? "같은 일이 반복되지 않도록 더 세심하게 살피겠습니다." : "같은 일이 없도록 더 세심하게 살필게요.";
+    }
+
+    /** "~다", "~요" 등 문장 끝맺음으로 끝나는 표현인지 (뒤따르는 문장부호는 무시) */
+    static boolean isSentence(String s) {
+        return s.matches(".*[다요죠네까][\\s.!?~…♡♥)]*$");
     }
 
     private static String endSentence(String s) {

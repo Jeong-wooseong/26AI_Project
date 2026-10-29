@@ -76,4 +76,13 @@ class RatingOnlyReplyServiceTest {
         assertThat(RatingOnlyReplyService.applyTone("감사합니다. 힘이 됩니다.", 5, withLength("3~4문장", "하십시오체", List.of())))
                 .isEqualTo("감사합니다. 힘이 됩니다. 앞으로도 변함없는 맛으로 보답하겠습니다. 오늘도 좋은 하루 되세요!");
     }
+
+    @Test
+    void 표현_조각은_덧붙이지_않고_완결된_문장만_쓴다() {
+        assertThat(RatingOnlyReplyService.applyTone("감사합니다. 힘이 됩니다.", 5,
+                withLength("3~4문장", "하십시오체", List.of("이용해주셔서", "감사합니다~"))))
+                .isEqualTo("감사합니다. 힘이 됩니다. 앞으로도 변함없는 맛으로 보답하겠습니다. 오늘도 좋은 하루 되세요!");
+        assertThat(RatingOnlyReplyService.isSentence("또 들러주세요~!!")).isTrue();
+        assertThat(RatingOnlyReplyService.isSentence("이용해주셔서")).isFalse();
+    }
 }

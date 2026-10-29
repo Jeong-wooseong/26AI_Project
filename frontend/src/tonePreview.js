@@ -20,6 +20,9 @@ function endSentence(s) {
   return /[.!?~…♡♥)]$|[\u{1F300}-\u{1FAFF}]$/u.test(t) ? t : `${t}.`;
 }
 
+/** "~다", "~요" 등으로 끝나는 완결된 문장인지. "이용해주셔서" 같은 표현 조각은 미리보기 문장으로 쓰지 않는다 */
+const isSentence = (s) => /[다요죠네까][\s.!?~…♡♥)]*$/.test(s.trim());
+
 const OPENING = {
   하십시오체: '맛있게 드셔주셔서 기쁩니다.',
   해요체: '맛있게 드셨다니 기뻐요!',
@@ -48,9 +51,9 @@ export function previewText(tone) {
   const closing = tone.closing?.trim() ?? '';
   const formality = OPENING[tone.formality] ? tone.formality : '해요체';
   const parts = [OPENING[formality]];
-  const unused = tone.phrases.filter((p) => !overlaps(p, closing) && !overlaps(p, parts[0]));
+  const unused = tone.phrases.filter((p) => isSentence(p) && !overlaps(p, closing) && !overlaps(p, parts[0]));
 
-  // 가운데 문장: 마무리 인사·첫 문장과 뜻이 겹치지 않는 첫 표현 (없으면 기본 문장)
+  // 가운데 문장: 완결된 문장이고 마무리 인사·첫 문장과 뜻이 겹치지 않는 첫 표현 (없으면 기본 문장)
   parts.push(unused[0] ? endSentence(unused[0]) : FALLBACK_MIDDLE[formality]);
   if (tone.length === '3~4문장') {
     const second = unused.slice(1).find((p) => !overlaps(p, parts[1]));

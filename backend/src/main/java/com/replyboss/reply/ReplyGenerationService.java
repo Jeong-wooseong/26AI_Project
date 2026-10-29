@@ -24,7 +24,7 @@ import static com.replyboss.ai.Schemas.string;
 
 /**
  * 기능 3. 맞춤형 답글 초안 3종(정중형·친근형·간결형) 생성.
- * 매장 말투를 주입하고, 생성 후 안전 규칙(약속 금지·가림 표시 금지·키워드 반영)을 코드로 한 번 더 확인한다.
+ * 매장 말투와 톤별 문장 수를 주입하고, 생성 후 안전 규칙(약속 금지·가림 표시 금지)과 키워드 반영·문장 수를 코드로 한 번 더 확인한다.
  * 규칙을 어긴 초안이 있으면 이유를 알려 주고 한 번 다시 생성한다.
  */
 @Service
@@ -32,7 +32,7 @@ public class ReplyGenerationService {
 
     private static final Logger log = LoggerFactory.getLogger(ReplyGenerationService.class);
 
-    static final String PROMPT = "reply_generate_v1";
+    static final String PROMPT = "reply_generate_v2";
     static final List<ReviewType> TARGET_TYPES = List.of(ReviewType.PRAISE, ReviewType.COMPLAINT, ReviewType.INQUIRY);
 
     private static final Map<String, Object> SCHEMA = object(props(
@@ -47,6 +47,11 @@ public class ReplyGenerationService {
     static final Pattern PROMISE = Pattern.compile("환불|할인|쿠폰|무료|보상|적립금|서비스로\\s*(드리|챙겨)|서비스\\s*(드릴|드리겠|챙겨)");
     /** 개인정보 가림 표시 */
     static final Pattern MASK = Pattern.compile("\\[(전화번호|이메일|주소|주문번호|번호)\\]");
+    /** 문장 경계: 마침표·물음표·느낌표·물결·말줄임표·이모지 뒤의 공백, 또는 줄바꿈 */
+    private static final Pattern SENTENCE_BREAK = Pattern.compile("(?<=[.!?~…\\p{So}\\uFE0F])\\s+|\\n+");
+    private static final Pattern LETTER = Pattern.compile("[\\p{IsHangul}\\p{L}\\p{N}]");
+    /** 문장 수를 이만큼 넘는 것까지는 허용 (문장 쪼개기 방식 차이) */
+    private static final int LENGTH_TOLERANCE = 1;
 
     private final LlmClient llmClient;
     private final PromptTemplates prompts;
@@ -119,6 +124,11 @@ public class ReplyGenerationService {
             if (!ctx.keywords().isEmpty() && !mentionsKeyword(text, ctx.keywords())) {
                 problems.add(name + ": 리뷰 키워드(" + String.join(", ", ctx.keywords()) + ")를 언급하지 않음");
             }
+            int[] range = sentenceRange(ctx.tone(), tone);
+            int count = countSentences(text);
+            if (count < range[0] || count > range[1] + LENGTH_TOLERANCE) {
+                problems.add(name + ": " + count + "문장으로 작성됨 (" + range[0] + "~" + range[1] + "문장으로 맞출 것)");
+            }
         });
         return problems;
     }
@@ -135,6 +145,29 @@ public class ReplyGenerationService {
         return false;
     }
 
+    /** 톤별 목표 문장 수 [최소, 최대]. 간결형은 항상 1~2문장, 나머지는 매장 말투의 문장 길이 */
+    static int[] sentenceRange(ToneProfile tone, ReplyTone replyTone) {
+        if (replyTone == ReplyTone.CONCISE) {
+            return new int[]{1, 2};
+        }
+        return switch (tone.length()) {
+            case "1~2문장" -> new int[]{1, 2};
+            case "3~4문장" -> new int[]{3, 4};
+            default -> new int[]{2, 3};
+        };
+    }
+
+    /** 문장 수. 이모지만 있는 조각처럼 글자가 없는 조각은 세지 않는다 */
+    static int countSentences(String text) {
+        int count = 0;
+        for (String part : SENTENCE_BREAK.split(text.strip())) {
+            if (LETTER.matcher(part).find()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     static String userMessage(Context ctx) {
         ToneProfile t = ctx.tone();
         StringBuilder sb = new StringBuilder();
@@ -149,6 +182,11 @@ public class ReplyGenerationService {
         sb.append("- 문장 길이: ").append(t.length()).append('\n');
         sb.append("- 자주 쓰는 표현: ").append(t.phrases().isEmpty() ? "없음" : String.join(", ", t.phrases())).append('\n');
         sb.append("- 마무리 인사: ").append(t.closing().isEmpty() ? "없음" : t.closing()).append('\n');
+        sb.append("[작성 분량]\n");
+        for (ReplyTone tone : List.of(ReplyTone.POLITE, ReplyTone.FRIENDLY, ReplyTone.CONCISE)) {
+            int[] range = sentenceRange(t, tone);
+            sb.append("- ").append(FIELD.get(tone)).append(": ").append(range[0]).append('~').append(range[1]).append("문장\n");
+        }
         sb.append("[리뷰]\n");
         sb.append("- 별점: ").append(ctx.rating()).append('\n');
         sb.append("- 유형: ").append(ctx.type().name()).append('\n');
