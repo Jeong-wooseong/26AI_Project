@@ -1,0 +1,48 @@
+# backend/.env 파일이 있으면 그 값을 먼저 읽습니다 (저장소에는 커밋하지 않음, .env.example 참고)
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/replyboss?serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
+    username: ${DB_USERNAME:replyboss}
+    password: ${DB_PASSWORD:replyboss}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Seoul
+
+server:
+  port: 8080
+
+openai:
+  api-key: ${OPENAI_API_KEY:}
+  base-url: https://api.openai.com
+  # 분류·톤 추출처럼 짧고 정해진 형식의 작업은 가장 저렴한 모델
+  classify-model: ${OPENAI_CLASSIFY_MODEL:gpt-6-luna}
+  # 답글 생성(3주차)처럼 문장 품질이 중요한 작업
+  generate-model: ${OPENAI_GENERATE_MODEL:gpt-6.1-sol}
+  # 중복 답글 방지(4주차)
+  embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+  # 추론 모델이 느리면 low 로 (지원하지 않는 모델이면 비워둘 것)
+  reasoning-effort: ${OPENAI_REASONING_EFFORT:}
+  # 분류는 짧은 판단이라 추론을 적게 (추론이 길어져 응답이 잘리거나 시간이 초과되는 것을 막음). 비우면 위 설정을 따름
+  classify-reasoning-effort: ${OPENAI_CLASSIFY_REASONING_EFFORT:low}
+  timeout-seconds: 60
+  max-retries: 1
+
+# 중복 답글 방지 3단 (4주차)
+similarity:
+  # 임베딩 길이 (text-embedding-3 계열은 줄여서 받을 수 있음. 저장 공간 절약)
+  dimensions: 512
+  # 입력 시: 이 값 이상으로 비슷한 리뷰끼리 묶는다
+  review-group-threshold: 0.9
+  # 출력 시: 최근 답글과 이 값 이상이면 다시 생성
+  reply-threshold: 0.9
+  max-regenerations: 2
+  # 비교할 최근 최종 답글 수, 리뷰 묶기 비교 기간(일)
+  compare-count: 30
+  review-group-days: 7

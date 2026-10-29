@@ -5,7 +5,7 @@
 - **저장소**: https://github.com/Jeong-wooseong/26AI_Project (Public)
 - **과목**: 생성형 AI 활용 — 팀/개인 프로젝트
 - **개발 기간**: 6주 (2026.10.05 ~ 2026.11.11)
-- **상태**: 개발 중
+- **상태**: 개발 중 (1·2주차 범위 구현, 아래 [진행 현황](#진행-현황) 참고)
 
 ---
 
@@ -39,7 +39,7 @@
 | 활용 상황 | 영업 마감 후 리뷰를 한꺼번에 입력해 답글 초안을 고르고 복사, 주말에 주간 리포트 확인 |
 | 개발 목적 | 답글 작성 시간 절감 · 악성 리뷰에 대한 감정적 대응 방지 · 리뷰에서 개선점 도출 |
 
-ReplyBoss는 리뷰를 **직접 게시하지 않습니다.** 모든 답글은 초안이며, 사장님이 확인·수정한 뒤 복사해 각 플랫폼에 올리는 방식입니다.
+ReplyBoss는 리뷰를 **직접 게시하지 않습니다.** AI 답글은 모두 초안이며, 사장님이 하나를 골라 확인·수정한 뒤 **작성 완료**로 확정하고, 복사해 각 플랫폼에 올리는 방식입니다. '작성 완료'는 붙여넣을 최종 답글을 확정했다는 뜻이지 외부 플랫폼 게시 완료가 아닙니다.
 
 ## 2. 문제 정의
 
@@ -58,6 +58,10 @@ ReplyBoss는 리뷰를 **직접 게시하지 않습니다.** 모든 답글은 �
 - 붙여넣은 리뷰의 **개인정보(전화번호·주소 등)를 마스킹**한 뒤 AI에 전달
 - LLM이 유형(칭찬 / 불만 / 악성 / 문의), 감정, 키워드(메뉴명·불만 주제)를 **JSON으로 구조화**
 - **본문이 없는 평점만 리뷰**는 LLM을 호출하지 않고 규칙으로 처리
+- 입력 방식 3가지: **직접 입력**, **여러 리뷰 붙여넣기**(범용 파서로 리뷰 단위 추출), **파일 가져오기**(CSV·XLSX, 열 연결)
+  - 일괄 등록은 반드시 미리보기에서 확인·수정·제외 후 등록. 별점을 확정할 수 없으면 비워 두고 사용자가 선택
+  - 같은 목록 안 중복, 이미 등록된 리뷰와의 중복(마스킹 후 본문 비교)을 등록 전에 표시
+  - 파일은 브라우저 안에서만 읽고 서버에 업로드하지 않음. 플랫폼 공식 리뷰 API 조사 결과는 [docs/review-api-research.md](docs/review-api-research.md)
 
 | 별점 | 평점만 리뷰 처리 |
 | --- | --- |
@@ -139,8 +143,8 @@ flowchart LR
     LLM["LlmClient / EmbeddingClient"]
     REPO["JPA Repository"]
   end
-  DB[("MySQL / PostgreSQL")]
-  AI["LLM API"]
+  DB[("MySQL")]
+  AI["OpenAI API"]
   EMB["임베딩 API"]
   EXT --> WEB
   WEB -->|"HTTPS · JSON"| API
@@ -166,10 +170,10 @@ flowchart LR
 
 | 구분 | 기술 |
 | --- | --- |
-| Frontend | React |
-| Backend | Spring Boot (Java), Spring Data JPA |
-| Database | MySQL 또는 PostgreSQL (pgvector 선택) |
-| AI | LLM API (JSON 구조화 출력), 임베딩 API |
+| Frontend | React 18, Vite |
+| Backend | Spring Boot 3.5 (Java 17), Spring Data JPA |
+| Database | MySQL 8 (설치 없이 실행·테스트할 때는 H2) |
+| AI | OpenAI API (Chat Completions 구조화 출력, strict json_schema): 분류·톤 추출 `gpt-6-luna`, 답글 생성 `gpt-6.1-sol` / 임베딩 `text-embedding-3-small` (4주차) |
 | 기타 | Chrome Extension (선택), GitHub |
 
 ## 8. 데이터베이스 설계
@@ -225,7 +229,8 @@ erDiagram
 ```
 
 - 리뷰는 **마스킹본만 저장**하고 원문은 저장하지 않습니다.
-- 답글 임베딩은 MySQL에서는 JSON 배열로 저장해 앱에서 유사도를 계산하고, PostgreSQL에서는 pgvector를 사용할 수 있습니다.
+- 답글 임베딩은 JSON 배열로 저장하고, 최근 답글 5~10개와의 코사인 유사도는 앱에서 계산합니다.
+- JSON 성격의 컬럼(키워드, 톤 프로필)은 테스트용 H2 와 호환되도록 TEXT 에 JSON 문자열로 저장합니다.
 
 ## 9. API 명세
 
@@ -290,61 +295,134 @@ erDiagram
 ## 11. 프로젝트 구조
 
 ```
-ReplyBoss/
-├─ frontend/                 # React
-│  └─ src/
-│     ├─ pages/              # StoreSetup, ReviewInput, ReviewList, MaliciousGuide, History, WeeklyReport
-│     ├─ components/         # ReviewCard, ReplyTabs, ToneProfileForm, TypeBadge
-│     └─ api/
-├─ backend/                  # Spring Boot
-│  └─ src/main/java/com/replyboss/
-│     ├─ store/  review/  reply/  report/  template/
-│     ├─ ai/                 # LlmClient, EmbeddingClient, PromptTemplates
-│     ├─ masking/
-│     └─ common/
-├─ prompts/                  # 프롬프트 버전 관리
-├─ eval/                     # 라벨링 데이터, 정확도·중복률 측정 스크립트
-├─ extension/                # (선택) 크롬 확장
-└─ docs/                     # ERD, API 명세, 발표 자료
+26AI_Project/
+├─ backend/                         # Spring Boot 3.5 (Java 17)
+│  ├─ src/main/java/com/replyboss/
+│  │  ├─ ai/                        # OpenAiLlmClient(구조화 출력), Schemas, PromptTemplates
+│  │  ├─ masking/                   # MaskingService (전화번호·이메일·주소·주문번호)
+│  │  ├─ store/                     # 가게, 톤 프로필 추출·저장
+│  │  ├─ review/                    # 리뷰 입력·분류·재시도, 평가용 분류 API
+│  │  ├─ reply/                     # 답글, 평점만 템플릿 풀
+│  │  └─ common/                    # 예외 처리, JSON 컬럼 도우미
+│  ├─ src/main/resources/prompts/   # 프롬프트 버전 관리 (classify_v1, tone_extract_v1)
+│  └─ .env.example
+├─ frontend/                        # React 18 + Vite
+│  └─ src/pages/                    # StoreSetup, ReviewInput, ReviewList
+├─ eval/                            # 라벨링 리뷰 셋, 분류 정확도 측정 스크립트
+├─ docker-compose.yml               # 로컬 MySQL
+└─ .github/workflows/ci.yml         # 백엔드 빌드·테스트, 프론트 빌드
 ```
 
 ## 12. 실행 방법
 
-> 개발 진행에 따라 업데이트 예정입니다.
+필요한 것: JDK 17 이상, Node.js 18 이상, MySQL 8 (또는 Docker), OpenAI API 키
 
-### 저장소 받기
+### 1) 저장소 받기
 
 ```bash
 git clone https://github.com/Jeong-wooseong/26AI_Project.git
 cd 26AI_Project
 ```
 
-### 환경 변수
+### 2) DB 준비
 
-`backend/.env` (저장소에 커밋하지 않음)
+**바로 실행해보려면 (설치 없음)**: 4단계에서 `bootRunLocal` 로 실행하면 MySQL 대신 H2 파일 DB(`backend/data/`)를 쓴다. 이 단계는 건너뛴다.
 
-```
-LLM_API_KEY=your-llm-api-key
-EMBEDDING_API_KEY=your-embedding-api-key
-DB_URL=jdbc:mysql://localhost:3306/replyboss
-DB_USERNAME=root
-DB_PASSWORD=your-password
+**MySQL 로 실행하려면** Docker(Windows 는 WSL2 필요)를 쓰거나:
+
+```bash
+docker compose up -d
 ```
 
-### 백엔드
+MySQL 을 직접 설치했다면 `replyboss` 데이터베이스와 사용자를 만든다 (테이블은 첫 실행 때 자동 생성).
+
+```sql
+CREATE DATABASE replyboss DEFAULT CHARACTER SET utf8mb4;
+CREATE USER 'replyboss'@'localhost' IDENTIFIED BY 'replyboss';
+GRANT ALL ON replyboss.* TO 'replyboss'@'localhost';
+```
+
+### 3) 환경 변수
+
+`backend/.env.example` 을 `backend/.env` 로 복사하고 값을 채운다. `.env` 는 저장소에 올리지 않는다.
+
+```
+OPENAI_API_KEY=sk-...
+DB_URL=jdbc:mysql://localhost:3306/replyboss?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+DB_USERNAME=replyboss
+DB_PASSWORD=replyboss
+```
+
+### 4) 백엔드 (http://localhost:8080)
 
 ```bash
 cd backend
-./gradlew bootRun
+./gradlew bootRunLocal   # MySQL 없이 실행 (Windows PowerShell: .\gradlew.bat bootRunLocal)
+./gradlew bootRun        # MySQL 로 실행   (Windows PowerShell: .\gradlew.bat bootRun)
+./gradlew test           # 테스트 (H2 메모리 DB, LLM 은 가짜로 대체)
 ```
 
-### 프론트엔드
+`bootRunLocal` 로 켰을 때는 http://localhost:8080/h2-console 에서 저장된 데이터를 볼 수 있다 (JDBC URL `jdbc:h2:file:./data/replyboss`, 사용자 `sa`, 비밀번호 없음).
+
+### 5) 프론트엔드 (http://localhost:5173)
 
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+
+개발 서버가 `/api` 요청을 백엔드(8080)로 넘겨준다.
+
+### 6) 분류 정확도 측정
+
+백엔드를 켠 상태에서 프로젝트 루트에서 실행한다. 자세한 내용은 [eval/README.md](eval/README.md).
+
+```bash
+node eval/classify_eval.mjs
+```
+
+## 진행 현황
+
+| 주차 | 범위 | 상태 |
+| --- | --- | --- |
+| 1주차 | 기능 정의, 와이어프레임, ERD, API 명세, 개발 환경, 분류 프롬프트 v1, 라벨링 셋 50개 | 완료 |
+| 2주차 | 가게 등록, 톤 프로필 추출·수정·저장, 리뷰 입력, 마스킹, 분류 API, 평점만 분기 + 템플릿 풀, 정확도 측정 스크립트 | 완료 (정확도 1차 측정 필요) |
+| 3주차 | 답글 3톤 생성, 톤 주입, 안전 규칙, 편집·복사, 이력 조회 | 완료 (작성 완료 확정, 전체 기간·검색 이력 조회 포함) |
+
+**답글 상태**: 초안(AI 생성, 여러 개) → 작성 완료(사장님이 확정한 최종 답글, 리뷰당 1개, `completedAt` 기록). 복사만으로는 작성 완료가 되지 않습니다. 오늘의 리뷰 기본 목록(작성 완료)에는 최종 답글만 표시하고, 초안 작업은 '작성 대기' 탭에서 합니다. 답글 프롬프트는 `prompts/reply_generate_v3.txt`(매장 소개·감정·최근 최종 답글 반영)를 씁니다.
+| 4주차 | 임베딩, 중복 방지 3단, 악성 리뷰 가이드, 예외 처리 | 구현 완료 (실제 OpenAI 호출로 임계값 0.9 검증 필요) |
+
+**중복 방지 3단** (`similarity.*` 설정, 임베딩 `text-embedding-3-small` 512차원)
+- 1단 입력 시: 새 리뷰를 최근 7일 리뷰와 비교해 유사도 0.9 이상이면 같은 묶음(`groupId`)으로 묶고 화면에 "비슷한 리뷰 n건" 표시
+- 2단 생성 시: 같은 묶음 리뷰의 최종 답글과 최근 최종 답글(최대 8개)을 프롬프트에 주고 같은 표현을 피하게 지시
+- 3단 출력 시: 초안 임베딩이 이전 최종 답글(최대 30개)과 0.9 이상이면 이유를 알려 최대 2회 다시 생성, `maxSimilarity`·`regenCount` 저장
+- 임베딩 호출이 실패하면 묶기·비교만 건너뛰고 등록·생성은 그대로 진행
+
+**악성 리뷰 대응 가이드** (`prompts/malicious_guide_v1.txt`): 전략(사과 후 마무리 / 사실 관계 설명 / 응대 보류·신고 검토) 추천, 근거, 답글 전에 확인할 것, 답글 초안. 다른 전략을 고르면 그 전략으로 다시 생성. 보상 약속·가림 표시·위협성 표현(고소·신고하겠다 등)은 코드로 검사해 다시 생성. 사장님 확인 체크 전에는 복사·작성 완료 불가 (서버도 `confirmed=true` 확인).
+| 5주차 | 주간 리포트, (선택) 크롬 확장, 1차 테스트 | 진행 중 (주간 리포트 완료, 크롬 확장 보류, 1차 테스트·지표 측정 예정) |
+
+**주간 리포트** (`prompts/weekly_report_v1.txt`): 월~일 단위, 리뷰 날짜는 고객 작성일(없으면 등록일). 리뷰 수·평균 별점·유형별 수·불만 비율, 불만 주제(불만 리뷰 키워드) 순위와 지난주 대비 변화, 대표 불만 리뷰 3건(상위 주제별 별점 가장 낮은 리뷰), 답글 작성 완료율·수정률을 서버에서 집계합니다. AI는 버튼을 눌렀을 때만 요약 2~3문장과 개선 제안 2~3개를 쓰며, 집계에 없는 숫자를 쓰면 다시 생성합니다. 요약을 만든 뒤 리뷰가 바뀌면 화면에 '다시 만들기'를 안내합니다. 불만 주제는 분류 단계 키워드를 그대로 세므로, 같은 뜻의 다른 표현(예: 배달 지연 / 배달이 늦음)은 따로 셉니다.
+
+### 현재 동작하는 API
+
+| 메서드 | 엔드포인트 | 설명 |
+| --- | --- | --- |
+| POST / GET | `/api/stores` | 가게 등록 / 목록 |
+| GET / PUT | `/api/stores/{id}` | 가게 조회 / 수정 (매장 소개·운영 방식 `info` 포함) |
+| POST | `/api/stores/{id}/tone-profile/extract` | 예시 답글 3~5개로 톤 추출 (저장 안 함) |
+| PUT | `/api/stores/{id}/tone-profile` | 톤 프로필 저장 |
+| POST | `/api/stores/{id}/reviews` | 리뷰 일괄 입력 → 마스킹·분류 (평점만 리뷰는 템플릿 답글까지) |
+| GET | `/api/stores/{id}/reviews?date=&type=` | 날짜·유형별 리뷰 목록 (date 없으면 전체 기간 이력) |
+| POST | `/api/stores/{id}/reviews/duplicate-check` | 일괄 등록 전 중복 확인 (저장 안 함) |
+| POST | `/api/reviews/{id}/replies` | 답글 초안 3종(정중형·친근형·간결형) 생성 / 다시 생성 (최종 답글은 유지) |
+| PUT | `/api/reviews/{id}/final-reply` | 작성 완료: 답글 하나를 최종 확정 `{ replyId, content, confirmed }` (확정한 답글 수정에도 사용, 대응 답글은 confirmed 필수) |
+| POST | `/api/reviews/{id}/malicious-guide` | 악성 리뷰 대응 가이드 `{ strategy? }` (없으면 추천) |
+| POST | `/api/reviews/{id}/classify` | 분류 다시 시도 |
+| GET | `/api/stores/{id}/reports?week=` | 주간 리포트 (week 는 그 주의 아무 날짜, 수치는 매번 집계 + 저장된 AI 요약) |
+| POST | `/api/stores/{id}/reports/insight?week=` | AI 요약·개선 제안 만들기 (집계에 없는 숫자 검사) |
+| PATCH | `/api/replies/{id}/select` | (이전 방식, 화면에서 사용 안 함) 복사한 답글 기록 |
+| POST | `/api/eval/classify` | 정확도 측정용 분류 (저장 안 함) |
 
 ## 13. 성공 지표
 

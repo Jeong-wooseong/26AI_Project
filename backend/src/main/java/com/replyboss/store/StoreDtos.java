@@ -1,0 +1,66 @@
+package com.replyboss.store;
+
+import com.replyboss.common.JsonText;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+public final class StoreDtos {
+
+    private StoreDtos() {
+    }
+
+    public record StoreRequest(
+            @NotBlank(message = "매장명을 입력하십시오.")
+            @Size(max = 100, message = "매장명은 100자 이내여야 합니다.")
+            String name,
+            @Size(max = 50, message = "업종은 50자 이내여야 합니다.")
+            String category,
+            /** 매장 소개·운영 방식 (선택). 보내지 않으면(null) 기존 값을 유지한다. */
+            @Size(max = 500, message = "매장 소개·운영 방식은 500자 이내여야 합니다.")
+            String info
+    ) {
+        public StoreRequest(String name, String category) {
+            this(name, category, null);
+        }
+    }
+
+    public record ToneExtractRequest(
+            @NotNull(message = "예시 답글을 입력하십시오.")
+            @Size(min = 3, max = 5, message = "예시 답글은 3~5개가 필요합니다.")
+            List<@NotBlank(message = "비어 있는 예시 답글이 있습니다.") String> sampleReplies
+    ) {
+    }
+
+    public record ToneUpdateRequest(
+            @NotNull(message = "답글 스타일 정보가 없습니다.") @Valid ToneProfile toneProfile,
+            List<String> sampleReplies
+    ) {
+    }
+
+    public record StoreResponse(
+            Long id,
+            String name,
+            String category,
+            String info,
+            ToneProfile toneProfile,
+            List<String> sampleReplies,
+            LocalDateTime updatedAt
+    ) {
+        public static StoreResponse from(Store store) {
+            return new StoreResponse(
+                    store.getId(),
+                    store.getName(),
+                    store.getCategory(),
+                    store.getInfo(),
+                    JsonText.read(store.getToneProfile(), ToneProfile.class),
+                    JsonText.readStringList(store.getSampleReplies()),
+                    store.getUpdatedAt()
+            );
+        }
+    }
+}
