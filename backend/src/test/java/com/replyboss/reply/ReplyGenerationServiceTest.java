@@ -119,4 +119,18 @@ class ReplyGenerationServiceTest {
                 Sentiment.POSITIVE, List.of("라떼"), "라떼 맛있어요", List.of());
         assertThat(ReplyGenerationService.problemsOf(ReplyTone.FRIENDLY, noAsk, high)).isEmpty();
     }
+
+    @Test
+    void 정중형은_하십시오체_친근형은_해요체로_구분한다() {
+        assertThat(ReplyGenerationService.userMessage(ctx))
+                .contains("[초안별 말투]").contains("polite: 하십시오체").contains("friendly: 해요체").contains("concise: 해요체");
+        var tone = ctx.tone();
+        assertThat(ReplyGenerationService.registerProblem(ReplyTone.POLITE, "배달이 늦어 죄송합니다. 더 살피겠습니다.", tone)).isNull();
+        assertThat(ReplyGenerationService.registerProblem(ReplyTone.POLITE, "배달이 늦어 죄송해요. 더 살피겠습니다.", tone)).contains("해요체");
+        assertThat(ReplyGenerationService.registerProblem(ReplyTone.FRIENDLY, "늦어서 정말 죄송해요 😊 다음엔 더 빨리 보낼게요!", tone)).isNull();
+        assertThat(ReplyGenerationService.registerProblem(ReplyTone.FRIENDLY, "늦어서 죄송해요. 감사합니다~", tone)).contains("하십시오체");
+        // 매장 마무리 인사가 든 문장은 검사하지 않는다 (정중형에 '오늘도 좋은 하루 되세요!'가 들어가도 됨)
+        assertThat(ReplyGenerationService.registerProblem(ReplyTone.POLITE, "늦어 죄송합니다. 오늘도 좋은 하루 되세요!", tone)).isNull();
+        assertThat(ReplyGenerationService.registerProblem(ReplyTone.CONCISE, "죄송합니다. 고마워요.", tone)).isNull();
+    }
 }

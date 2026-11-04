@@ -39,7 +39,7 @@ public class ReplyGenerationService {
 
     private static final Logger log = LoggerFactory.getLogger(ReplyGenerationService.class);
 
-    static final String PROMPT = "reply_generate_v8";
+    static final String PROMPT = "reply_generate_v9";
     static final List<ReviewType> TARGET_TYPES = List.of(ReviewType.PRAISE, ReviewType.COMPLAINT, ReviewType.INQUIRY);
 
     private static final Map<String, Object> SCHEMA = object(props(
@@ -194,7 +194,8 @@ public class ReplyGenerationService {
         ));
         Map<ReplyTone, String> drafts = new EnumMap<>(ReplyTone.class);
         FIELD.forEach((tone, field) -> {
-            String text = json.path(field).asText("").strip();
+            // "기뻐요 😊 ." 처럼 문장부호 앞에 남는 공백을 정리한다
+            String text = json.path(field).asText("").strip().replaceAll("[ \\t]+([.!?,])", "$1");
             if (!text.isEmpty()) {
                 drafts.put(tone, text.length() > 2000 ? text.substring(0, 2000) : text);
             }
@@ -220,6 +221,10 @@ public class ReplyGenerationService {
         }
         if (MASK.matcher(text).find()) {
             problems.add(name + ": 개인정보 가림 표시를 그대로 씀");
+        }
+        String register = registerProblem(tone, text, ctx.tone());
+        if (register != null) {
+            problems.add(name + ": " + register);
         }
         if (RATING_PRESSURE.matcher(text).find()) {
             problems.add(name + ": 별점 이유를 묻거나 별점 수정을 부탁함");
@@ -281,6 +286,47 @@ public class ReplyGenerationService {
         };
     }
 
+    /** 문장 끝의 문장부호·이모지·공백을 뗀 글자 */
+    private static final Pattern TRAILING = Pattern.compile("[^\\p{IsHangul}\\p{L}\\p{N}]+$");
+
+    /**
+     * 초안별 말투 검사: 정중형은 하십시오체, 친근형은 해요체여야 세 초안이 구분된다.
+     * 매장의 마무리 인사가 들어간 문장은 사장님이 정한 문구라 검사하지 않는다.
+     */
+    static String registerProblem(ReplyTone tone, String text, ToneProfile profile) {
+        if (tone != ReplyTone.POLITE && tone != ReplyTone.FRIENDLY) {
+            return null;
+        }
+        String closing = profile == null || profile.closing() == null ? "" : profile.closing().strip();
+        int mismatched = 0;
+        for (String part : SENTENCE_BREAK.split(text.strip())) {
+            if (!LETTER.matcher(part).find() || (!closing.isEmpty() && part.contains(closing))) {
+                continue;
+            }
+            String end = TRAILING.matcher(part.strip()).replaceAll("");
+            boolean formal = end.endsWith("니다") || end.endsWith("니까");
+            boolean haeyo = end.endsWith("요");
+            if ((tone == ReplyTone.POLITE && haeyo) || (tone == ReplyTone.FRIENDLY && formal)) {
+                mismatched++;
+            }
+        }
+        if (mismatched == 0) {
+            return null;
+        }
+        return tone == ReplyTone.POLITE
+                ? "해요체(~요) 문장이 " + mismatched + "개 있음 (정중형은 하십시오체 ~습니다로만)"
+                : "하십시오체(~습니다) 문장이 " + mismatched + "개 있음 (친근형은 해요체 ~요로만)";
+    }
+
+    /** 초안별 높임말: 정중형 하십시오체, 친근형 해요체, 간결형은 매장 설정 */
+    static String registerOf(ReplyTone tone, ToneProfile profile) {
+        return switch (tone) {
+            case POLITE -> "하십시오체";
+            case FRIENDLY -> "해요체";
+            default -> profile == null ? "해요체" : profile.formality();
+        };
+    }
+
     /** 문장 수. 이모지만 있는 조각처럼 글자가 없는 조각은 세지 않는다 */
     static int countSentences(String text) {
         int count = 0;
@@ -307,6 +353,10 @@ public class ReplyGenerationService {
         sb.append("- 문장 길이: ").append(t.length()).append('\n');
         sb.append("- 자주 쓰는 표현: ").append(t.phrases().isEmpty() ? "없음" : String.join(", ", t.phrases())).append('\n');
         sb.append("- 마무리 인사: ").append(t.closing().isEmpty() ? "없음" : t.closing()).append('\n');
+        sb.append("[초안별 말투] (매장 높임말 설정은 간결형에 적용)\n");
+        for (ReplyTone tone : List.of(ReplyTone.POLITE, ReplyTone.FRIENDLY, ReplyTone.CONCISE)) {
+            sb.append("- ").append(FIELD.get(tone)).append(": ").append(registerOf(tone, t)).append('\n');
+        }
         sb.append("[작성 분량]\n");
         for (ReplyTone tone : List.of(ReplyTone.POLITE, ReplyTone.FRIENDLY, ReplyTone.CONCISE)) {
             int[] range = sentenceRange(t, tone);
