@@ -3,7 +3,6 @@ package com.replyboss.auth;
 import com.replyboss.reply.ReplyRepository;
 import com.replyboss.report.WeeklyReportRepository;
 import com.replyboss.review.ReviewRepository;
-import com.replyboss.store.Store;
 import com.replyboss.store.StoreRepository;
 import com.replyboss.support.SupportService;
 import org.springframework.stereotype.Component;
@@ -32,7 +31,7 @@ public class AccountDataCleaner {
 
     @Transactional
     public void deleteAllOf(Long userId) {
-        List<Long> storeIds = stores.findByOwner_IdOrderByIdAsc(userId).stream().map(Store::getId).toList();
+        List<Long> storeIds = stores.findIdsByOwnerId(userId);
         if (!storeIds.isEmpty()) {
             replies.deleteByStoreIds(storeIds);
             reviews.deleteByStoreIds(storeIds);

@@ -239,6 +239,7 @@ class AccountAndSupportTest {
         mvc.perform(get("/api/admin/inquiries?status=RECEIVED").session(a)).andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].userEmail").value("b@test.com"));
         clearInvocations(mail);
+        when(mail.isConfigured()).thenReturn(true);
         mvc.perform(patch("/api/admin/inquiries/" + bInquiryId).session(a).with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("answer", "확인 후 수정했습니다."))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ANSWERED"));

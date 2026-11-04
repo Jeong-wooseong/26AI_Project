@@ -1,0 +1,298 @@
+// 고객 지원: 자주 묻는 질문 · 문의하기(일반/오류/개선 제안) · 내 문의(처리 상태와 답변)
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { support } from '../api.js';
+import Icon from '../components/Icon.jsx';
+import {
+  Alert, EmptyState, FormInput, FormSelect, PageHeader, PrimaryButton, SecondaryButton, SegmentedTabs, StatusIndicator,
+} from '../components/ui.jsx';
+import { formatDateTime } from '../components/reply/replyModel.js';
+
+export const INQUIRY_TYPES = [
+  ['GENERAL', '일반 문의', '기능이나 이용 방법에 대한 질문'],
+  ['BUG', '오류 제보', '오작동이나 예상하지 못한 결과'],
+  ['SUGGESTION', '기능 개선 제안', '추가되었으면 하는 기능'],
+];
+export const TYPE_LABEL = Object.fromEntries(INQUIRY_TYPES.map(([k, l]) => [k, l]));
+export const LOCATIONS = ['매장 설정', '리뷰 입력', '오늘의 리뷰', '답글 생성', '주간 리포트', '로그인·계정', '도우미', '기타'];
+export const STATUS = {
+  RECEIVED: ['접수', 'neutral'],
+  IN_PROGRESS: ['확인 중', 'inquiry'],
+  ANSWERED: ['답변 완료', 'success'],
+};
+/** 화면 주소 → 발생 위치 기본값 */
+const LOCATION_OF = { setup: '매장 설정', input: '리뷰 입력', reviews: '오늘의 리뷰', report: '주간 리포트' };
+const MAX_FILE = 5 * 1024 * 1024;
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
+const TABS = [
+  { key: 'faq', label: '자주 묻는 질문' },
+  { key: 'new', label: '문의하기' },
+  { key: 'mine', label: '내 문의' },
+];
+
+/** 다른 화면에서 문의 화면을 여는 주소 (오류 제보: 위치·오류 코드 자동 기록) */
+export function supportLink({ type = 'BUG', location, code, from } = {}) {
+  const q = new URLSearchParams({ type });
+  if (location) q.set('location', location);
+  if (code) q.set('code', code);
+  const page = from ?? window.location.hash.slice(1).split('?')[0];
+  if (page && !page.startsWith('support')) q.set('from', page);
+  return `#support/new?${q}`;
+}
+
+/** 오류 안내 옆에 붙이는 '오류 제보' 링크 */
+export function ReportErrorLink({ location, code }) {
+  return (
+    <a className="report-link" href={supportLink({ type: 'BUG', location, code })}>
+      오류 제보
+    </a>
+  );
+}
+
+export default function Support({ sub, params, from, toast }) {
+  const tab = TABS.some((t) => t.key === sub) ? sub : 'faq';
+  const go = (key) => {
+    window.location.hash = `support/${key}`;
+  };
+  return (
+    <>
+      <PageHeader title="고객 지원" description="서비스 이용 중 궁금한 점이나 불편한 점을 알려주십시오. 담당자가 확인한 뒤 답변합니다." />
+      <SegmentedTabs tabs={TABS} value={tab} onChange={go} label="고객 지원" idPrefix="support" />
+      {tab === 'faq' && <FaqTab />}
+      {tab === 'new' && <InquiryForm key={params.toString()} params={params} from={from} toast={toast} onDone={() => go('mine')} />}
+      {tab === 'mine' && <MyInquiries />}
+    </>
+  );
+}
+
+function FaqTab() {
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState(null);
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(null);
+
+  useEffect(() => {
+    support.faq().then(setItems).catch((e) => setError(e.message));
+  }, []);
+
+  const shown = useMemo(() => {
+    if (!items) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((f) => [f.question, f.answer, ...(f.keywords ?? [])].some((t) => t.toLowerCase().includes(q)));
+  }, [items, query]);
+
+  if (error) return <Alert>{error}</Alert>;
+  if (!items) return <EmptyState loading description="불러오는 중…" />;
+  return (
+    <section className="section">
+      <div className="section-body">
+        <FormInput icon="search" label="자주 묻는 질문 검색" hideLabel placeholder="예: 인증 메일, 말투, 작성 완료"
+                   value={query} onChange={(e) => setQuery(e.target.value)} />
+        {shown.length === 0 ? (
+          <p className="dt-empty">
+            찾는 내용이 없으면 오른쪽 아래 도우미에게 물어보거나 <a href="#support/new?type=GENERAL">문의를 남겨 주십시오</a>.
+          </p>
+        ) : (
+          <ul className="faq">
+            {shown.map((f) => (
+              <li key={f.id} className={open === f.id ? 'is-open' : ''}>
+                <button type="button" className="faq-q" aria-expanded={open === f.id} onClick={() => setOpen(open === f.id ? null : f.id)}>
+                  <span className="faq-cat">{f.category}</span>
+                  {f.question}
+                  <Icon name="next" size={16} className="faq-chevron" />
+                </button>
+                {open === f.id && <p className="faq-a">{f.answer}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function InquiryForm({ params, from, toast, onDone }) {
+  const initialType = INQUIRY_TYPES.some(([k]) => k === params.get('type')) ? params.get('type') : 'GENERAL';
+  const fromPage = params.get('from') || from || '';
+  const [form, setForm] = useState({
+    type: initialType,
+    title: '',
+    content: '',
+    location: params.get('location') || LOCATION_OF[fromPage.split('/')[0]] || '',
+  });
+  const errorCode = params.get('code') || '';
+  const [file, setFile] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef(null);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  function pickFile(e) {
+    const f = e.target.files?.[0] ?? null;
+    e.target.value = '';
+    if (!f) return;
+    if (!IMAGE_TYPES.includes(f.type)) {
+      setErrors((x) => ({ ...x, file: 'PNG, JPG, GIF, WEBP 이미지만 첨부할 수 있습니다.' }));
+      return;
+    }
+    if (f.size > MAX_FILE) {
+      setErrors((x) => ({ ...x, file: '5MB 이하 이미지만 첨부할 수 있습니다.' }));
+      return;
+    }
+    setErrors((x) => ({ ...x, file: null }));
+    setFile(f);
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    setError(null);
+    const next = {};
+    if (!form.title.trim()) next.title = '제목을 입력하십시오.';
+    if (!form.content.trim()) next.content = '상세 내용을 입력하십시오.';
+    setErrors(next);
+    if (Object.keys(next).length) return;
+    setBusy(true);
+    try {
+      await support.createInquiry({ ...form, pagePath: fromPage ? `#${fromPage}` : '', errorCode }, file);
+      toast.show('문의를 접수했습니다. 답변이 등록되면 메일로 알려 드립니다.');
+      onDone();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="section" onSubmit={submit} noValidate>
+      <div className="section-body">
+        <fieldset className="type-picker">
+          <legend className="label">문의 유형</legend>
+          <div className="type-options">
+            {INQUIRY_TYPES.map(([key, label, desc]) => (
+              <label key={key} className={`type-option ${form.type === key ? 'is-selected' : ''}`}>
+                <input type="radio" name="inquiry-type" value={key} checked={form.type === key} onChange={set('type')} />
+                <span className="type-option-label">{label}</span>
+                <span className="hint">{desc}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <div className="form-grid">
+          <FormSelect label="발생 위치" value={form.location} onChange={set('location')}
+                      options={[['', '선택 안 함'], ...LOCATIONS.map((l) => [l, l])]} />
+          <div className="field">
+            <span className="label">자동 기록</span>
+            <p className="auto-record">
+              {fromPage ? `화면 #${fromPage}` : '화면 정보 없음'}
+              {errorCode && ` · 오류 코드 ${errorCode}`}
+            </p>
+          </div>
+        </div>
+        <FormInput label="제목" value={form.title} onChange={set('title')} error={errors.title} maxLength={100}
+                   placeholder={form.type === 'BUG' ? '예: AI 답글 생성이 완료되지 않습니다.' : '문의 내용을 간략하게 적어 주십시오.'}
+                   counter={`${form.title.length}/100`} counterInside />
+        <FormInput multiline rows={6} label="상세 내용" value={form.content} onChange={set('content')} error={errors.content}
+                   maxLength={3000} counter={`${form.content.length}/3000`}
+                   placeholder={form.type === 'BUG'
+                     ? '어떤 버튼을 눌렀을 때 어떤 일이 일어났는지 적어 주십시오.\n예: 답글 생성 버튼을 누르면 로딩 상태가 계속 유지됩니다.'
+                     : '구체적인 상황을 적어 주십시오.'}
+                   hint="리뷰 원문이나 고객 연락처 같은 개인정보는 적지 마십시오." />
+        <div className="field">
+          <span className="label">첨부 이미지 (선택)</span>
+          <div className="attach-row">
+            <SecondaryButton tone="neutral" size="sm" icon="attach" onClick={() => fileRef.current?.click()}>
+              {file ? '다른 이미지 선택' : '이미지 선택'}
+            </SecondaryButton>
+            {file && (
+              <span className="attach-name">
+                {file.name} ({Math.ceil(file.size / 1024)}KB)
+                <button type="button" className="icon-btn icon-btn-sm" aria-label="첨부 이미지 빼기" onClick={() => setFile(null)}>
+                  <Icon name="remove" size={14} />
+                </button>
+              </span>
+            )}
+            <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden onChange={pickFile} />
+          </div>
+          {errors.file ? (
+            <p className="field-error" role="alert"><Icon name="error" size={16} />{errors.file}</p>
+          ) : (
+            <p className="hint">오류 화면 캡처 등 PNG·JPG·GIF·WEBP, 5MB 이하 1장</p>
+          )}
+        </div>
+        {error && <Alert>{error}</Alert>}
+      </div>
+      <div className="section-foot">
+        <p className="hint">접수 → 확인 중 → 답변 완료 순으로 처리됩니다.</p>
+        <div className="end">
+          <PrimaryButton type="submit" icon="send" loading={busy} loadingText="접수 중">문의 접수</PrimaryButton>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+function MyInquiries() {
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState(null);
+  const [open, setOpen] = useState(null);
+
+  useEffect(() => {
+    support.myInquiries().then(setItems).catch((e) => setError(e.message));
+  }, []);
+
+  if (error) return <Alert>{error}</Alert>;
+  if (!items) return <EmptyState loading description="불러오는 중…" />;
+  if (items.length === 0) {
+    return (
+      <EmptyState title="남긴 문의가 없습니다" description="궁금한 점이나 오류가 있으면 문의를 남겨 주십시오."
+                  action={<PrimaryButton icon="send" onClick={() => { window.location.hash = 'support/new'; }}>문의하기</PrimaryButton>} />
+    );
+  }
+  return (
+    <ul className="inquiry-list">
+      {items.map((q) => {
+        const [label, tone] = STATUS[q.status] ?? [q.status, 'neutral'];
+        const isOpen = open === q.id;
+        return (
+          <li key={q.id} className="section inquiry">
+            <button type="button" className="inquiry-head" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : q.id)}>
+              <span className="tag">{TYPE_LABEL[q.type] ?? q.type}</span>
+              <span className="inquiry-title">{q.title}</span>
+              <span className="inquiry-date">{formatDateTime(q.createdAt)}</span>
+              <StatusIndicator tone={tone}>{label}</StatusIndicator>
+            </button>
+            {isOpen && (
+              <div className="inquiry-body">
+                <InquiryMeta q={q} />
+                <p className="inquiry-content">{q.content}</p>
+                {q.attachmentName && (
+                  <a className="attach-link" href={support.attachmentUrl(q.id)} target="_blank" rel="noreferrer">
+                    <Icon name="attach" size={16} />{q.attachmentName}
+                  </a>
+                )}
+                {q.answer ? (
+                  <div className="inquiry-answer">
+                    <span className="final-label">답변 {q.answeredAt && <span className="final-tone">{formatDateTime(q.answeredAt)}</span>}</span>
+                    <p>{q.answer}</p>
+                  </div>
+                ) : (
+                  <p className="hint">아직 답변이 없습니다. 답변이 등록되면 메일로 알려 드립니다.</p>
+                )}
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function InquiryMeta({ q }) {
+  const parts = [q.location && `위치 ${q.location}`, q.pagePath && `화면 ${q.pagePath}`, q.errorCode && `오류 코드 ${q.errorCode}`]
+    .filter(Boolean);
+  return parts.length ? <p className="inquiry-meta">{parts.join(' · ')}</p> : null;
+}
+

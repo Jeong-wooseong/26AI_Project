@@ -8,13 +8,33 @@ export class ApiError extends Error {
   }
 }
 
-async function request(method, path, body) {
+// 로그인이 풀렸을 때(401) 앱이 로그인 화면을 보여주도록 알린다
+let onUnauthorized = null;
+export function setUnauthorizedHandler(fn) {
+  onUnauthorized = fn;
+}
+
+// CSRF: 서버가 내려준 XSRF-TOKEN 쿠키 값을 헤더로 돌려보낸다 (GET 이외 요청)
+function csrfToken() {
+  const m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+async function request(method, path, body, { retried = false, quiet401 = false } = {}) {
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+  const headers = {};
+  if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
+  if (method !== 'GET') {
+    const token = csrfToken();
+    if (token) headers['X-XSRF-TOKEN'] = token;
+  }
   let res;
   try {
     res = await fetch(path, {
       method,
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      headers,
+      credentials: 'same-origin',
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
     });
   } catch {
     throw new ApiError('NETWORK', '서버에 연결할 수 없습니다. 백엔드 실행 상태를 확인하십시오.', 0);
@@ -28,6 +48,12 @@ async function request(method, path, body) {
     throw new ApiError('NETWORK', '서버에 연결할 수 없습니다. 백엔드 실행 상태를 확인하십시오.', res.status);
   }
   if (!res.ok) {
+    // 보안 토큰이 없거나 바뀐 경우: 토큰을 새로 받고 한 번만 다시 시도
+    if (res.status === 403 && data?.code === 'CSRF' && !retried) {
+      await fetch('/api/auth/me', { credentials: 'same-origin' }).catch(() => {});
+      return request(method, path, body, { retried: true, quiet401 });
+    }
+    if (res.status === 401 && !quiet401 && onUnauthorized) onUnauthorized();
     throw new ApiError(data?.code ?? 'UNKNOWN', data?.message ?? `요청 실패 (${res.status})`, res.status);
   }
   return data;
@@ -65,4 +91,59 @@ export const api = {
   weeklyReport: (storeId, week) => request('GET', `/api/stores/${storeId}/reports?week=${week}`),
   generateInsight: (storeId, week) => request('POST', `/api/stores/${storeId}/reports/insight?week=${week}`),
   reclassify: (reviewId) => request('POST', `/api/reviews/${reviewId}/classify`),
+  // 답글 피드백 (value: UP | DOWN | null 취소, reasons: FeedbackReason 목록)
+  replyFeedback: (replyId, value, reasons = [], comment = '') =>
+    request('PUT', `/api/replies/${replyId}/feedback`, { value, reasons, comment }),
+};
+
+export const auth = {
+  // 로그인하지 않았으면 null
+  me: async () => {
+    try {
+      return await request('GET', '/api/auth/me', undefined, { quiet401: true });
+    } catch (e) {
+      if (e.status === 401) return null;
+      throw e;
+    }
+  },
+  signup: (body) => request('POST', '/api/auth/signup', body),
+  verify: (token) => request('POST', '/api/auth/verify', { token }),
+  resendVerification: (email) => request('POST', '/api/auth/resend-verification', { email }),
+  login: (email, password, remember) =>
+    request('POST', '/api/auth/login', { email, password, remember }, { quiet401: true }),
+  logout: () => request('POST', '/api/auth/logout'),
+  requestReset: (email) => request('POST', '/api/auth/password-reset/request', { email }),
+  confirmReset: (token, password, passwordConfirm) =>
+    request('POST', '/api/auth/password-reset/confirm', { token, password, passwordConfirm }),
+  deleteAccount: (password) => request('DELETE', '/api/auth/account', { password }, { quiet401: true }),
+};
+
+export const support = {
+  faq: () => request('GET', '/api/support/faq'),
+  // form: { type, title, content, location, pagePath, errorCode }, file: 이미지(선택)
+  createInquiry: (form, file) => {
+    const fd = new FormData();
+    Object.entries(form).forEach(([k, v]) => {
+      if (v != null && v !== '') fd.append(k, v);
+    });
+    if (file) fd.append('file', file);
+    return request('POST', '/api/support/inquiries', fd);
+  },
+  myInquiries: () => request('GET', '/api/support/inquiries'),
+  attachmentUrl: (id) => `/api/support/inquiries/${id}/attachment`,
+  // history: [{ role: 'user' | 'assistant', text }] 최근 6개
+  ask: (message, history) => request('POST', '/api/support/assistant', { message, history }),
+};
+
+export const admin = {
+  inquiries: ({ status, type } = {}) => {
+    const q = new URLSearchParams();
+    if (status) q.set('status', status);
+    if (type) q.set('type', type);
+    const qs = q.toString();
+    return request('GET', `/api/admin/inquiries${qs ? `?${qs}` : ''}`);
+  },
+  handle: (id, status, answer) => request('PATCH', `/api/admin/inquiries/${id}`, { status, answer }),
+  attachmentUrl: (id) => `/api/admin/inquiries/${id}/attachment`,
+  stats: () => request('GET', '/api/admin/stats'),
 };

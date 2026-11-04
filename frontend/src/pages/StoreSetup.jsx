@@ -5,13 +5,14 @@ import {
   Alert, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton, SecondaryButton, SettingsSection, StatusIndicator,
 } from '../components/ui.jsx';
 import { previewText } from '../tonePreview.js';
+import AccountSection from '../components/AccountSection.jsx';
 
 const MIN_SAMPLES = 3;
 const MAX_SAMPLES = 5;
 const INFO_MAX = 500;
 
 /** 화면 ① 가게 설정: 가게 정보 + 예시 답글로 톤 프로필 추출 → 수정 → 저장 */
-export default function StoreSetup({ store, onSaved, toast, go }) {
+export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDeleted }) {
   const [name, setName] = useState(store?.name ?? '');
   const [category, setCategory] = useState(store?.category ?? '카페');
   const [info, setInfo] = useState(store?.info ?? '');
@@ -229,6 +230,8 @@ export default function StoreSetup({ store, onSaved, toast, go }) {
             </>
           )}
         </SettingsSection>
+
+        <AccountSection me={me} onDeleted={onAccountDeleted} />
       </div>
     </>
   );

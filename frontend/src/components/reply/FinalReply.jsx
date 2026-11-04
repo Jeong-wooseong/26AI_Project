@@ -3,6 +3,7 @@ import Icon from '../Icon.jsx';
 import { FormInput, PrimaryButton, SecondaryButton } from '../ui.jsx';
 import { ReplyText } from './ReplyTypingText.jsx';
 import { selectTextOf, useCopy } from './useCopy.js';
+import ReplyFeedback from './ReplyFeedback.jsx';
 import { STRATEGY_LABEL, TONE_LABEL, hasFillIn, textOf } from './replyModel.js';
 
 /** 작성 완료한 최종 답글 하나: 리뷰 원문과 구분해 보여주고, 복사와 수정을 제공한다. */
@@ -79,7 +80,10 @@ export default function FinalReply({ reply, onSave, toast }) {
           </div>
         </div>
       ) : (
-        <p ref={textRef} className="final-text"><ReplyText text={text} /></p>
+        <>
+          <p ref={textRef} className="final-text"><ReplyText text={text} /></p>
+          <ReplyFeedback reply={reply} toast={toast} />
+        </>
       )}
     </div>
   );

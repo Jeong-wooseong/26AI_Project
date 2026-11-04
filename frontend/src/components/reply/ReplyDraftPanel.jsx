@@ -5,6 +5,7 @@ import ReplyGenerationLoader from './ReplyGenerationLoader.jsx';
 import ReplyTypingText from './ReplyTypingText.jsx';
 import { selectTextOf, useCopy } from './useCopy.js';
 import { DRAFT_TYPES, SIMILAR_THRESHOLD, TONE_LABEL, draftsOf, hasFillIn, textOf } from './replyModel.js';
+import ReplyFeedback from './ReplyFeedback.jsx';
 
 /**
  * 작성 대기 리뷰의 답글 영역: 초안 확인 → (필요하면 수정) → 하나 선택 → 작성 완료.
@@ -158,6 +159,7 @@ export default function ReplyDraftPanel({ review: r, generation, onGenerate, onC
                       {copied ? '복사됨' : '복사'}
                     </button>
                   </div>
+                  {!editing && <ReplyFeedback reply={d} toast={toast} />}
                 </div>
               );
             })}

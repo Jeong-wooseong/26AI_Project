@@ -31,6 +31,17 @@ import {
   Store,
   Trash2,
   X,
+  ThumbsUp,
+  ThumbsDown,
+  LogOut,
+  UserRound,
+  LifeBuoy,
+  MessageCircle,
+  ShieldCheck,
+  Send,
+  Paperclip,
+  Mail,
+  ArrowRight,
 } from 'lucide-react';
 
 const ICONS = {
@@ -64,6 +75,17 @@ const ICONS = {
   restore: Undo2,
   search: Search,
   guide: ShieldAlert, // 악성 리뷰 대응 가이드
+  like: ThumbsUp, // 답글 피드백: 마음에 들어요
+  dislike: ThumbsDown, // 답글 피드백: 개선하고 싶어요
+  logout: LogOut,
+  user: UserRound,
+  support: LifeBuoy, // 고객 지원
+  chat: MessageCircle, // 도우미
+  admin: ShieldCheck, // 관리자
+  send: Send,
+  attach: Paperclip,
+  mail: Mail,
+  go: ArrowRight,
 };
 
 export default function Icon({ name, size = 18, className = '', ...rest }) {
