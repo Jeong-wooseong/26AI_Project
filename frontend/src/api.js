@@ -91,6 +91,8 @@ export const api = {
   weeklyReport: (storeId, week) => request('GET', `/api/stores/${storeId}/reports?week=${week}`),
   generateInsight: (storeId, week) => request('POST', `/api/stores/${storeId}/reports/insight?week=${week}`),
   reclassify: (reviewId) => request('POST', `/api/reviews/${reviewId}/classify`),
+  // 리뷰 삭제 (초안·최종 답글도 함께 지워짐)
+  deleteReview: (reviewId) => request('DELETE', `/api/reviews/${reviewId}`),
   // 답글 피드백 (value: UP | DOWN | null 취소, reasons: FeedbackReason 목록)
   replyFeedback: (replyId, value, reasons = [], comment = '') =>
     request('PUT', `/api/replies/${replyId}/feedback`, { value, reasons, comment }),

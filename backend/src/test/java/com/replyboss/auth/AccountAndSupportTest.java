@@ -289,6 +289,12 @@ class AccountAndSupportTest {
                         .content(json(Map.of("value", "UP")))).andExpect(status().isNotFound());
         mvc.perform(get("/api/admin/stats").session(a)).andExpect(jsonPath("$.feedbackDown").value(1))
                 .andExpect(jsonPath("$.downReasons.AWKWARD_TONE").value(1));
+
+        // 리뷰 삭제: 남의 리뷰는 404, 내 리뷰는 답글과 함께 지워진다
+        long reviewId = body(r).path(0).path("id").asLong();
+        mvc.perform(delete("/api/reviews/" + reviewId).session(a).with(csrf())).andExpect(status().isNotFound());
+        mvc.perform(delete("/api/reviews/" + reviewId).session(b).with(csrf())).andExpect(status().isNoContent());
+        mvc.perform(get("/api/stores/" + bStoreId + "/reviews").session(b)).andExpect(jsonPath("$.length()").value(0));
     }
 
     @Test

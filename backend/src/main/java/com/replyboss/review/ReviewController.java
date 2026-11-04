@@ -10,6 +10,7 @@ import com.replyboss.review.ReviewDtos.ReviewResponse;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -70,6 +71,14 @@ public class ReviewController {
     public ReviewResponse completeReply(@PathVariable Long reviewId, @Valid @RequestBody CompleteReplyRequest request) {
         guard.requireReview(reviewId);
         return reviewService.completeReply(reviewId, request);
+    }
+
+    /** 리뷰 삭제 (답글도 함께) */
+    @DeleteMapping("/api/reviews/{reviewId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long reviewId) {
+        guard.requireReview(reviewId);
+        reviewService.delete(reviewId);
     }
 
     /** 악성 리뷰 대응 가이드. body 의 strategy(APOLOGY|FACT|HOLD) 가 없으면 추천을 받는다 */

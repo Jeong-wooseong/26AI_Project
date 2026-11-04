@@ -36,4 +36,8 @@ public interface ReplyRepository extends JpaRepository<Reply, Long> {
 
     /** 관리자 통계: 피드백이 있는 답글 */
     List<Reply> findByFeedbackIsNotNull();
+
+    @Modifying
+    @Query("delete from Reply r where r.review.id = :reviewId")
+    int deleteByReviewId(@Param("reviewId") Long reviewId);
 }

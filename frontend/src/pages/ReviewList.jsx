@@ -12,6 +12,7 @@ import MaliciousGuidePanel from '../components/reply/MaliciousGuidePanel.jsx';
 import { DRAFT_TONES, DRAFT_TYPES, finalReplyOf, formatDateTime, statusOf, textOf } from '../components/reply/replyModel.js';
 import { prefersReducedMotion } from '../components/reply/ReplyTypingText.jsx';
 import Mascot from '../components/Mascot.jsx';
+import BulkReplyPanel from '../components/reply/BulkReplyPanel.jsx';
 
 const PAGE_SIZE = 10;
 // 작성 완료: 리뷰 원문과 최종 답글 중심 / 작성 대기·분류 실패: 분류 결과와 초안 작업
@@ -51,8 +52,7 @@ export default function ReviewList({ store, toast, go, initialTab }) {
   const [page, setPage] = useState(1);
   const [reviews, setReviews] = useState(null);
   const [error, setError] = useState(null);
-  const [bulk, setBulk] = useState(null); // 초안 일괄 생성 진행: { done, total }
-  const [bulkError, setBulkError] = useState(null);
+  const [bulkOpen, setBulkOpen] = useState(false); // 답글 일괄 처리 패널
 
   const load = useCallback(async () => {
     setError(null);
@@ -106,32 +106,7 @@ export default function ReviewList({ store, toast, go, initialTab }) {
   const paged = visible.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
   const usedPlatforms = PLATFORMS.filter(([v]) => all.some((r) => r.platform === v) || v === platform);
 
-  // 초안이 아직 없는 칭찬·불만·문의 리뷰 (작성 대기 탭의 지금 조건 기준)
-  const needDrafts = status === 'wait'
-    ? visible.filter((r) => r.status === 'CLASSIFIED' && DRAFT_TYPES.includes(r.type)
-      && !r.replies.some((p) => DRAFT_TONES.includes(p.tone)))
-    : [];
-
-  // 한 건씩 차례로 생성한다 (동시에 보내면 OpenAI 속도 제한에 걸리기 쉬움). 실패하면 멈추고 이유를 보여준다.
-  async function generateAll() {
-    if (bulk) return;
-    const targets = needDrafts;
-    setBulkError(null);
-    setBulk({ done: 0, total: targets.length });
-    let done = 0;
-    for (const r of targets) {
-      try {
-        replace(await api.generateReplies(r.id));
-        done += 1;
-        setBulk({ done, total: targets.length });
-      } catch (e) {
-        setBulkError(`${done}건 생성 후 중단되었습니다: ${e.message} (오류 코드 ${e.code})`);
-        break;
-      }
-    }
-    setBulk(null);
-    if (done) toast.show(`답글 초안 ${done}건 생성 완료`);
-  }
+  const remove = (id) => setReviews((rs) => rs.filter((x) => x.id !== id));
 
   const typeOptions = [
     ['ALL', `전체 유형 (${byStatus.length})`],
@@ -177,7 +152,6 @@ export default function ReviewList({ store, toast, go, initialTab }) {
         </Alert>
       )}
 
-      {bulkError && <Alert>{bulkError}</Alert>}
 
       {reviews === null && !error && <EmptyState loading description="불러오는 중" />}
       {reviews && reviews.length === 0 && (
@@ -187,6 +161,10 @@ export default function ReviewList({ store, toast, go, initialTab }) {
           pose="smile"
           action={<PrimaryButton icon="add" onClick={() => go('input')}>리뷰 등록</PrimaryButton>}
         />
+      )}
+
+      {bulkOpen && status === 'wait' && visible.length > 0 && (
+        <BulkReplyPanel reviews={visible} onUpdated={replace} onClose={() => setBulkOpen(false)} toast={toast} />
       )}
 
       {all.length > 0 && (
@@ -201,10 +179,9 @@ export default function ReviewList({ store, toast, go, initialTab }) {
                 </button>
               ))}
             </div>
-            {(needDrafts.length > 0 || bulk) && (
-              <SecondaryButton size="sm" icon="analyze" onClick={generateAll} loading={!!bulk}
-                               loadingText={bulk ? `초안 생성 중 ${bulk.done}/${bulk.total}` : '생성 중'}>
-                초안 일괄 생성 ({needDrafts.length})
+            {status === 'wait' && visible.length > 0 && (
+              <SecondaryButton size="sm" icon="classify" aria-expanded={bulkOpen} onClick={() => setBulkOpen((v) => !v)}>
+                답글 일괄 처리
               </SecondaryButton>
             )}
             {visible.length > 0 && (
@@ -221,8 +198,8 @@ export default function ReviewList({ store, toast, go, initialTab }) {
               {paged.map((r, i) => {
                 const no = (current - 1) * PAGE_SIZE + i + 1;
                 return isDone
-                  ? <CompletedRow key={r.id} no={no} review={r} onUpdated={replace} toast={toast} />
-                  : <Ticket key={r.id} no={no} review={r} onUpdated={replace} toast={toast} />;
+                  ? <CompletedRow key={r.id} no={no} review={r} onUpdated={replace} onDeleted={remove} toast={toast} />
+                  : <Ticket key={r.id} no={no} review={r} onUpdated={replace} onDeleted={remove} toast={toast} />;
               })}
             </>
           )}
@@ -271,7 +248,7 @@ function EmptyTab({ status, searching, waitCount, onShowWait }) {
 }
 
 /** 작성 완료 행: 리뷰 원문 → 최종 답글. 초안은 보여주지 않는다. */
-function CompletedRow({ no, review: r, onUpdated, toast }) {
+function CompletedRow({ no, review: r, onUpdated, onDeleted, toast }) {
   const reply = finalReplyOf(r);
   // 완료한 뒤 다른 시각(분 단위)에 고쳤을 때만 수정 시각을 따로 보여준다
   const edited = r.finalUpdatedAt && r.completedAt && formatDateTime(r.finalUpdatedAt) !== formatDateTime(r.completedAt);
@@ -325,13 +302,14 @@ function CompletedRow({ no, review: r, onUpdated, toast }) {
           {formatDateTime(r.completedAt)}
         </time>
         {edited && <span className="done-sub">수정 {formatDateTime(r.finalUpdatedAt)}</span>}
+        <DeleteReview review={r} onDeleted={onDeleted} toast={toast} />
       </div>
     </DataTableRow>
   );
 }
 
 /** 작성 대기·분류 실패 행: 분류 결과와 답글 초안 작업 */
-function Ticket({ no, review: r, onUpdated, toast }) {
+function Ticket({ no, review: r, onUpdated, onDeleted, toast }) {
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState(null);
   const [generation, setGeneration] = useState({ state: 'idle' });
@@ -446,12 +424,13 @@ function Ticket({ no, review: r, onUpdated, toast }) {
         <ReplyStatus review={r} generation={generation} />
       </span>
 
-      {failed && (
-        <div className="rt-actions" role="cell">
+      <div className="rt-actions" role="cell">
+        {failed && (
           <IconButton icon={retrying ? 'loading' : 'retry'} className={retrying ? 'is-loading' : undefined}
                       label="재분류" onClick={retry} disabled={retrying} />
-        </div>
-      )}
+        )}
+        <DeleteReview review={r} onDeleted={onDeleted} toast={toast} disabled={generation.state === 'loading'} />
+      </div>
       {failed && (
         <p className="rt-error">
           {retryError ? retryError.message : failureText(r.failureCode)}
@@ -471,6 +450,59 @@ function Ticket({ no, review: r, onUpdated, toast }) {
 }
 
 /** 중복 방지 1단: 최근 7일 안에 내용이 비슷한 리뷰가 있으면 알린다 (답글은 서로 다른 표현으로 생성) */
+/** 리뷰 삭제: 한 번 더 확인한 뒤 리뷰와 그 답글(초안·최종)을 지운다. 되돌릴 수 없다. */
+function DeleteReview({ review: r, onDeleted, toast, disabled }) {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const wrap = useRef(null);
+
+  useEffect(() => {
+    if (!asking) return undefined;
+    const close = (e) => {
+      if (e.type === 'keydown' ? e.key === 'Escape' : !wrap.current?.contains(e.target)) setAsking(false);
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', close);
+    };
+  }, [asking]);
+
+  async function remove() {
+    setBusy(true);
+    try {
+      await api.deleteReview(r.id);
+      onDeleted(r.id);
+      toast.show('리뷰를 삭제했습니다.');
+    } catch (e) {
+      toast.show(`삭제하지 못했습니다: ${e.message}`);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <span className="del-wrap" ref={wrap}>
+      <IconButton icon="delete" tone="danger" size="sm" label="리뷰 삭제" aria-expanded={asking}
+                  disabled={disabled || busy} onClick={() => setAsking((v) => !v)} />
+      {asking && (
+        <span className="del-pop" role="dialog" aria-label="리뷰 삭제 확인">
+          <span className="del-pop-text">
+            이 리뷰를 삭제할까요?
+            <span className="hint">{r.finalReplyId != null ? '최종 답글도 함께 삭제되며' : '답글 초안도 함께 삭제되며'} 되돌릴 수 없습니다.</span>
+          </span>
+          <span className="del-pop-actions">
+            <button type="button" className="act-btn" onClick={() => setAsking(false)} disabled={busy}>취소</button>
+            <button type="button" className="btn btn-danger btn-sm" onClick={remove} disabled={busy} autoFocus>
+              {busy ? '삭제 중…' : '삭제'}
+            </button>
+          </span>
+        </span>
+      )}
+    </span>
+  );
+}
+
 function SimilarNote({ count }) {
   return (
     <span className="similar-note" title="최근 7일 안에 내용이 비슷한 리뷰입니다. 답글 초안은 그 리뷰의 답글과 겹치지 않게 만듭니다.">

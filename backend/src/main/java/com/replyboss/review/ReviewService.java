@@ -236,6 +236,14 @@ public class ReviewService {
      * 리뷰 하나에 최종 답글은 하나뿐이라, 다른 답글로 바꾸면 이전 답글은 확정에서 빠진다.
      * 외부 플랫폼에 게시하지 않는다. 사장님이 붙여넣을 답글을 확정해 두는 기능이다.
      */
+    /** 리뷰 삭제 (잘못 입력했거나 중복 등록한 경우): 그 리뷰의 초안·최종 답글도 함께 지운다 */
+    @Transactional
+    public void delete(Long reviewId) {
+        Review review = reviewRepository.findById(reviewId).orElseThrow(() -> ApiException.notFound("리뷰"));
+        replyRepository.deleteByReviewId(reviewId);
+        reviewRepository.delete(review);
+    }
+
     @Transactional
     public ReviewResponse completeReply(Long reviewId, CompleteReplyRequest request) {
         Review review = reviewRepository.findById(reviewId).orElseThrow(() -> ApiException.notFound("리뷰"));
