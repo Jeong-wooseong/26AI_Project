@@ -39,7 +39,7 @@ public class ReplyGenerationService {
 
     private static final Logger log = LoggerFactory.getLogger(ReplyGenerationService.class);
 
-    static final String PROMPT = "reply_generate_v7";
+    static final String PROMPT = "reply_generate_v8";
     static final List<ReviewType> TARGET_TYPES = List.of(ReviewType.PRAISE, ReviewType.COMPLAINT, ReviewType.INQUIRY);
 
     private static final Map<String, Object> SCHEMA = object(props(
@@ -56,6 +56,9 @@ public class ReplyGenerationService {
     static final Pattern RATING_PRESSURE = Pattern.compile(
             "(별점|평점)[^.!?\\n]{0,15}(수정|올려|바꿔|고쳐|변경|다시\\s*(주|남겨|매겨))"
                     + "|왜[^.!?\\n]{0,12}(별점|평점|\\d\\s*점)|(별점|평점|\\d\\s*점)[^.!?\\n]{0,10}(주신|남기신)\\s*(이유|까닭)");
+    /** 아쉬운 점을 부드럽게 묻는 문장 (낮은 별점 + 칭찬 리뷰에 필요) */
+    static final Pattern ASKS_FEEDBACK = Pattern.compile(
+            "(아쉬|불편|부족|모자라|마음에\\s*들지|개선)[^.!?\\n]{0,30}(알려|말씀|남겨|들려|전해|얘기|이야기)");
     /** 개인정보 가림 표시 */
     static final Pattern MASK = Pattern.compile("\\[(전화번호|이메일|주소|주문번호|번호)\\]");
     /** 문장 경계: 마침표·물음표·느낌표·물결·말줄임표·이모지 뒤의 공백, 또는 줄바꿈 */
@@ -220,6 +223,10 @@ public class ReplyGenerationService {
         }
         if (RATING_PRESSURE.matcher(text).find()) {
             problems.add(name + ": 별점 이유를 묻거나 별점 수정을 부탁함");
+        }
+        if (RatingMismatch.of(ctx.rating(), ctx.sentiment()) == RatingMismatch.LOW_RATING_POSITIVE
+                && !ASKS_FEEDBACK.matcher(text).find()) {
+            problems.add(name + ": 별점이 낮으므로 \"혹시 아쉬웠던 점이 있으셨다면 편하게 알려 주세요\"처럼 아쉬운 점을 부드럽게 묻는 문장을 넣을 것");
         }
         String injected = UntrustedText.outputProblem(text, ctx.maskedContent());
         if (injected != null) {
