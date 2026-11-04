@@ -30,6 +30,12 @@ public final class UntrustedText {
             "프롬프트|시스템\\s*(메시지|지시)|인공지능|챗\\s*GPT|GPT|지시\\s*사항|(?<![A-Za-z])AI(?![A-Za-z])|에이아이|언어\\s*모델",
             Pattern.CASE_INSENSITIVE);
 
+    /** 답글에 나오면 안 되는 형식: HTML 태그, 코드 블록, 마크다운 강조·제목 */
+    static final Pattern MARKUP = Pattern.compile("<\\s*/?\\s*[A-Za-z!][^>]*>|```|\\*\\*[^*]+\\*\\*|(?m)^\\s*#{1,6}\\s");
+    /** 가림 처리를 거치지 않은 연락처·이메일 (마스킹이 놓쳤거나 모델이 만들어 낸 경우) */
+    static final Pattern RAW_CONTACT = Pattern.compile(
+            "[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)+|0\\d{1,2}[-.\\s]?\\d{3,4}[-.\\s]?\\d{4}");
+
     /** 따옴표로 감싼 문구 ('나는 바보다' 등): 본문이 그대로 출력하라고 시킨 문구일 수 있다 */
     private static final Pattern QUOTED = Pattern.compile("['\"‘’“”「『]([^'\"‘’“”」』\\n]{2,40})['\"‘’“”」』]");
 
@@ -73,6 +79,12 @@ public final class UntrustedText {
         }
         if (META.matcher(output).find()) {
             return "AI·프롬프트 관련 표현이 있음 (리뷰에 대한 답글만 쓸 것)";
+        }
+        if (MARKUP.matcher(output).find()) {
+            return "HTML·마크다운 같은 형식이 있음 (일반 문장으로만 쓸 것)";
+        }
+        if (RAW_CONTACT.matcher(output).find()) {
+            return "연락처·이메일을 그대로 씀 (필요하면 [매장 연락처 입력]처럼 채울 자리로)";
         }
         for (String q : quotedTargets(reviewText)) {
             if (output.contains(q)) {

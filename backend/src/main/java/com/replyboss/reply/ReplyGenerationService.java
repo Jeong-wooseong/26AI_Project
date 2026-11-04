@@ -10,6 +10,7 @@ import com.replyboss.ai.SimilarityProperties;
 import com.replyboss.ai.UntrustedText;
 import com.replyboss.ai.Vectors;
 import com.replyboss.ai.PromptTemplates;
+import com.replyboss.ai.RiskSignals;
 import com.replyboss.review.ReviewType;
 import com.replyboss.review.Sentiment;
 import com.replyboss.store.ToneProfile;
@@ -38,7 +39,7 @@ public class ReplyGenerationService {
 
     private static final Logger log = LoggerFactory.getLogger(ReplyGenerationService.class);
 
-    static final String PROMPT = "reply_generate_v4";
+    static final String PROMPT = "reply_generate_v5";
     static final List<ReviewType> TARGET_TYPES = List.of(ReviewType.PRAISE, ReviewType.COMPLAINT, ReviewType.INQUIRY);
 
     private static final Map<String, Object> SCHEMA = object(props(
@@ -143,7 +144,7 @@ public class ReplyGenerationService {
             feedback = "\n\n[이전 초안의 문제 — 고쳐서 다시 작성]\n- " + String.join("\n- ", problems);
         }
         if (best.isEmpty()) {
-            throw new LlmException("안전 규칙을 지키는 답글 초안을 만들지 못했습니다", null, "LLM_INVALID");
+            throw new LlmException("안전 규칙을 지키는 답글 초안을 만들지 못했습니다", null, "LLM_UNSAFE");
         }
         return new Result(best, attempt - 1);
     }
@@ -289,7 +290,8 @@ public class ReplyGenerationService {
         sb.append("- 감정: ").append(ctx.sentiment() == null ? "알 수 없음" : ctx.sentiment().name()).append('\n');
         sb.append("- 키워드: ").append(ctx.keywords().isEmpty() ? "없음" : String.join(", ", ctx.keywords())).append('\n');
         sb.append("- 본문:\n").append(UntrustedText.wrap(ctx.maskedContent()))
-                .append(UntrustedText.injectionNotice(ctx.maskedContent()));
+                .append(UntrustedText.injectionNotice(ctx.maskedContent()))
+                .append(RiskSignals.notice(ctx.maskedContent()));
         if (!ctx.pastReplies().isEmpty()) {
             sb.append("\n[최근 답글 - 시작·마무리 표현 반복 금지]");
             for (String r : ctx.pastReplies().stream().limit(PROMPT_PAST_REPLY_COUNT).map(PastReply::text).toList()) {

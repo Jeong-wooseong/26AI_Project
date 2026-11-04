@@ -70,7 +70,7 @@ public class MaliciousGuideService {
             log.info("악성 리뷰 가이드 답글 규칙 위반으로 다시 생성: {}", problems);
             guide = call(user + "\n\n[이전 답글의 문제 — 고쳐서 다시 작성]\n- " + String.join("\n- ", problems), ctx.chosen());
             if (!problems(guide.reply(), ctx.maskedContent()).isEmpty()) {
-                throw new LlmException("안전 규칙을 지키는 대응 답글을 만들지 못했습니다", null, "LLM_INVALID");
+                throw new LlmException("안전 규칙을 지키는 대응 답글을 만들지 못했습니다", null, "LLM_UNSAFE");
             }
         }
         return guide;

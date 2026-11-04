@@ -296,6 +296,11 @@ function CompletedRow({ no, review: r, onUpdated, toast }) {
           {r.writtenAt && <span>작성일 {r.writtenAt}</span>}
           {r.similarCount > 0 && <SimilarNote count={r.similarCount} />}
           {r.injectionSuspected && <InjectionNote />}
+          {r.riskSignals?.length > 0 && (
+            <span className="risk-note" title="원인 인정이나 환불·보상 약속 없이 매장 연락을 안내하는 초안을 만듭니다. 답글을 쓰기 전에 주문 내역과 상황을 직접 확인하십시오.">
+              사장님 확인 필요: {r.riskSignals.join(', ')}
+            </span>
+          )}
         </p>
         {reply && <FinalReply reply={reply} onSave={save} toast={toast} />}
       </div>
@@ -401,6 +406,11 @@ function Ticket({ no, review: r, onUpdated, toast }) {
           )}
           {r.similarCount > 0 && <SimilarNote count={r.similarCount} />}
           {r.injectionSuspected && <InjectionNote />}
+          {r.riskSignals?.length > 0 && (
+            <span className="risk-note" title="원인 인정이나 환불·보상 약속 없이 매장 연락을 안내하는 초안을 만듭니다. 답글을 쓰기 전에 주문 내역과 상황을 직접 확인하십시오.">
+              사장님 확인 필요: {r.riskSignals.join(', ')}
+            </span>
+          )}
         </p>
       </div>
 

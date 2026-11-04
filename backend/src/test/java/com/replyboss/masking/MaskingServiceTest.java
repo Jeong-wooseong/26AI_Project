@@ -58,4 +58,9 @@ class MaskingServiceTest {
         assertThat(masking.mask(null)).isEmpty();
         assertThat(masking.mask("   ")).isEmpty();
     }
+
+    @Test
+    void 보이지_않는_문자와_제어_문자를_지운다() {
+        assertThat(new MaskingService().mask("프\u200B롬\u200D프트\u0007 무시\nOK")).isEqualTo("프롬프트 무시\nOK");
+    }
 }

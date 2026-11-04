@@ -480,6 +480,7 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 
 /* 중복 방지 안내 */
 .similar-note { color: var(--type-complaint); }
+.risk-note { color: var(--danger); font-weight: 600; }
 .regen-note { margin-top: -2px; }
 .draft-edited.is-warn { color: var(--type-complaint); }
 

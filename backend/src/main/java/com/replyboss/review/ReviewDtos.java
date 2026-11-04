@@ -1,5 +1,6 @@
 package com.replyboss.review;
 
+import com.replyboss.ai.RiskSignals;
 import com.replyboss.ai.UntrustedText;
 import com.replyboss.common.JsonText;
 import com.replyboss.reply.GuideStrategy;
@@ -94,6 +95,8 @@ public final class ReviewDtos {
             int similarCount,
             /** 본문에 AI 에게 보내는 지시문으로 보이는 문장이 있음 (답글 생성 때 무시하도록 처리) */
             boolean injectionSuspected,
+            /** 사장님 확인이 필요한 신호 (건강·위생, 환불·보상, 법적 대응) */
+            List<String> riskSignals,
             List<ReplyResponse> replies
     ) {
         public static ReviewResponse from(Review review, List<Reply> replies) {
@@ -122,6 +125,7 @@ public final class ReviewDtos {
                     review.getGroupId(),
                     similarCount,
                     UntrustedText.looksLikeInjection(review.getMaskedContent()),
+                    RiskSignals.of(review.getMaskedContent()),
                     replies.stream().map(ReplyResponse::from).toList()
             );
         }
@@ -174,6 +178,32 @@ public final class ReviewDtos {
     public record EvalClassifyRequest(
             @NotNull @Min(1) @Max(5) Integer rating,
             String content
+    ) {
+    }
+
+    /** 답글 안전성 점검용: 저장하지 않고 분류 → 초안(또는 악성 가이드)까지 만든다 */
+    public record EvalReplyRequest(
+            @NotNull Long storeId,
+            @NotNull @Min(1) @Max(5) Integer rating,
+            @Size(max = 2000) String content
+    ) {
+    }
+
+    public record EvalReplyResponse(
+            String maskedContent,
+            ReviewType type,
+            Sentiment sentiment,
+            List<String> keywords,
+            boolean injectionSuspected,
+            List<String> riskSignals,
+            /** 톤(POLITE 등) → 초안. 만들지 못했으면 빈 맵 */
+            java.util.Map<String, String> drafts,
+            int regenerations,
+            String guideStrategy,
+            String guideReason,
+            String guideReply,
+            String errorCode,
+            String errorMessage
     ) {
     }
 

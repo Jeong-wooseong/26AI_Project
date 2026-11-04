@@ -41,4 +41,13 @@ class UntrustedTextTest {
         // 지시문이 없는 리뷰의 따옴표 문구는 답글에 인용해도 된다
         assertThat(UntrustedText.outputProblem("'인생 라떼'라는 말씀에 힘이 납니다.", "여기 '인생 라떼'예요")).isNull();
     }
+
+    @Test
+    void HTML_마크다운과_연락처를_답글에서_잡는다() {
+        assertThat(UntrustedText.outputProblem("<b>감사합니다</b>", "맛있어요")).contains("HTML");
+        assertThat(UntrustedText.outputProblem("**감사합니다** 또 오세요.", "맛있어요")).contains("HTML");
+        assertThat(UntrustedText.outputProblem("010-1234-5678로 연락드리겠습니다.", "연락 주세요")).contains("연락처");
+        assertThat(UntrustedText.outputProblem("[매장 연락처 입력]으로 연락 주시면 확인하겠습니다.", "환불해 주세요")).isNull();
+        assertThat(UntrustedText.outputProblem("오후 3시~5시 사이에는 조금 붐빕니다.", "언제 한가해요?")).isNull();
+    }
 }

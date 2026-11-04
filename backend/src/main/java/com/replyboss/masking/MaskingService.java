@@ -26,11 +26,14 @@ public class MaskingService {
             new Rule(Pattern.compile("(?<![\\d.])\\d{8,}(?![\\d.])"), "[번호]")
     );
 
+    /** 보이지 않는 문자(폭 없는 공백 등)와 줄바꿈·탭을 뺀 제어 문자. 지시문을 글자 사이에 숨기는 우회도 함께 막는다 */
+    private static final Pattern INVISIBLE = Pattern.compile("[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\uFEFF]|[\\p{Cntrl}&&[^\\n\\t]]");
+
     public String mask(String text) {
         if (text == null) {
             return "";
         }
-        String result = text.strip();
+        String result = INVISIBLE.matcher(text).replaceAll("").strip();
         for (Rule rule : RULES) {
             result = rule.pattern().matcher(result).replaceAll(rule.replacement());
         }
