@@ -56,7 +56,7 @@ async function post(path, body) {
   return data;
 }
 
-const stores = await fetch(`${API}/api/stores`).then((r) => r.json()).catch(() => null);
+const stores = await fetch(`${API}/api/eval/stores`).then((r) => r.json()).catch(() => null);
 if (!stores?.length) {
   console.error(`매장이 없거나 백엔드(${API})에 연결할 수 없습니다. 매장 설정에서 매장과 답글 스타일을 저장한 뒤 실행하십시오.`);
   process.exit(1);

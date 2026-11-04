@@ -11,11 +11,13 @@ import com.replyboss.reply.ReplyGenerationService;
 import com.replyboss.review.ReviewDtos.EvalReplyRequest;
 import com.replyboss.review.ReviewDtos.EvalReplyResponse;
 import com.replyboss.store.Store;
+import com.replyboss.store.StoreDtos.StoreResponse;
 import com.replyboss.store.StoreService;
 import com.replyboss.store.ToneProfile;
 import com.replyboss.review.ReviewDtos.EvalClassifyRequest;
 import com.replyboss.review.ReviewDtos.EvalClassifyResponse;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -51,6 +53,12 @@ public class EvalController {
      * 답글 안전성 점검용 (eval/reply_safety_eval.mjs 가 호출). 실제와 같은 마스킹·분류·생성·검사를 거치지만 저장하지 않는다.
      * 이전 답글 비교(중복 방지 2·3단)는 하지 않는다. AI 호출이 실패해도 오류 코드를 담아 돌려줘 다음 사례를 계속 점검하게 한다.
      */
+    /** 측정 스크립트용 매장 목록 (로그인 없이, 같은 PC 에서만 — SecurityConfig) */
+    @GetMapping("/api/eval/stores")
+    public List<StoreResponse> stores() {
+        return storeService.findAll();
+    }
+
     @PostMapping("/api/eval/replies")
     public EvalReplyResponse replies(@Valid @RequestBody EvalReplyRequest request) {
         Store store = storeService.get(request.storeId());

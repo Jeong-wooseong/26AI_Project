@@ -133,7 +133,7 @@ export default function Admin({ toast }) {
           )}
         </section>
         {selected ? (
-          <InquiryDetail key={selected.id} q={selected} onSaved={onSaved} />
+          <InquiryDetail key={`${selected.id}-${selected.status}`} q={selected} onSaved={onSaved} />
         ) : (
           <EmptyState title="문의를 선택하십시오" description="왼쪽 목록에서 문의를 고르면 내용과 답변 칸이 나타납니다." />
         )}
