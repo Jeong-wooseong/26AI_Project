@@ -20,6 +20,45 @@ export function PageHeader({ title, description, actions }) {
   );
 }
 
+/**
+ * 페이지 첫머리의 시각적 중심: 연한 블루 띠 + 캐릭터 + 지금 상태.
+ * stats: [{ label, value, unit, tone }] — 실제 데이터만 넣는다 (없으면 생략)
+ * steps: [{ label, state: 'done' | 'current' | 'todo' }] — 이 화면이 전체 흐름에서 어디인지
+ */
+export function PageHero({ eyebrow, title, description, pose, stats, steps, actions }) {
+  return (
+    <section className="page-hero">
+      <div className="page-hero-main">
+        {eyebrow && <p className="page-hero-eyebrow">{eyebrow}</p>}
+        <h1>{title}</h1>
+        {description && <p className="page-hero-desc">{description}</p>}
+        {steps && (
+          <ol className="flow-steps" aria-label="진행 단계">
+            {steps.map((s, i) => (
+              <li key={s.label} className={`flow-step is-${s.state}`} aria-current={s.state === 'current' ? 'step' : undefined}>
+                <span className="flow-step-no">{s.state === 'done' ? <Icon name="confirm" size={14} /> : i + 1}</span>
+                {s.label}
+              </li>
+            ))}
+          </ol>
+        )}
+        {actions && <div className="page-actions">{actions}</div>}
+      </div>
+      {stats && stats.length > 0 && (
+        <dl className="hero-stats">
+          {stats.map((s) => (
+            <div key={s.label} className={`hero-stat ${s.tone ? `is-${s.tone}` : ''}`}>
+              <dt>{s.label}</dt>
+              <dd><strong>{s.value}</strong>{s.unit && <span>{s.unit}</span>}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {pose && <Mascot pose={pose} size={132} className="page-hero-mascot" />}
+    </section>
+  );
+}
+
 /* ── 버튼 ─────────────────────────────────────────── */
 function ButtonBase({ variant, icon, loading = false, loadingText, size, className, disabled, children, ...rest }) {
   return (
@@ -205,11 +244,12 @@ export function SectionCard({ as: Tag = 'section', title, description, aside, he
  * 설정 화면의 한 구역: 왼쪽에 제목·설명·상태, 오른쪽에 입력 항목과 그 구역의 저장 버튼.
  * status: 지금 데이터 기준의 진행 상태 (예: 저장됨, 3/5개) — 화면에 이미 있는 값만 넣는다.
  */
-export function SettingsSection({ as: Tag = 'section', title, description, status, actions, actionsStart, children, ...rest }) {
+export function SettingsSection({ as: Tag = 'section', title, description, status, actions, actionsStart, icon, children, ...rest }) {
   const headingId = useId();
   return (
     <Tag className="settings-section" aria-labelledby={headingId} {...rest}>
       <div className="settings-aside">
+        {icon && <span className="settings-icon" aria-hidden="true"><Icon name={icon} size={20} /></span>}
         <h2 id={headingId}>{title}</h2>
         {description && <p>{description}</p>}
         {status && <div className="settings-status">{status}</div>}

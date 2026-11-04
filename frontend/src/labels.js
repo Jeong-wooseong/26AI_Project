@@ -32,3 +32,9 @@ export const todayISO = () => {
   const pad = (v) => String(v).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
+
+/** 업종 → 아이콘 이름 (components/Icon.jsx) */
+export const CATEGORY_ICON = {
+  카페: 'cat-cafe', 한식: 'cat-korean', 분식: 'cat-snack', 중식: 'cat-chinese', 일식: 'cat-japanese',
+  양식: 'cat-western', 치킨: 'cat-chicken', 피자: 'cat-pizza', 디저트: 'cat-dessert', 기타: 'cat-etc',
+};

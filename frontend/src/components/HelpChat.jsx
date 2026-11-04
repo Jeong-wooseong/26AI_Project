@@ -71,7 +71,7 @@ export default function HelpChat() {
       {open && (
         <section className="helpchat-panel" role="dialog" aria-label="ReplyBoss 도우미">
           <header className="helpchat-head">
-            <Mascot pose="hello" size={44} className="helpchat-avatar" />
+            <Mascot pose="smile" size={44} className="helpchat-avatar" />
             <div className="helpchat-title">
               <strong>ReplyBoss 도우미</strong>
               <p className="hint">자주 묻는 질문을 바탕으로 안내합니다</p>

@@ -24,6 +24,7 @@ export default function AccountSection({ me, onDeleted }) {
 
   return (
     <SettingsSection
+      icon="user"
       title="계정"
       description="로그인한 계정과 탈퇴 설정입니다. 탈퇴하면 계정과 모든 데이터가 즉시 삭제되며 되돌릴 수 없습니다."
     >

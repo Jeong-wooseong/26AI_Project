@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { auth } from '../api.js';
 import Icon from '../components/Icon.jsx';
-import Mascot from '../components/Mascot.jsx';
+import Mascot, { BrandLogo } from '../components/Mascot.jsx';
 import { Alert, FormInput, PrimaryButton, SecondaryButton } from '../components/ui.jsx';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -16,12 +16,12 @@ function AuthCard({ title, description, children, footer, pose = 'hero' }) {
     <div className={`auth ${pose ? 'has-mascot' : ''}`}>
       {pose && (
         <aside className="auth-hero">
-          <Mascot pose={pose} size={pose === 'hero' ? 280 : 200} />
+          <Mascot pose={pose} size={pose === 'hero' ? 240 : 180} />
           <p className="auth-tagline">리뷰와 사장님을 잇는,<br />AI 답글 파트너</p>
         </aside>
       )}
       <div className="auth-col">
-        <div className="auth-brand">ReplyBoss</div>
+        <BrandLogo size={40} className="auth-brand" />
         <section className="auth-card">
           <div className="auth-head">
             <h1>{title}</h1>
@@ -148,7 +148,7 @@ export function SignupPage() {
 
   if (sentTo) {
     return (
-      <AuthCard pose="hello" title="인증 메일을 보냈습니다" description={`${sentTo} 메일함에서 인증 링크를 눌러 가입을 마치십시오.`}
+      <AuthCard pose="happy" title="인증 메일을 보냈습니다" description={`${sentTo} 메일함에서 인증 링크를 눌러 가입을 마치십시오.`}
                 footer={<a href="#login">로그인 화면으로</a>}>
         <ul className="auth-steps">
           <li>링크는 24시간 동안 유효합니다.</li>

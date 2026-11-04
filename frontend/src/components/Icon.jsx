@@ -42,6 +42,15 @@ import {
   Paperclip,
   Mail,
   ArrowRight,
+  Coffee,
+  Soup,
+  UtensilsCrossed,
+  Pizza,
+  Drumstick,
+  CakeSlice,
+  Fish,
+  Sandwich,
+  Sparkles,
 } from 'lucide-react';
 
 const ICONS = {
@@ -86,6 +95,17 @@ const ICONS = {
   attach: Paperclip,
   mail: Mail,
   go: ArrowRight,
+  sparkles: Sparkles, // 답글 스타일 분석
+  'cat-cafe': Coffee,
+  'cat-korean': Soup,
+  'cat-snack': Sandwich,
+  'cat-chinese': UtensilsCrossed,
+  'cat-japanese': Fish,
+  'cat-western': UtensilsCrossed,
+  'cat-chicken': Drumstick,
+  'cat-pizza': Pizza,
+  'cat-dessert': CakeSlice,
+  'cat-etc': Store,
 };
 
 export default function Icon({ name, size = 18, className = '', ...rest }) {

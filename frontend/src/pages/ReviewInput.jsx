@@ -1,22 +1,50 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { PLATFORMS } from '../labels.js';
+import { PLATFORMS, todayISO } from '../labels.js';
+import { statusOf } from '../components/reply/replyModel.js';
+import StarRating from '../components/StarRating.jsx';
 import Icon from '../components/Icon.jsx';
 import {
-  Alert, DataTable, DataTableHead, DataTableRow, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton,
-  SecondaryButton, SectionCard, SegmentedTabs, TabPanel,
+  Alert, DataTable, DataTableHead, DataTableRow, FormInput, FormSelect, IconButton, PageHero, PrimaryButton,
+  SecondaryButton, SectionCard, TabPanel,
 } from '../components/ui.jsx';
 import PastePanel from '../components/import/PastePanel.jsx';
 import FilePanel from '../components/import/FilePanel.jsx';
 
 const MAX_ROWS = 30;
 const MAX_LENGTH = 2000; // 리뷰 본문 최대 글자 수 (기존 maxLength 와 동일)
-const RATING_OPTIONS = [5, 4, 3, 2, 1].map((n) => [n, `${n}점`]);
 const MODES = [
-  { key: 'manual', label: '직접 입력', icon: 'manual' },
-  { key: 'paste', label: '여러 리뷰 붙여넣기', icon: 'paste' },
-  { key: 'file', label: '파일 가져오기', icon: 'file' },
+  { key: 'manual', label: '직접 입력', icon: 'manual', desc: '한 건씩 별점과 내용을 입력' },
+  { key: 'paste', label: '여러 리뷰 붙여넣기', icon: 'paste', desc: '배달앱에서 복사한 리뷰를 한 번에' },
+  { key: 'file', label: '파일 가져오기', icon: 'file', desc: 'CSV·엑셀 파일의 리뷰를 불러오기' },
 ];
+
+/** 입력 방식 고르기: 탭과 같은 역할(←/→ 키 이동)을 하는 선택 카드 */
+function ModeCards({ value, onChange }) {
+  function onKeyDown(e) {
+    const i = MODES.findIndex((m) => m.key === value);
+    const n = e.key === 'ArrowRight' ? (i + 1) % MODES.length : e.key === 'ArrowLeft' ? (i - 1 + MODES.length) % MODES.length : null;
+    if (n == null) return;
+    e.preventDefault();
+    onChange(MODES[n].key);
+    document.getElementById(`input-mode-tab-${MODES[n].key}`)?.focus();
+  }
+  return (
+    <div className="mode-cards" role="tablist" aria-label="입력 방식">
+      {MODES.map((m) => (
+        <button key={m.key} type="button" role="tab" id={`input-mode-tab-${m.key}`} aria-controls={`input-mode-panel-${m.key}`}
+                aria-selected={value === m.key} tabIndex={value === m.key ? 0 : -1} className="mode-card"
+                onClick={() => onChange(m.key)} onKeyDown={onKeyDown}>
+          <span className="mode-card-icon"><Icon name={m.icon} size={20} /></span>
+          <span className="mode-card-text">
+            <span className="mode-card-label">{m.label}</span>
+            <span className="mode-card-desc">{m.desc}</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
 const ENTRY_COLUMNS = [
   { label: '번호', className: 'entry-no' },
   { label: '별점' },
@@ -35,6 +63,20 @@ export default function ReviewInput({ store, toast, go }) {
   const [mode, setMode] = useState('manual');
   const [pasteRows, setPasteRows] = useState([]);
   const [fileRows, setFileRows] = useState([]);
+  const [today, setToday] = useState(null); // 오늘 등록된 리뷰 현황 (실제 목록에서 셈)
+
+  useEffect(() => {
+    let alive = true;
+    api.listReviews(store.id, { date: todayISO() })
+      .then((list) => {
+        if (!alive) return;
+        const by = { done: 0, wait: 0, fail: 0 };
+        list.forEach((r) => { by[statusOf(r)] += 1; });
+        setToday({ total: list.length, ...by });
+      })
+      .catch(() => alive && setToday(null));
+    return () => { alive = false; };
+  }, [store.id]);
 
   // 화면에서 고른 출처를 따르는 미리보기 행은 출처를 바꾸면 함께 바뀐다 (파일 값·직접 고른 값은 유지)
   useEffect(() => {
@@ -96,28 +138,53 @@ export default function ReviewInput({ store, toast, go }) {
   }
 
   const full = rows.length >= MAX_ROWS;
+  const withText = rows.filter((r) => r.content.trim()).length;
+  const avg = rows.reduce((sum, r) => sum + Number(r.rating), 0) / rows.length;
 
   return (
     <>
-      <PageHeader title="리뷰 입력" description="고객 리뷰를 등록하고 AI로 유형을 분류합니다. 별점만 있는 리뷰에는 답글 초안이 함께 생성됩니다." />
+      <PageHero
+        eyebrow="리뷰 입력"
+        title="오늘 들어온 리뷰를 등록해 보세요"
+        description="등록하면 AI가 리뷰 유형을 분류하고, 작성 대기에서 답글 초안을 만듭니다. 별점만 있는 리뷰는 답글 초안이 바로 만들어집니다."
+        pose="happy"
+        steps={[
+          { label: '리뷰 등록', state: 'current' },
+          { label: 'AI 분류', state: 'todo' },
+          { label: '답글 초안 · 작성 완료', state: 'todo' },
+        ]}
+        stats={today && [
+          { label: '오늘 등록', value: today.total, unit: '건' },
+          { label: '작성 완료', value: today.done, unit: '건', tone: 'success' },
+          { label: '작성 대기', value: today.wait, unit: '건', tone: today.wait ? 'warning' : undefined },
+        ]}
+      />
 
       {error && <Alert>{error}</Alert>}
+
+      <ModeCards value={mode} onChange={setMode} />
 
       <SectionCard
         aria-label="리뷰 입력"
         header={(
           <>
-            <SegmentedTabs tabs={MODES} value={mode} onChange={setMode} label="입력 방식" idPrefix="input-mode" />
+            <span className="section-label">{MODES.find((m) => m.key === mode)?.label}</span>
             <FormSelect id="platform" label="리뷰 출처" fieldClassName="field-inline platform-field" value={platform}
                         options={PLATFORMS} onChange={(e) => setPlatform(e.target.value)} />
           </>
         )}
         stickyFooter
         footerStart={mode === 'manual' && (
-          <span className="row-count" aria-live="polite">
-            {full && <span className="row-count-full">최대 개수 도달</span>}
-            <strong>{rows.length}</strong> / {MAX_ROWS}건
-          </span>
+          <div className="entry-summary" aria-live="polite">
+            <span className="row-count">
+              {full && <span className="row-count-full">최대 개수 도달</span>}
+              <strong>{rows.length}</strong> / {MAX_ROWS}건
+            </span>
+            <span className="count-bar" aria-hidden="true"><span style={{ width: `${(rows.length / MAX_ROWS) * 100}%` }} /></span>
+            <span className="entry-summary-text">
+              내용 있음 {withText} · 별점만 {rows.length - withText} · 평균 <Icon name="star" size={14} className="star-inline" />{avg.toFixed(1)}
+            </span>
+          </div>
         )}
         footer={mode === 'manual' && (
           <PrimaryButton type="submit" form="manual-review-form" icon="classify" loading={busy} loadingText="처리 중">
@@ -138,8 +205,8 @@ export default function ReviewInput({ store, toast, go }) {
                 <DataTableRow key={r.key} className={`entry-row ${r.content.trim() ? 'is-filled' : ''}`}>
                   <span className="entry-no" role="cell">{i + 1}</span>
                   <div className="cell-rating" role="cell">
-                    <FormSelect icon="star" aria-label={`리뷰 ${i + 1} 별점`} value={r.rating} options={RATING_OPTIONS}
-                                onChange={(e) => update(r.key, { rating: Number(e.target.value) })} />
+                    <StarRating label={`리뷰 ${i + 1} 별점`} value={Number(r.rating)}
+                                onChange={(n) => update(r.key, { rating: n })} />
                   </div>
                   <div className="cell-content" role="cell">
                     <FormInput aria-label={`리뷰 ${i + 1} 본문`} value={r.content} maxLength={MAX_LENGTH}

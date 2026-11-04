@@ -8,6 +8,7 @@ import Support, { ReportErrorLink } from './pages/Support.jsx';
 import Admin from './pages/Admin.jsx';
 import { ForgotPage, LegalPage, LoginPage, ResetPage, SignupPage, VerifyPage } from './pages/Auth.jsx';
 import HelpChat from './components/HelpChat.jsx';
+import { BrandLogo } from './components/Mascot.jsx';
 import { Toast, useToast } from './components/Toast.jsx';
 import Icon from './components/Icon.jsx';
 import { EmptyState, PrimaryButton, SecondaryButton } from './components/ui.jsx';
@@ -201,7 +202,7 @@ export default function App() {
       <header className="header">
         <div className="header-inner">
           <div className="brand">
-            <span className="brand-name">ReplyBoss</span>
+            <BrandLogo size={32} />
             <span className="brand-divider" aria-hidden="true" />
             <span className="brand-store">{store?.name ?? '매장 미등록'}</span>
           </div>

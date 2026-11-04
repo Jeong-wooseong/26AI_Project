@@ -7,11 +7,21 @@ import analyzing from '../assets/mascot/analyzing.png';
 import writing from '../assets/mascot/writing.png';
 import done from '../assets/mascot/done.png';
 import help from '../assets/mascot/help.png';
-import hello from '../assets/mascot/hello.png';
+import logo from '../assets/mascot/logo.png';
 
-const POSES = { hero, smile, happy, thinking, analyzing, writing, done, help, hello };
+const POSES = { hero, smile, happy, thinking, analyzing, writing, done, help };
 
-/** pose: hero(대표) | smile | happy | thinking | analyzing(분석 중) | writing(답글 작성 중) | done(완료) | help(오류·확인 필요) | hello(인사) */
+/** pose: hero(대표) | smile | happy | thinking | analyzing(분석 중) | writing(답글 작성 중) | done(완료) | help(오류·확인 필요) */
+/** 로고: 캐릭터 + ReplyBoss 글자 */
+export function BrandLogo({ size = 30, className = '' }) {
+  return (
+    <span className={`brand-logo ${className}`}>
+      <img src={logo} alt="" aria-hidden="true" style={{ height: size, width: size }} draggable="false" />
+      <span className="brand-name">ReplyBoss</span>
+    </span>
+  );
+}
+
 export default function Mascot({ pose = 'smile', size = 96, className = '' }) {
   return (
     <img src={POSES[pose] ?? smile} alt="" aria-hidden="true" style={{ height: size, width: 'auto' }}

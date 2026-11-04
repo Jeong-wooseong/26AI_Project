@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 import { api } from '../api.js';
-import { CATEGORIES, EMOJI_LEVELS, FORMALITIES, LENGTHS } from '../labels.js';
+import { CATEGORIES, CATEGORY_ICON, EMOJI_LEVELS, FORMALITIES, LENGTHS } from '../labels.js';
+import Icon from '../components/Icon.jsx';
 import {
-  Alert, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton, SecondaryButton, SettingsSection, StatusIndicator,
+  Alert, FormInput, FormSelect, IconButton, PageHero, PrimaryButton, SecondaryButton, SettingsSection, StatusIndicator,
 } from '../components/ui.jsx';
 import { previewText } from '../tonePreview.js';
 import AccountSection from '../components/AccountSection.jsx';
@@ -10,6 +11,41 @@ import AccountSection from '../components/AccountSection.jsx';
 const MIN_SAMPLES = 3;
 const MAX_SAMPLES = 5;
 const INFO_MAX = 500;
+
+/** 분석된 말투를 한눈에: 값은 실제 분석·수정 결과를 그대로 쓰고, 3단계 중 어디인지만 표시한다 */
+const TONE_SCALES = [
+  { key: 'formality', label: '격식 수준', levels: ['반말 섞임', '해요체', '하십시오체'], words: ['낮음', '보통', '높음'] },
+  { key: 'emojiLevel', label: '이모지', levels: EMOJI_LEVELS, words: ['쓰지 않음', '가끔', '자주'] },
+  { key: 'length', label: '답글 길이', levels: LENGTHS, words: ['짧은 편', '보통', '긴 편'] },
+];
+
+function ToneSummary({ tone }) {
+  return (
+    <div className="tone-summary">
+      <p className="tone-summary-title"><Icon name="sparkles" size={16} />매장 답글 스타일 분석</p>
+      <div className="tone-tiles">
+        {TONE_SCALES.map((s) => {
+          const i = s.levels.indexOf(tone[s.key]);
+          return (
+            <div key={s.key} className="tone-tile">
+              <span className="tone-tile-label">{s.label}</span>
+              <strong className="tone-tile-value">{i >= 0 ? s.words[i] : tone[s.key]}</strong>
+              <span className="tone-scale" aria-hidden="true">
+                {s.levels.map((_, j) => <span key={j} className={j === i ? 'is-on' : ''} />)}
+              </span>
+              <span className="tone-tile-raw">{tone[s.key]}</span>
+            </div>
+          );
+        })}
+        <div className="tone-tile">
+          <span className="tone-tile-label">자주 쓰는 표현</span>
+          <strong className="tone-tile-value">{tone.phrases.length}개</strong>
+          <span className="tone-tile-raw">{tone.phrases.slice(0, 2).join(', ') || '없음'}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** 화면 ① 가게 설정: 가게 정보 + 예시 답글로 톤 프로필 추출 → 수정 → 저장 */
 export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDeleted }) {
@@ -104,7 +140,17 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
 
   return (
     <>
-      <PageHeader title="매장 설정" description="매장 정보와 답글 작성에 사용할 기본 설정을 관리합니다." />
+      <PageHero
+        eyebrow="매장 설정"
+        title={store ? `${store.name}의 답글 스타일을 알려 주세요` : '먼저 매장을 등록해 보세요'}
+        description="기존 답글 3~5개로 AI가 매장의 말투를 배우고, 앞으로 만드는 모든 답글 초안에 반영합니다."
+        pose={store?.toneProfile ? 'happy' : 'thinking'}
+        steps={[
+          { label: '매장 정보', state: store ? 'done' : 'current' },
+          { label: '예시 답글', state: !store ? 'todo' : sampleReady ? 'done' : 'current' },
+          { label: '답글 스타일 저장', state: store?.toneProfile ? 'done' : sampleReady ? 'current' : 'todo' },
+        ]}
+      />
 
       {error && <Alert>{error}</Alert>}
 
@@ -114,6 +160,7 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
           onSubmit={saveStore}
           noValidate
           title="매장 정보"
+          icon={CATEGORY_ICON[category] ?? 'store'}
           description="매장명과 업종, 답글에 반영할 매장 소개입니다."
           status={store
             ? <StatusIndicator tone="success" icon="confirm">등록됨</StatusIndicator>
@@ -128,10 +175,10 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
             <FormInput id="storeName" label="매장명" ref={nameRef} value={name} placeholder="예: 리플라이 커피"
                        maxLength={100} error={nameError}
                        onChange={(e) => { setName(e.target.value); if (nameError) setNameError(null); }} />
-            <FormSelect id="storeCategory" label="업종" value={category} options={CATEGORIES}
+            <FormSelect id="storeCategory" label="업종" value={category} options={CATEGORIES} icon={CATEGORY_ICON[category]}
                         onChange={(e) => setCategory(e.target.value)} />
           </div>
-          <FormInput id="storeInfo" label="매장 소개·운영 방식 (선택)" multiline rows={3} value={info} maxLength={INFO_MAX}
+          <FormInput id="storeInfo" label="매장 소개·운영 방식 (선택)" multiline rows={3} fieldClassName="info-box" value={info} maxLength={INFO_MAX}
                      counter={`${info.length}/${INFO_MAX}`}
                      placeholder="예: 주문이 들어오면 바로 튀깁니다. 소스는 매장에서 직접 만듭니다."
                      hint="AI는 여기 적힌 내용만 운영 방식으로 답글에 언급하고, 적히지 않은 재료·조리법은 지어내지 않습니다."
@@ -140,6 +187,7 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
 
         <SettingsSection
           title="예시 답글"
+          icon="input"
           description={`기존에 작성한 답글을 ${MIN_SAMPLES}~${MAX_SAMPLES}개 등록하면 AI가 매장의 응대 스타일을 분석합니다. 분석에만 사용됩니다.`}
           status={store && (
             <StatusIndicator tone={sampleReady ? 'success' : 'neutral'} icon={sampleReady ? 'confirm' : undefined}>
@@ -163,15 +211,19 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
           ) : (
             <div className="sample-list">
               {samples.map((s, i) => (
-                <div className="sample" key={i}>
-                  <label className="sample-no" htmlFor={`sample${i}`}><span className="sr-only">예시 답글 </span>{i + 1}</label>
-                  <FormInput id={`sample${i}`} multiline rows={2} value={s} counter={`${s.length}자`}
+                <div className={`sample-card ${s.trim() ? 'is-filled' : ''}`} key={i}>
+                  <div className="sample-head">
+                    <span className="sample-avatar" aria-hidden="true"><Icon name={CATEGORY_ICON[category] ?? 'store'} size={14} /></span>
+                    <label className="sample-label" htmlFor={`sample${i}`}>사장님 답글 {i + 1}</label>
+                    <span className="sample-count">{s.length}자</span>
+                    {samples.length > MIN_SAMPLES && (
+                      <IconButton icon="delete" tone="danger" size="sm" label={`예시 ${i + 1} 삭제`}
+                                  onClick={() => setSamples(samples.filter((_, j) => j !== i))} />
+                    )}
+                  </div>
+                  <FormInput id={`sample${i}`} multiline rows={2} value={s}
                              placeholder="예: 찾아주셔서 감사합니다. 다음에도 맛있는 커피로 보답하겠습니다."
                              onChange={(e) => setSamples(samples.map((v, j) => (j === i ? e.target.value : v)))} />
-                  {samples.length > MIN_SAMPLES ? (
-                    <IconButton icon="delete" tone="danger" label={`예시 ${i + 1} 삭제`}
-                                onClick={() => setSamples(samples.filter((_, j) => j !== i))} />
-                  ) : <span aria-hidden="true" />}
                 </div>
               ))}
             </div>
@@ -180,6 +232,7 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
 
         <SettingsSection
           title="답글 스타일"
+          icon="sparkles"
           description="분석된 높임말, 이모지, 문장 길이, 자주 쓰는 표현입니다. 항목별로 수정한 뒤 저장합니다."
           status={store && toneStatus}
           actionsStart={store && tone && store.toneProfile && (
@@ -193,6 +246,7 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
           {store && !tone && <p className="hint">예시 답글로 답글 스타일 분석을 실행하면 결과가 표시됩니다.</p>}
           {store && tone && (
             <>
+              <ToneSummary tone={tone} />
               <div className="grid-3">
                 <FormSelect id="formality" label="높임말" value={tone.formality} options={FORMALITIES}
                             onChange={(e) => updateTone({ formality: e.target.value })} />
