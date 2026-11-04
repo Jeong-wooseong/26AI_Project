@@ -1,5 +1,6 @@
 package com.replyboss.review;
 
+import com.replyboss.ai.UntrustedText;
 import com.replyboss.common.JsonText;
 import com.replyboss.reply.GuideStrategy;
 import com.replyboss.reply.Reply;
@@ -91,6 +92,8 @@ public final class ReviewDtos {
             /** 비슷한 리뷰 묶음 (없으면 null)과 묶음 안의 다른 리뷰 수 */
             String groupId,
             int similarCount,
+            /** 본문에 AI 에게 보내는 지시문으로 보이는 문장이 있음 (답글 생성 때 무시하도록 처리) */
+            boolean injectionSuspected,
             List<ReplyResponse> replies
     ) {
         public static ReviewResponse from(Review review, List<Reply> replies) {
@@ -118,6 +121,7 @@ public final class ReviewDtos {
                     review.getFinalUpdatedAt(),
                     review.getGroupId(),
                     similarCount,
+                    UntrustedText.looksLikeInjection(review.getMaskedContent()),
                     replies.stream().map(ReplyResponse::from).toList()
             );
         }

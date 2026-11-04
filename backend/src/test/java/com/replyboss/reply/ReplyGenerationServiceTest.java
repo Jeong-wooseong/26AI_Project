@@ -40,6 +40,7 @@ class ReplyGenerationServiceTest {
         String msg = ReplyGenerationService.userMessage(ctx);
         assertThat(msg).contains("해요체").contains("😊").contains("3~4문장").contains("보답할게요")
                 .contains("오늘도 좋은 하루 되세요!").contains("COMPLAINT").contains("배달 지연").contains("[전화번호]");
+        assertThat(msg).contains("<review>\n배달이 너무 늦었어요 [전화번호]\n</review>").doesNotContain("[주의]");
         assertThat(msg).contains("[확인된 매장 정보] 없음").contains("감정: NEGATIVE").doesNotContain("[최근 답글");
         assertThat(msg).contains("[작성 분량]").contains("polite: 3~4문장").contains("friendly: 3~4문장")
                 .contains("concise: 1~2문장");

@@ -6,6 +6,7 @@ import com.replyboss.ai.LlmException;
 import com.replyboss.ai.LlmRequest;
 import com.replyboss.ai.OpenAiProperties;
 import com.replyboss.ai.PromptTemplates;
+import com.replyboss.ai.UntrustedText;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -27,7 +28,7 @@ import static com.replyboss.ai.Schemas.stringEnum;
 @Service
 public class ClassificationService {
 
-    static final String PROMPT = "classify_v1";
+    static final String PROMPT = "classify_v2";
     private static final int MAX_KEYWORDS = 3;
     private static final int MAX_KEYWORD_LENGTH = 20;
 
@@ -52,7 +53,8 @@ public class ClassificationService {
         JsonNode json = llmClient.generateJson(new LlmRequest(
                 props.classifyModel(),
                 prompts.render(PROMPT, Map.of()),
-                "별점: " + rating + "\n본문: " + maskedContent,
+                // 본문은 <review> 구역에 넣어 지시가 아닌 데이터로 구분한다 (프롬프트 인젝션 대비)
+                "별점: " + rating + "\n본문:\n" + UntrustedText.wrap(maskedContent) + UntrustedText.injectionNotice(maskedContent),
                 "review_classification",
                 SCHEMA,
                 2000,
@@ -79,7 +81,9 @@ public class ClassificationService {
         Set<String> keywords = new LinkedHashSet<>();
         for (JsonNode node : json.path("keywords")) {
             String k = node.asText("").strip();
-            if (k.isEmpty() || k.contains("[") || k.contains("]") || k.length() > MAX_KEYWORD_LENGTH) {
+            // 가림 표시, 너무 긴 값, 지시문·AI 관련 말은 키워드로 쓰지 않는다
+            if (k.isEmpty() || k.contains("[") || k.contains("]") || k.length() > MAX_KEYWORD_LENGTH
+                    || UntrustedText.META.matcher(k).find() || UntrustedText.looksLikeInjection(k)) {
                 continue;
             }
             keywords.add(k);

@@ -7,6 +7,7 @@ import com.replyboss.ai.LlmRequest;
 import com.replyboss.ai.EmbeddingClient;
 import com.replyboss.ai.OpenAiProperties;
 import com.replyboss.ai.SimilarityProperties;
+import com.replyboss.ai.UntrustedText;
 import com.replyboss.ai.Vectors;
 import com.replyboss.ai.PromptTemplates;
 import com.replyboss.review.ReviewType;
@@ -37,7 +38,7 @@ public class ReplyGenerationService {
 
     private static final Logger log = LoggerFactory.getLogger(ReplyGenerationService.class);
 
-    static final String PROMPT = "reply_generate_v3";
+    static final String PROMPT = "reply_generate_v4";
     static final List<ReviewType> TARGET_TYPES = List.of(ReviewType.PRAISE, ReviewType.COMPLAINT, ReviewType.INQUIRY);
 
     private static final Map<String, Object> SCHEMA = object(props(
@@ -123,7 +124,7 @@ public class ReplyGenerationService {
                             + "). 시작 문장, 짚는 내용, 마무리 표현을 바꿀 것");
                 }
                 problems.addAll(own);
-                if (isSafe(draft.text())) {
+                if (isSafe(draft.text(), ctx)) {
                     double score = own.size() * 10 + (draft.maxSimilarity() == null ? 0 : draft.maxSimilarity());
                     if (!bestScore.containsKey(tone) || score < bestScore.get(tone)) {
                         bestScore.put(tone, score);
@@ -147,8 +148,10 @@ public class ReplyGenerationService {
         return new Result(best, attempt - 1);
     }
 
-    static boolean isSafe(String text) {
-        return !PROMISE.matcher(text).find() && !MASK.matcher(text).find();
+    /** 끝까지 어기면 초안에서 빼는 규칙: 보상 약속, 가림 표시, AI·프롬프트 표현이나 리뷰 속 지시문이 시킨 문구 */
+    static boolean isSafe(String text, Context ctx) {
+        return !PROMISE.matcher(text).find() && !MASK.matcher(text).find()
+                && UntrustedText.outputProblem(text, ctx.maskedContent()) == null;
     }
 
     /** 3단: 초안을 임베딩해 이전 답글과의 최대 유사도를 붙인다. 임베딩 실패 시 비교 없이 진행 */
@@ -209,6 +212,10 @@ public class ReplyGenerationService {
         }
         if (MASK.matcher(text).find()) {
             problems.add(name + ": 개인정보 가림 표시를 그대로 씀");
+        }
+        String injected = UntrustedText.outputProblem(text, ctx.maskedContent());
+        if (injected != null) {
+            problems.add(name + ": " + injected);
         }
         if (!ctx.keywords().isEmpty() && !mentionsKeyword(text, ctx.keywords())) {
             problems.add(name + ": 리뷰 키워드(" + String.join(", ", ctx.keywords()) + ")를 언급하지 않음");
@@ -281,7 +288,8 @@ public class ReplyGenerationService {
         sb.append("- 유형: ").append(ctx.type().name()).append('\n');
         sb.append("- 감정: ").append(ctx.sentiment() == null ? "알 수 없음" : ctx.sentiment().name()).append('\n');
         sb.append("- 키워드: ").append(ctx.keywords().isEmpty() ? "없음" : String.join(", ", ctx.keywords())).append('\n');
-        sb.append("- 본문: ").append(ctx.maskedContent());
+        sb.append("- 본문:\n").append(UntrustedText.wrap(ctx.maskedContent()))
+                .append(UntrustedText.injectionNotice(ctx.maskedContent()));
         if (!ctx.pastReplies().isEmpty()) {
             sb.append("\n[최근 답글 - 시작·마무리 표현 반복 금지]");
             for (String r : ctx.pastReplies().stream().limit(PROMPT_PAST_REPLY_COUNT).map(PastReply::text).toList()) {

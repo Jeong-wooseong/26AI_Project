@@ -295,6 +295,7 @@ function CompletedRow({ no, review: r, onUpdated, toast }) {
           <span>{TYPE_LABEL[r.type]}</span>
           {r.writtenAt && <span>작성일 {r.writtenAt}</span>}
           {r.similarCount > 0 && <SimilarNote count={r.similarCount} />}
+          {r.injectionSuspected && <InjectionNote />}
         </p>
         {reply && <FinalReply reply={reply} onSave={save} toast={toast} />}
       </div>
@@ -399,6 +400,7 @@ function Ticket({ no, review: r, onUpdated, toast }) {
             <span>확신도 {Math.round(r.confidence * 100)}%</span>
           )}
           {r.similarCount > 0 && <SimilarNote count={r.similarCount} />}
+          {r.injectionSuspected && <InjectionNote />}
         </p>
       </div>
 
@@ -441,6 +443,15 @@ function SimilarNote({ count }) {
   return (
     <span className="similar-note" title="최근 7일 안에 내용이 비슷한 리뷰입니다. 답글 초안은 그 리뷰의 답글과 겹치지 않게 만듭니다.">
       비슷한 리뷰 {count}건
+    </span>
+  );
+}
+
+/** 리뷰 본문에 AI 에게 보내는 지시문으로 보이는 문장이 있을 때. 분류·답글 생성은 그 문장을 따르지 않는다 */
+function InjectionNote() {
+  return (
+    <span className="similar-note" title="리뷰에 AI 답글 생성기를 겨냥한 지시문으로 보이는 문장이 있습니다. 답글은 그 문장을 따르지 않고 별점과 리뷰 내용에만 답합니다.">
+      지시문 포함 리뷰
     </span>
   );
 }

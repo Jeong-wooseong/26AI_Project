@@ -6,6 +6,7 @@ import com.replyboss.ai.LlmException;
 import com.replyboss.ai.LlmRequest;
 import com.replyboss.ai.OpenAiProperties;
 import com.replyboss.ai.PromptTemplates;
+import com.replyboss.ai.UntrustedText;
 import com.replyboss.common.ApiException;
 import com.replyboss.common.JsonText;
 import com.replyboss.reply.Reply;
@@ -62,7 +63,7 @@ import static com.replyboss.ai.Schemas.string;
 public class ReportService {
 
     private static final Logger log = LoggerFactory.getLogger(ReportService.class);
-    static final String PROMPT = "weekly_report_v1";
+    static final String PROMPT = "weekly_report_v2";
     static final int TOP_TOPICS = 5;
     static final int REPRESENTATIVES = 3;
 
@@ -123,11 +124,17 @@ public class ReportService {
         Set<String> allowed = allowedNumbers(stats);
         InsightText text = call(user);
         List<String> unknown = unknownNumbers(text, allowed);
-        if (!unknown.isEmpty()) {
+        if (!unknown.isEmpty() || hasMeta(text)) {
             log.info("주간 리포트 요약에 집계에 없는 숫자 {} → 다시 생성", unknown);
-            text = call(user + "\n\n[이전 답변의 문제 — 고쳐서 다시 작성]\n- 집계에 없는 숫자를 씀: "
-                    + String.join(", ", unknown) + ". [집계]의 숫자만 쓰거나 숫자 없이 쓸 것");
-            if (!unknownNumbers(text, allowed).isEmpty()) {
+            List<String> issues = new ArrayList<>();
+            if (!unknown.isEmpty()) {
+                issues.add("집계에 없는 숫자를 씀: " + String.join(", ", unknown) + ". [집계]의 숫자만 쓰거나 숫자 없이 쓸 것");
+            }
+            if (hasMeta(text)) {
+                issues.add("AI·프롬프트 관련 표현이 있음");
+            }
+            text = call(user + "\n\n[이전 답변의 문제 — 고쳐서 다시 작성]\n- " + String.join("\n- ", issues));
+            if (!unknownNumbers(text, allowed).isEmpty() || hasMeta(text)) {
                 throw new LlmException("집계와 맞지 않는 숫자가 있어 요약을 만들지 못했습니다", null, "LLM_INVALID");
             }
         }
@@ -309,7 +316,7 @@ public class ReportService {
         }
         for (RepresentativeReview rep : s.representatives()) {
             sb.append("\n- (별점 ").append(rep.rating()).append(", 주제 ").append(rep.topic() == null ? "없음" : rep.topic())
-                    .append(") ").append(rep.maskedContent());
+                    .append(")\n").append(UntrustedText.wrap(rep.maskedContent()));
         }
         return sb.toString();
     }
@@ -357,6 +364,11 @@ public class ReportService {
             allowed.add(String.valueOf(d.getYear()));
         }
         return allowed;
+    }
+
+    static boolean hasMeta(InsightText text) {
+        return UntrustedText.META.matcher(text.summary()).find()
+                || text.suggestions().stream().anyMatch(t -> UntrustedText.META.matcher(t).find());
     }
 
     static List<String> unknownNumbers(InsightText text, Set<String> allowed) {

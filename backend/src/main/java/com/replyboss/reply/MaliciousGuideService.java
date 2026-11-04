@@ -6,6 +6,7 @@ import com.replyboss.ai.LlmException;
 import com.replyboss.ai.LlmRequest;
 import com.replyboss.ai.OpenAiProperties;
 import com.replyboss.ai.PromptTemplates;
+import com.replyboss.ai.UntrustedText;
 import com.replyboss.store.ToneProfile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +32,7 @@ import static com.replyboss.ai.Schemas.stringEnum;
 public class MaliciousGuideService {
 
     private static final Logger log = LoggerFactory.getLogger(MaliciousGuideService.class);
-    static final String PROMPT = "malicious_guide_v1";
+    static final String PROMPT = "malicious_guide_v2";
 
     private static final Map<String, Object> SCHEMA = object(props(
             "strategy", stringEnum(Arrays.stream(GuideStrategy.values()).map(Enum::name).toList()),
@@ -64,11 +65,11 @@ public class MaliciousGuideService {
     public Guide generate(Context ctx) {
         String user = userMessage(ctx);
         Guide guide = call(user, ctx.chosen());
-        List<String> problems = problems(guide.reply());
+        List<String> problems = problems(guide.reply(), ctx.maskedContent());
         if (!problems.isEmpty()) {
             log.info("악성 리뷰 가이드 답글 규칙 위반으로 다시 생성: {}", problems);
             guide = call(user + "\n\n[이전 답글의 문제 — 고쳐서 다시 작성]\n- " + String.join("\n- ", problems), ctx.chosen());
-            if (!problems(guide.reply()).isEmpty()) {
+            if (!problems(guide.reply(), ctx.maskedContent()).isEmpty()) {
                 throw new LlmException("안전 규칙을 지키는 대응 답글을 만들지 못했습니다", null, "LLM_INVALID");
             }
         }
@@ -102,7 +103,7 @@ public class MaliciousGuideService {
         return new Guide(strategy, reason, checklist, reply.length() > 2000 ? reply.substring(0, 2000) : reply);
     }
 
-    static List<String> problems(String reply) {
+    static List<String> problems(String reply, String reviewText) {
         List<String> problems = new ArrayList<>();
         if (ReplyGenerationService.PROMISE.matcher(reply).find()) {
             problems.add("정하지 않은 보상·할인 약속 표현이 있음");
@@ -112,6 +113,10 @@ public class MaliciousGuideService {
         }
         if (THREAT.matcher(reply).find()) {
             problems.add("고소·신고 같은 위협성 표현이 있음");
+        }
+        String injected = UntrustedText.outputProblem(reply, reviewText);
+        if (injected != null) {
+            problems.add(injected);
         }
         return problems;
     }
@@ -126,7 +131,8 @@ public class MaliciousGuideService {
         sb.append("[리뷰]\n");
         sb.append("- 별점: ").append(ctx.rating()).append('\n');
         sb.append("- 키워드: ").append(ctx.keywords().isEmpty() ? "없음" : String.join(", ", ctx.keywords())).append('\n');
-        sb.append("- 본문: ").append(ctx.maskedContent());
+        sb.append("- 본문:\n").append(UntrustedText.wrap(ctx.maskedContent()))
+                .append(UntrustedText.injectionNotice(ctx.maskedContent()));
         return sb.toString();
     }
 }
