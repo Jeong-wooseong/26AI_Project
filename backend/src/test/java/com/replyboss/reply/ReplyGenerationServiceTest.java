@@ -113,7 +113,7 @@ class ReplyGenerationServiceTest {
         assertThat(ReplyGenerationService.isSafe(ok, low)).isTrue();
         assertThat(ReplyGenerationService.problemsOf(ReplyTone.FRIENDLY, ok, low)).isEmpty();
         // 아쉬운 점을 묻지 않으면 다시 생성을 요청한다 (낮은 별점 + 칭찬일 때만)
-        String noAsk = "라떼를 맛있게 드셨다니 기뻐요. 남겨주신 한마디가 힘이 됩니다. 다음 주문도 정성껏 준비할게요.";
+        String noAsk = "라떼를 맛있게 드셨다니 기뻐요. 남겨주신 한마디가 힘이 돼요. 다음 주문도 정성껏 준비할게요.";
         assertThat(ReplyGenerationService.problemsOf(ReplyTone.FRIENDLY, noAsk, low)).anyMatch(p -> p.contains("아쉬운 점"));
         var high = new ReplyGenerationService.Context("달빛카페", "카페", null, ctx.tone(), 5, ReviewType.PRAISE,
                 Sentiment.POSITIVE, List.of("라떼"), "라떼 맛있어요", List.of());
