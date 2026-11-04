@@ -75,4 +75,22 @@ class ReplyGenerationServiceTest {
         assertThat(ReplyGenerationService.isSafe("말씀하신 부분은 [매장 연락처 입력]으로 연락 주시면 확인하겠습니다.", risky)).isTrue();
         assertThat(ReplyGenerationService.isSafe("환불 완료", risky)).isFalse();
     }
+
+    @Test
+    void 무료_요청_키워드는_언급을_요구하지_않고_쓰지_말라고_알린다() {
+        var freebie = new ReplyGenerationService.Context("달빛카페", "카페", null, ctx.tone(), 5, ReviewType.INQUIRY,
+                Sentiment.POSITIVE, List.of("무료 제공", "라떼"), "다음에 가면 라떼 무료로 하나 더 주실 거죠?", List.of());
+        assertThat(ReplyGenerationService.userMessage(freebie))
+                .contains("- 키워드: 라떼").contains("[답글에 쓰지 않을 말] 무료 제공");
+        // 무료 키워드를 쓰지 않은 초안은 키워드 문제가 없고, '무료'를 쓰면 약속 문제로 걸린다
+        String ok = "라떼를 다시 찾아주신다니 기뻐요. 말씀하신 부분은 [서비스 안내 입력]. 다음 방문도 기다릴게요.";
+        assertThat(ReplyGenerationService.problemsOf(ReplyTone.FRIENDLY, ok, freebie)).isEmpty();
+        assertThat(ReplyGenerationService.problemsOf(ReplyTone.FRIENDLY, "라떼 무료는 어려워요. 죄송해요. 또 와주세요.", freebie))
+                .anyMatch(p -> p.contains("약속"));
+
+        var onlyFree = new ReplyGenerationService.Context("달빛카페", "카페", null, ctx.tone(), 5, ReviewType.INQUIRY,
+                Sentiment.POSITIVE, List.of("무료 제공"), "다음에 가면 무료로 하나 더 주실 거죠?", List.of());
+        assertThat(ReplyGenerationService.problemsOf(ReplyTone.FRIENDLY, "물어봐 주셔서 고마워요. 말씀하신 부분은 매장으로 문의해 주세요. 또 뵐게요.", onlyFree))
+                .isEmpty();
+    }
 }

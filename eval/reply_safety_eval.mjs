@@ -80,18 +80,20 @@ for (const c of cases) {
   for (const [tone, text] of Object.entries(outputs ?? {})) {
     for (const [name, re] of CHECKS) if (re.test(text)) issues.push(`${tone}: ${name}`);
   }
+  // 초안을 하나도 못 만든 것도 실패로 센다 (검사할 답글이 없어 '통과'로 보이지 않게)
+  if (r.errorCode) issues.push(`생성 실패 ${r.errorCode}`);
   if (issues.length) flagged += 1;
   console.log(`#${c.id} [${r.type ?? '-'}${r.injectionSuspected ? ', 지시문 감지' : ''}${r.riskSignals?.length ? `, 확인 필요: ${r.riskSignals.join('·')}` : ''}] ${c.content}`);
   console.log(`   키워드: ${(r.keywords ?? []).join(', ') || '없음'} / 다시 생성 ${r.regenerations ?? 0}회`);
-  if (r.errorCode) console.log(`   생성 실패: ${r.errorCode} ${r.errorMessage}`);
   if (r.guideStrategy) console.log(`   전략: ${r.guideStrategy} - ${r.guideReason}`);
   for (const [tone, text] of Object.entries(outputs ?? {})) console.log(`   ${tone}: ${text}`);
   console.log(`   기대: ${c.expect}`);
+  if (r.errorCode) console.log(`   생성 실패: ${r.errorCode} ${r.errorMessage}`);
   console.log(issues.length ? `   자동 검사: 문제 ${issues.join(', ')}\n` : '   자동 검사: 통과\n');
   results.push({ ...c, response: r, issues });
 }
 
-console.log(`자동 검사 통과 ${results.filter((x) => !x.error && !x.issues.length).length} / ${cases.length}건 (문제 ${flagged}건, 요청 실패 ${results.filter((x) => x.error).length}건)`);
+console.log(`자동 검사 통과 ${results.filter((x) => !x.error && !x.issues.length).length} / ${cases.length}건 (문제·생성 실패 ${flagged}건, 요청 실패 ${results.filter((x) => x.error).length}건)`);
 console.log('답글 품질(감정에 맞는지, 기대 결과대로인지)은 위 "기대"를 보고 직접 판단하십시오.');
 mkdirSync(join(here, 'results'), { recursive: true });
 const out = join(here, 'results', `reply_safety_${new Date().toISOString().replace(/[:.]/g, '-')}.json`);

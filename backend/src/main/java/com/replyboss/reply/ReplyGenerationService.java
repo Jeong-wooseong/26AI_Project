@@ -39,7 +39,7 @@ public class ReplyGenerationService {
 
     private static final Logger log = LoggerFactory.getLogger(ReplyGenerationService.class);
 
-    static final String PROMPT = "reply_generate_v5";
+    static final String PROMPT = "reply_generate_v6";
     static final List<ReviewType> TARGET_TYPES = List.of(ReviewType.PRAISE, ReviewType.COMPLAINT, ReviewType.INQUIRY);
 
     private static final Map<String, Object> SCHEMA = object(props(
@@ -218,8 +218,9 @@ public class ReplyGenerationService {
         if (injected != null) {
             problems.add(name + ": " + injected);
         }
-        if (!ctx.keywords().isEmpty() && !mentionsKeyword(text, ctx.keywords())) {
-            problems.add(name + ": 리뷰 키워드(" + String.join(", ", ctx.keywords()) + ")를 언급하지 않음");
+        List<String> required = requiredKeywords(ctx.keywords());
+        if (!required.isEmpty() && !mentionsKeyword(text, required)) {
+            problems.add(name + ": 리뷰 키워드(" + String.join(", ", required) + ")를 언급하지 않음");
         }
         int[] range = sentenceRange(ctx.tone(), tone);
         int count = countSentences(text);
@@ -227,6 +228,19 @@ public class ReplyGenerationService {
             problems.add(name + ": " + count + "문장으로 작성됨 (" + range[0] + "~" + range[1] + "문장으로 맞출 것)");
         }
         return problems;
+    }
+
+    /**
+     * 답글에 꼭 언급할 키워드. "무료 제공"처럼 보상·할인을 뜻하는 키워드는 언급하면 약속 규칙(PROMISE)에 걸리므로 뺀다.
+     * (두 규칙이 서로 부딪혀 초안을 하나도 만들지 못하는 것을 막는다)
+     */
+    static List<String> requiredKeywords(List<String> keywords) {
+        return keywords.stream().filter(k -> !PROMISE.matcher(k).find()).toList();
+    }
+
+    /** 약속 표현이라 답글에 쓰지 않을 키워드 */
+    static List<String> avoidKeywords(List<String> keywords) {
+        return keywords.stream().filter(k -> PROMISE.matcher(k).find()).toList();
     }
 
     /** "배달 지연" 같은 키워드는 낱말 하나만 나와도 언급한 것으로 본다 ("배달이 늦어" 등) */
@@ -288,7 +302,13 @@ public class ReplyGenerationService {
         sb.append("- 별점: ").append(ctx.rating()).append('\n');
         sb.append("- 유형: ").append(ctx.type().name()).append('\n');
         sb.append("- 감정: ").append(ctx.sentiment() == null ? "알 수 없음" : ctx.sentiment().name()).append('\n');
-        sb.append("- 키워드: ").append(ctx.keywords().isEmpty() ? "없음" : String.join(", ", ctx.keywords())).append('\n');
+        List<String> required = requiredKeywords(ctx.keywords());
+        sb.append("- 키워드: ").append(required.isEmpty() ? "없음" : String.join(", ", required)).append('\n');
+        List<String> avoid = avoidKeywords(ctx.keywords());
+        if (!avoid.isEmpty()) {
+            sb.append("- [답글에 쓰지 않을 말] ").append(String.join(", ", avoid))
+                    .append(" (보상·할인 관련 요청이므로 단어를 쓰지 말고 \"말씀하신 부분\"처럼 표현)\n");
+        }
         sb.append("- 본문:\n").append(UntrustedText.wrap(ctx.maskedContent()))
                 .append(UntrustedText.injectionNotice(ctx.maskedContent()))
                 .append(RiskSignals.notice(ctx.maskedContent()));
