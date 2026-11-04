@@ -41,7 +41,7 @@ class ReplyGenerationServiceTest {
         assertThat(msg).contains("해요체").contains("😊").contains("3~4문장").contains("보답할게요")
                 .contains("오늘도 좋은 하루 되세요!").contains("COMPLAINT").contains("배달 지연").contains("[전화번호]");
         assertThat(msg).contains("<review>\n배달이 너무 늦었어요 [전화번호]\n</review>").doesNotContain("[주의]");
-        assertThat(msg).contains("[확인된 매장 정보] 없음").contains("감정: NEGATIVE").doesNotContain("[최근 답글");
+        assertThat(msg).contains("[확인된 매장 정보] 없음").contains("감정(본문 기준): NEGATIVE").doesNotContain("[최근 답글").doesNotContain("별점과 본문:");
         assertThat(msg).contains("[작성 분량]").contains("polite: 3~4문장").contains("friendly: 3~4문장")
                 .contains("concise: 1~2문장");
     }
@@ -92,5 +92,25 @@ class ReplyGenerationServiceTest {
                 Sentiment.POSITIVE, List.of("무료 제공"), "다음에 가면 무료로 하나 더 주실 거죠?", List.of());
         assertThat(ReplyGenerationService.problemsOf(ReplyTone.FRIENDLY, "물어봐 주셔서 고마워요. 말씀하신 부분은 매장으로 문의해 주세요. 또 뵐게요.", onlyFree))
                 .isEmpty();
+    }
+
+    @Test
+    void 별점과_본문이_반대면_알리고_별점_수정_부탁이나_추궁은_뺀다() {
+        assertThat(RatingMismatch.of(5, Sentiment.NEGATIVE)).isEqualTo(RatingMismatch.HIGH_RATING_NEGATIVE);
+        assertThat(RatingMismatch.of(1, Sentiment.POSITIVE)).isEqualTo(RatingMismatch.LOW_RATING_POSITIVE);
+        assertThat(RatingMismatch.of(3, Sentiment.POSITIVE)).isNull();
+        assertThat(RatingMismatch.of(5, Sentiment.NEUTRAL)).isNull();
+
+        var low = new ReplyGenerationService.Context("달빛카페", "카페", null, ctx.tone(), 1, ReviewType.PRAISE,
+                Sentiment.POSITIVE, List.of("라떼"), "라떼 정말 맛있었어요! 다음에도 주문할게요.", List.of());
+        assertThat(ReplyGenerationService.userMessage(low)).contains("- 별점과 본문: 별점은 낮은데(1점) 본문은 긍정적");
+
+        assertThat(ReplyGenerationService.isSafe("라떼 칭찬 감사해요. 별점도 수정해 주시면 힘이 될 거예요.", low)).isFalse();
+        assertThat(ReplyGenerationService.isSafe("라떼를 즐겨주셔서 고마워요. 그런데 왜 1점을 주셨나요?", low)).isFalse();
+        assertThat(ReplyGenerationService.problemsOf(ReplyTone.FRIENDLY, "혹시 1점 주신 이유가 궁금해요. 라떼 고마워요. 또 와요.", low))
+                .anyMatch(p -> p.contains("별점"));
+        String ok = "라떼를 맛있게 드셨다니 기뻐요. 혹시 아쉬웠던 점이 있었다면 편하게 알려 주세요. 다음 주문도 정성껏 준비할게요.";
+        assertThat(ReplyGenerationService.isSafe(ok, low)).isTrue();
+        assertThat(ReplyGenerationService.problemsOf(ReplyTone.FRIENDLY, ok, low)).isEmpty();
     }
 }

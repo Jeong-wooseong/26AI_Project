@@ -296,6 +296,13 @@ function CompletedRow({ no, review: r, onUpdated, toast }) {
           {r.writtenAt && <span>작성일 {r.writtenAt}</span>}
           {r.similarCount > 0 && <SimilarNote count={r.similarCount} />}
           {r.injectionSuspected && <InjectionNote />}
+          {r.ratingMismatch && (
+            <span className="similar-note" title={r.ratingMismatch === 'HIGH_RATING_NEGATIVE'
+              ? '별점은 높지만 본문에 불만이 있습니다. 답글은 본문의 불만을 중심으로 만듭니다.'
+              : '별점은 낮지만 본문은 긍정적입니다. 답글은 칭찬에 감사하고 아쉬운 점을 부드럽게 묻습니다.'}>
+              별점과 내용이 다름
+            </span>
+          )}
           {r.riskSignals?.length > 0 && (
             <span className="risk-note" title="원인 인정이나 환불·보상 약속 없이 매장 연락을 안내하는 초안을 만듭니다. 답글을 쓰기 전에 주문 내역과 상황을 직접 확인하십시오.">
               사장님 확인 필요: {r.riskSignals.join(', ')}
@@ -406,6 +413,13 @@ function Ticket({ no, review: r, onUpdated, toast }) {
           )}
           {r.similarCount > 0 && <SimilarNote count={r.similarCount} />}
           {r.injectionSuspected && <InjectionNote />}
+          {r.ratingMismatch && (
+            <span className="similar-note" title={r.ratingMismatch === 'HIGH_RATING_NEGATIVE'
+              ? '별점은 높지만 본문에 불만이 있습니다. 답글은 본문의 불만을 중심으로 만듭니다.'
+              : '별점은 낮지만 본문은 긍정적입니다. 답글은 칭찬에 감사하고 아쉬운 점을 부드럽게 묻습니다.'}>
+              별점과 내용이 다름
+            </span>
+          )}
           {r.riskSignals?.length > 0 && (
             <span className="risk-note" title="원인 인정이나 환불·보상 약속 없이 매장 연락을 안내하는 초안을 만듭니다. 답글을 쓰기 전에 주문 내역과 상황을 직접 확인하십시오.">
               사장님 확인 필요: {r.riskSignals.join(', ')}

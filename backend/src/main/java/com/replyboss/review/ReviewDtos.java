@@ -4,6 +4,7 @@ import com.replyboss.ai.RiskSignals;
 import com.replyboss.ai.UntrustedText;
 import com.replyboss.common.JsonText;
 import com.replyboss.reply.GuideStrategy;
+import com.replyboss.reply.RatingMismatch;
 import com.replyboss.reply.Reply;
 import com.replyboss.reply.ReplyTone;
 import jakarta.validation.Valid;
@@ -97,6 +98,8 @@ public final class ReviewDtos {
             boolean injectionSuspected,
             /** 사장님 확인이 필요한 신호 (건강·위생, 환불·보상, 법적 대응) */
             List<String> riskSignals,
+            /** 별점과 본문 감정이 반대인 경우 HIGH_RATING_NEGATIVE | LOW_RATING_POSITIVE (아니면 null) */
+            RatingMismatch ratingMismatch,
             List<ReplyResponse> replies
     ) {
         public static ReviewResponse from(Review review, List<Reply> replies) {
@@ -126,6 +129,7 @@ public final class ReviewDtos {
                     similarCount,
                     UntrustedText.looksLikeInjection(review.getMaskedContent()),
                     RiskSignals.of(review.getMaskedContent()),
+                    review.hasContent() ? RatingMismatch.of(review.getRating(), review.getSentiment()) : null,
                     replies.stream().map(ReplyResponse::from).toList()
             );
         }

@@ -39,7 +39,7 @@ public class ReplyGenerationService {
 
     private static final Logger log = LoggerFactory.getLogger(ReplyGenerationService.class);
 
-    static final String PROMPT = "reply_generate_v6";
+    static final String PROMPT = "reply_generate_v7";
     static final List<ReviewType> TARGET_TYPES = List.of(ReviewType.PRAISE, ReviewType.COMPLAINT, ReviewType.INQUIRY);
 
     private static final Map<String, Object> SCHEMA = object(props(
@@ -52,6 +52,10 @@ public class ReplyGenerationService {
 
     /** 사장님이 정하지 않은 보상 약속으로 볼 표현 */
     static final Pattern PROMISE = Pattern.compile("환불|할인|쿠폰|무료|보상|적립금|서비스로\\s*(드리|챙겨)|서비스\\s*(드릴|드리겠|챙겨)");
+    /** 별점 수정·상향 부탁이나 별점 이유 추궁 (공개 답글에 쓰면 안 됨) */
+    static final Pattern RATING_PRESSURE = Pattern.compile(
+            "(별점|평점)[^.!?\\n]{0,15}(수정|올려|바꿔|고쳐|변경|다시\\s*(주|남겨|매겨))"
+                    + "|왜[^.!?\\n]{0,12}(별점|평점|\\d\\s*점)|(별점|평점|\\d\\s*점)[^.!?\\n]{0,10}(주신|남기신)\\s*(이유|까닭)");
     /** 개인정보 가림 표시 */
     static final Pattern MASK = Pattern.compile("\\[(전화번호|이메일|주소|주문번호|번호)\\]");
     /** 문장 경계: 마침표·물음표·느낌표·물결·말줄임표·이모지 뒤의 공백, 또는 줄바꿈 */
@@ -151,7 +155,7 @@ public class ReplyGenerationService {
 
     /** 끝까지 어기면 초안에서 빼는 규칙: 보상 약속, 가림 표시, AI·프롬프트 표현이나 리뷰 속 지시문이 시킨 문구 */
     static boolean isSafe(String text, Context ctx) {
-        return !PROMISE.matcher(text).find() && !MASK.matcher(text).find()
+        return !PROMISE.matcher(text).find() && !MASK.matcher(text).find() && !RATING_PRESSURE.matcher(text).find()
                 && UntrustedText.outputProblem(text, ctx.maskedContent()) == null;
     }
 
@@ -213,6 +217,9 @@ public class ReplyGenerationService {
         }
         if (MASK.matcher(text).find()) {
             problems.add(name + ": 개인정보 가림 표시를 그대로 씀");
+        }
+        if (RATING_PRESSURE.matcher(text).find()) {
+            problems.add(name + ": 별점 이유를 묻거나 별점 수정을 부탁함");
         }
         String injected = UntrustedText.outputProblem(text, ctx.maskedContent());
         if (injected != null) {
@@ -301,7 +308,12 @@ public class ReplyGenerationService {
         sb.append("[리뷰]\n");
         sb.append("- 별점: ").append(ctx.rating()).append('\n');
         sb.append("- 유형: ").append(ctx.type().name()).append('\n');
-        sb.append("- 감정: ").append(ctx.sentiment() == null ? "알 수 없음" : ctx.sentiment().name()).append('\n');
+        sb.append("- 감정(본문 기준): ").append(ctx.sentiment() == null ? "알 수 없음" : ctx.sentiment().name()).append('\n');
+        RatingMismatch mismatch = RatingMismatch.of(ctx.rating(), ctx.sentiment());
+        if (mismatch != null) {
+            sb.append("- 별점과 본문: ").append(mismatch.description(ctx.rating()))
+                    .append(" → [별점과 본문이 다를 때] 규칙을 따른다\n");
+        }
         List<String> required = requiredKeywords(ctx.keywords());
         sb.append("- 키워드: ").append(required.isEmpty() ? "없음" : String.join(", ", required)).append('\n');
         List<String> avoid = avoidKeywords(ctx.keywords());

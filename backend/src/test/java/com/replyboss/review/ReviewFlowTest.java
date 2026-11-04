@@ -311,7 +311,7 @@ class ReviewFlowTest {
         verify(llmClient, times(2)).generateJson(captor.capture());
         String user = captor.getAllValues().get(1).user();
         assertThat(user).contains("[확인된 매장 정보] 주문 후 바로 굽습니다.")
-                .contains("감정: POSITIVE")
+                .contains("감정(본문 기준): POSITIVE")
                 .contains("[최근 답글").contains("치즈볼을 맛있게 드셔서 기쁩니다.");
     }
 
