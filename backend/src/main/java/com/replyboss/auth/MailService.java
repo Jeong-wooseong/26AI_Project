@@ -62,7 +62,12 @@ public class MailService {
             s.setHost(settings.host());
             s.setPort(settings.port() > 0 ? settings.port() : 587);
             s.setUsername(settings.username());
-            s.setPassword(settings.password());
+            // Gmail 앱 비밀번호는 화면에 'abcd efgh ijkl mnop' 처럼 띄어 보이므로 공백을 지운다
+            String password = settings.password();
+            if (settings.host() != null && settings.host().contains("gmail")) {
+                password = password.replaceAll("\\s+", "");
+            }
+            s.setPassword(password);
             s.setDefaultEncoding("UTF-8");
             Properties p = s.getJavaMailProperties();
             p.put("mail.smtp.auth", "true");
