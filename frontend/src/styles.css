@@ -723,7 +723,10 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .usermenu-pop a:hover, .usermenu-pop button:hover { background: var(--bg); }
 
 /* 로그인·회원가입 */
-.auth { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s5); padding: var(--s10) var(--s4); }
+.auth { min-height: 100vh; display: flex; align-items: center; justify-content: center; gap: var(--s12); padding: var(--s10) var(--s4); }
+.auth-col { width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: var(--s5); }
+.auth-hero { display: flex; flex-direction: column; align-items: center; gap: var(--s4); }
+.auth-tagline { font-size: var(--fs-section); line-height: var(--lh-section); font-weight: 600; color: var(--navy); text-align: center; }
 .auth-brand { font-size: 24px; font-weight: 700; letter-spacing: -0.025em; color: var(--navy); }
 .auth-card {
   width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: var(--s5); padding: var(--s8);
@@ -905,4 +908,28 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   .helpchat { right: 16px; bottom: 16px; }
   .helpchat-panel { width: calc(100vw - 32px); }
   .draft-card .feedback { grid-column: 1 / -1; }
+}
+
+/* 캐릭터 */
+.mascot { display: block; flex: none; user-select: none; -webkit-user-drag: none; }
+.empty-mascot { margin: 0 auto var(--s2); }
+.dt-empty .empty-mascot { margin-bottom: var(--s3); }
+.gen-loader { flex-direction: row; align-items: center; gap: var(--s4); }
+.gen-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.gen-mascot { animation: mascot-bob 1.6s ease-in-out infinite; }
+@keyframes mascot-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.helpchat-head { align-items: center; gap: var(--s3); }
+.helpchat-title { flex: 1; min-width: 0; }
+.helpchat-avatar { margin: -6px 0; }
+
+@media (max-width: 860px) {
+  .auth { flex-direction: column; justify-content: flex-start; gap: var(--s4); padding-top: var(--s6); }
+  .auth-hero .mascot { height: 112px !important; }
+  .auth-tagline { display: none; }
+}
+@media (max-width: 720px) {
+  .gen-mascot { height: 48px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-mascot { animation: none; }
 }

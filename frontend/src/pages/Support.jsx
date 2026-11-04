@@ -247,7 +247,7 @@ function MyInquiries() {
   if (!items) return <EmptyState loading description="불러오는 중…" />;
   if (items.length === 0) {
     return (
-      <EmptyState title="남긴 문의가 없습니다" description="궁금한 점이나 오류가 있으면 문의를 남겨 주십시오."
+      <EmptyState title="남긴 문의가 없습니다" description="궁금한 점이나 오류가 있으면 문의를 남겨 주십시오." pose="smile"
                   action={<PrimaryButton icon="send" onClick={() => { window.location.hash = 'support/new'; }}>문의하기</PrimaryButton>} />
     );
   }

@@ -3,6 +3,7 @@
 import { forwardRef, useId } from 'react';
 import Icon from './Icon.jsx';
 import Spinner from './Spinner.jsx';
+import Mascot from './Mascot.jsx';
 
 const cls = (...names) => names.filter(Boolean).join(' ');
 
@@ -269,9 +270,11 @@ export function DataTableRow({ className, children, ...rest }) {
 }
 
 /** 비어 있음·불러오는 중·오류 같은 안내 카드 */
-export function EmptyState({ title, description, loading, action }) {
+/** pose: 캐릭터 표정·동작 (Mascot 참고). 없으면 캐릭터 없이 */
+export function EmptyState({ title, description, loading, action, pose }) {
   return (
     <div className="section empty" role={loading ? 'status' : undefined}>
+      {pose && <Mascot pose={pose} size={112} className="empty-mascot" />}
       {loading && <Spinner />}
       {title && <h2>{title}</h2>}
       {description && <p>{description}</p>}

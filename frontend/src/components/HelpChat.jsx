@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { support } from '../api.js';
 import Icon from './Icon.jsx';
 import Spinner from './Spinner.jsx';
+import Mascot from './Mascot.jsx';
 import { supportLink } from '../pages/Support.jsx';
 
 const GREETING = {
@@ -70,7 +71,8 @@ export default function HelpChat() {
       {open && (
         <section className="helpchat-panel" role="dialog" aria-label="ReplyBoss 도우미">
           <header className="helpchat-head">
-            <div>
+            <Mascot pose="hello" size={44} className="helpchat-avatar" />
+            <div className="helpchat-title">
               <strong>ReplyBoss 도우미</strong>
               <p className="hint">자주 묻는 질문을 바탕으로 안내합니다</p>
             </div>

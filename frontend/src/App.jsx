@@ -163,6 +163,7 @@ export default function App() {
       <EmptyState
         title="서버에 연결할 수 없습니다"
         description={loadError}
+        pose="help"
         action={(
           <div className="end">
             <SecondaryButton tone="neutral" icon="retry" onClick={loadStore}>다시 불러오기</SecondaryButton>

@@ -252,7 +252,7 @@ function Insight({ report, state, onMake }) {
           <button type="button" className="text-btn" onClick={onMake}>다시 만들기</button>
         )}
       </div>
-      {loading && <ReplyGenerationLoader steps={INSIGHT_STEPS} note={INSIGHT_NOTE} />}
+      {loading && <ReplyGenerationLoader steps={INSIGHT_STEPS} note={INSIGHT_NOTE} pose="analyzing" />}
       {state.state === 'error' && (
         <div className="gen-error" role="alert">
           <p>{state.error.message}<span className="error-code">오류 코드 {state.error.code}</span></p>

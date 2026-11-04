@@ -11,6 +11,7 @@ import FinalReply from '../components/reply/FinalReply.jsx';
 import MaliciousGuidePanel from '../components/reply/MaliciousGuidePanel.jsx';
 import { DRAFT_TONES, DRAFT_TYPES, finalReplyOf, formatDateTime, statusOf, textOf } from '../components/reply/replyModel.js';
 import { prefersReducedMotion } from '../components/reply/ReplyTypingText.jsx';
+import Mascot from '../components/Mascot.jsx';
 
 const PAGE_SIZE = 10;
 // 작성 완료: 리뷰 원문과 최종 답글 중심 / 작성 대기·분류 실패: 분류 결과와 초안 작업
@@ -183,6 +184,7 @@ export default function ReviewList({ store, toast, go, initialTab }) {
         <EmptyState
           title={allTime ? '등록된 리뷰 없음' : isToday ? '오늘 등록된 리뷰 없음' : '해당 날짜의 리뷰 없음'}
           description="리뷰 입력 메뉴에서 리뷰를 등록하면 유형별로 분류됩니다."
+          pose="smile"
           action={<PrimaryButton icon="add" onClick={() => go('input')}>리뷰 등록</PrimaryButton>}
         />
       )}
@@ -249,6 +251,7 @@ function EmptyTab({ status, searching, waitCount, onShowWait }) {
   if (status === 'done') {
     return (
       <div className="dt-empty">
+        <Mascot pose="thinking" size={88} className="empty-mascot" />
         <p>작성 완료한 답글이 없습니다.</p>
         {waitCount > 0 && (
           <p className="dt-empty-sub">
@@ -259,7 +262,12 @@ function EmptyTab({ status, searching, waitCount, onShowWait }) {
       </div>
     );
   }
-  return <p className="dt-empty">{status === 'wait' ? '작성 대기 중인 리뷰가 없습니다.' : '분류에 실패한 리뷰가 없습니다.'}</p>;
+  return (
+    <div className="dt-empty">
+      <Mascot pose="done" size={88} className="empty-mascot" />
+      <p>{status === 'wait' ? '작성 대기 중인 리뷰가 없습니다. 모든 답글을 작성했어요.' : '분류에 실패한 리뷰가 없습니다.'}</p>
+    </div>
+  );
 }
 
 /** 작성 완료 행: 리뷰 원문 → 최종 답글. 초안은 보여주지 않는다. */
