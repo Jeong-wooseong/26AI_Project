@@ -64,12 +64,16 @@ public final class ReviewDtos {
             /** 악성 리뷰 가이드: APOLOGY | FACT | HOLD, 근거, 사장님이 확인할 것 */
             String strategy,
             String strategyReason,
-            List<String> checklist
+            List<String> checklist,
+            /** 사장님 피드백 UP | DOWN (없으면 null)과 고른 이유 */
+            String feedback,
+            List<String> feedbackReasons
     ) {
         public static ReplyResponse from(Reply reply) {
             return new ReplyResponse(reply.getId(), reply.getTone(), reply.getContent(),
                     reply.getEditedContent(), reply.isSelected(), reply.getMaxSimilarity(), reply.getRegenCount(),
-                    reply.getStrategy(), reply.getStrategyReason(), JsonText.readStringList(reply.getStrategyChecklist()));
+                    reply.getStrategy(), reply.getStrategyReason(), JsonText.readStringList(reply.getStrategyChecklist()),
+                    reply.getFeedback(), JsonText.readStringList(reply.getFeedbackReasons()));
         }
     }
 

@@ -1,5 +1,6 @@
 package com.replyboss.review;
 
+import com.replyboss.common.AccessGuard;
 import com.replyboss.review.ReviewDtos.CompleteReplyRequest;
 import com.replyboss.review.ReviewDtos.GuideRequest;
 import com.replyboss.review.ReviewDtos.DuplicateCheckRequest;
@@ -24,9 +25,12 @@ import java.util.List;
 @RestController
 public class ReviewController {
 
+    private final AccessGuard guard;
+
     private final ReviewService reviewService;
 
-    public ReviewController(ReviewService reviewService) {
+    public ReviewController(ReviewService reviewService, AccessGuard guard) {
+        this.guard = guard;
         this.reviewService = reviewService;
     }
 
@@ -34,12 +38,14 @@ public class ReviewController {
     @PostMapping("/api/stores/{storeId}/reviews")
     @ResponseStatus(HttpStatus.CREATED)
     public List<ReviewResponse> create(@PathVariable Long storeId, @Valid @RequestBody ReviewBatchRequest request) {
+        guard.requireStore(storeId);
         return reviewService.createBatch(storeId, request);
     }
 
     /** 일괄 등록 전 중복 확인 (저장하지 않음) */
     @PostMapping("/api/stores/{storeId}/reviews/duplicate-check")
     public DuplicateCheckResponse duplicateCheck(@PathVariable Long storeId, @Valid @RequestBody DuplicateCheckRequest request) {
+        guard.requireStore(storeId);
         return new DuplicateCheckResponse(reviewService.findDuplicates(storeId, request));
     }
 
@@ -47,12 +53,14 @@ public class ReviewController {
     public List<ReviewResponse> list(@PathVariable Long storeId,
                                      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
                                      @RequestParam(required = false) ReviewType type) {
+        guard.requireStore(storeId);
         return reviewService.list(storeId, date, type);
     }
 
     /** 답글 초안 3종 생성 (다시 부르면 복사하지 않은 초안을 새로 바꿈) */
     @PostMapping("/api/reviews/{reviewId}/replies")
     public ReviewResponse generateReplies(@PathVariable Long reviewId) {
+        guard.requireReview(reviewId);
         return reviewService.generateReplies(reviewId);
     }
 
@@ -60,17 +68,20 @@ public class ReviewController {
     /** 작성 완료: 답글 하나를 최종 확정한다 (확정한 답글 수정에도 사용). 외부 플랫폼에는 게시하지 않는다. */
     @PutMapping("/api/reviews/{reviewId}/final-reply")
     public ReviewResponse completeReply(@PathVariable Long reviewId, @Valid @RequestBody CompleteReplyRequest request) {
+        guard.requireReview(reviewId);
         return reviewService.completeReply(reviewId, request);
     }
 
     /** 악성 리뷰 대응 가이드. body 의 strategy(APOLOGY|FACT|HOLD) 가 없으면 추천을 받는다 */
     @PostMapping("/api/reviews/{reviewId}/malicious-guide")
     public ReviewResponse maliciousGuide(@PathVariable Long reviewId, @RequestBody(required = false) GuideRequest request) {
+        guard.requireReview(reviewId);
         return reviewService.maliciousGuide(reviewId, request == null ? null : request.strategy());
     }
 
     @PostMapping("/api/reviews/{reviewId}/classify")
     public ReviewResponse reclassify(@PathVariable Long reviewId) {
+        guard.requireReview(reviewId);
         return reviewService.reclassify(reviewId);
     }
 }

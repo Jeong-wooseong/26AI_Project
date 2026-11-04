@@ -71,6 +71,20 @@ public class Reply {
     @Column(name = "strategy_reason", columnDefinition = "TEXT")
     private String strategyReason;
 
+    /** 사장님 피드백: UP(마음에 들어요) | DOWN(개선하고 싶어요). 답글 품질·프롬프트 개선에 쓴다 */
+    @Column(length = 10)
+    private String feedback;
+
+    /** DOWN 일 때 고른 이유 (JSON 배열) */
+    @Column(name = "feedback_reasons", columnDefinition = "TEXT")
+    private String feedbackReasons;
+
+    @Column(name = "feedback_comment", length = 300)
+    private String feedbackComment;
+
+    @Column(name = "feedback_at")
+    private LocalDateTime feedbackAt;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -134,6 +148,30 @@ public class Reply {
         this.strategy = strategy;
         this.strategyReason = reason;
         this.strategyChecklist = checklistJson;
+    }
+
+    /** 피드백 저장. value 가 null 이면 피드백을 지운다 */
+    public void recordFeedback(String value, String reasonsJson, String comment) {
+        this.feedback = value;
+        this.feedbackReasons = value == null ? null : reasonsJson;
+        this.feedbackComment = value == null ? null : comment;
+        this.feedbackAt = value == null ? null : LocalDateTime.now();
+    }
+
+    public String getFeedback() {
+        return feedback;
+    }
+
+    public String getFeedbackReasons() {
+        return feedbackReasons;
+    }
+
+    public String getFeedbackComment() {
+        return feedbackComment;
+    }
+
+    public LocalDateTime getFeedbackAt() {
+        return feedbackAt;
     }
 
     public String getEmbedding() {

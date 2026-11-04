@@ -1,5 +1,6 @@
 package com.replyboss.report;
 
+import com.replyboss.common.AccessGuard;
 import com.replyboss.report.ReportDtos.ReportResponse;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,9 +14,12 @@ import java.time.LocalDate;
 @RestController
 public class ReportController {
 
+    private final AccessGuard guard;
+
     private final ReportService reportService;
 
-    public ReportController(ReportService reportService) {
+    public ReportController(ReportService reportService, AccessGuard guard) {
+        this.guard = guard;
         this.reportService = reportService;
     }
 
@@ -23,6 +27,7 @@ public class ReportController {
     @GetMapping("/api/stores/{storeId}/reports")
     public ReportResponse report(@PathVariable Long storeId,
                                  @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate week) {
+        guard.requireStore(storeId);
         return reportService.report(storeId, week == null ? LocalDate.now() : week);
     }
 
@@ -30,6 +35,7 @@ public class ReportController {
     @PostMapping("/api/stores/{storeId}/reports/insight")
     public ReportResponse insight(@PathVariable Long storeId,
                                   @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate week) {
+        guard.requireStore(storeId);
         return reportService.generateInsight(storeId, week == null ? LocalDate.now() : week);
     }
 }

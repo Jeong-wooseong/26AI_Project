@@ -1,6 +1,10 @@
 package com.replyboss.store;
 
+import com.replyboss.auth.AppUser;
 import jakarta.persistence.Column;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -18,6 +22,11 @@ public class Store {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** 매장 주인 계정. 계정 기능 이전에 만든 매장은 null 이었다가 첫 가입자에게 넘어간다 */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private AppUser owner;
 
     @Column(nullable = false, length = 100)
     private String name;
@@ -70,6 +79,10 @@ public class Store {
     public void rename(String name, String category) {
         this.name = name;
         this.category = category;
+    }
+
+    public void assignOwner(AppUser owner) {
+        this.owner = owner;
     }
 
     public void describe(String info) {

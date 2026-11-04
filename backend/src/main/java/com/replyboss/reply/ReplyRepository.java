@@ -2,11 +2,13 @@ package com.replyboss.reply;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface ReplyRepository extends JpaRepository<Reply, Long> {
 
@@ -23,4 +25,15 @@ public interface ReplyRepository extends JpaRepository<Reply, Long> {
     /** 이 가게에서 최근에 쓴 템플릿 ID (같은 템플릿이 연달아 나오지 않게 하려고 사용) */
     @Query("select r.template.id from Reply r where r.review.store.id = :storeId and r.template is not null order by r.id desc")
     List<Long> findRecentTemplateIds(@Param("storeId") Long storeId, Pageable pageable);
+
+    /** 답글이 속한 매장의 주인 계정 ID */
+    @Query("select o.id from Reply r join r.review v join v.store s join s.owner o where r.id = :replyId")
+    Optional<Long> findOwnerId(@Param("replyId") Long replyId);
+
+    @Modifying
+    @Query("delete from Reply r where r.review.id in (select v.id from Review v where v.store.id in :storeIds)")
+    int deleteByStoreIds(@Param("storeIds") Collection<Long> storeIds);
+
+    /** 관리자 통계: 피드백이 있는 답글 */
+    List<Reply> findByFeedbackIsNotNull();
 }

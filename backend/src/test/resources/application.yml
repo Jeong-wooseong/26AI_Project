@@ -26,3 +26,16 @@ similarity:
   max-regenerations: 2
   compare-count: 30
   review-group-days: 7
+
+replyboss:
+  app-url: http://localhost:5173
+  remember-me-key: test-remember-key
+  secure-cookies: false
+  upload-dir: ./build/test-uploads
+  admin-emails: admin2@test.com
+  mail:
+    host: smtp.test
+    port: 587
+    username: test@test.com
+    password: test-password
+    from: test@test.com

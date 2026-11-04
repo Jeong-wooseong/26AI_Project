@@ -15,8 +15,37 @@ spring:
         jdbc:
           time_zone: Asia/Seoul
 
+  servlet:
+    multipart:
+      # 문의 첨부 이미지 5MB (요청 전체는 여유를 둠)
+      max-file-size: 5MB
+      max-request-size: 6MB
+
 server:
   port: 8080
+  servlet:
+    session:
+      timeout: 2h
+      cookie:
+        http-only: true
+        same-site: lax
+
+# 계정·고객 지원 (backend/.env 로 설정)
+replyboss:
+  # 인증·재설정 메일 링크에 쓰는 프론트엔드 주소
+  app-url: ${APP_URL:http://localhost:5173}
+  # '로그인 상태 유지' 쿠키 서명 키 (임의의 긴 값으로 바꿀 것)
+  remember-me-key: ${REMEMBER_ME_KEY:}
+  secure-cookies: ${SECURE_COOKIES:false}
+  upload-dir: ${UPLOAD_DIR:./data/uploads}
+  # 관리자로 만들 이메일 (쉼표 구분). 첫 가입자는 항상 관리자
+  admin-emails: ${ADMIN_EMAILS:}
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    from: ${MAIL_FROM:}
 
 openai:
   api-key: ${OPENAI_API_KEY:}

@@ -20,12 +20,17 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    // 로그인·회원가입 (세션, CSRF, 로그인 상태 유지)
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    // 이메일 인증·비밀번호 재설정 메일 (SMTP)
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
 
     runtimeOnly 'com.mysql:mysql-connector-j'
     // local 프로필(MySQL 없이 실행)과 테스트에서 쓰는 파일·메모리 DB
     runtimeOnly 'com.h2database:h2'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

@@ -1,5 +1,6 @@
 package com.replyboss.store;
 
+import com.replyboss.auth.AppUserRepository;
 import com.replyboss.common.ApiException;
 import com.replyboss.common.JsonText;
 import com.replyboss.store.StoreDtos.StoreRequest;
@@ -14,9 +15,25 @@ import java.util.List;
 public class StoreService {
 
     private final StoreRepository storeRepository;
+    private final AppUserRepository userRepository;
 
-    public StoreService(StoreRepository storeRepository) {
+    public StoreService(StoreRepository storeRepository, AppUserRepository userRepository) {
         this.storeRepository = storeRepository;
+        this.userRepository = userRepository;
+    }
+
+    /** 로그인한 사장님의 매장 등록 */
+    @Transactional
+    public StoreResponse create(StoreRequest request, Long ownerId) {
+        Store store = new Store(request.name().trim(), trimOrNull(request.category()), trimOrNull(request.info()));
+        store.assignOwner(userRepository.getReferenceById(ownerId));
+        return StoreResponse.from(storeRepository.save(store));
+    }
+
+    /** 이 사장님의 매장 목록 */
+    @Transactional(readOnly = true)
+    public List<StoreResponse> findAllOwned(Long ownerId) {
+        return storeRepository.findByOwner_IdOrderByIdAsc(ownerId).stream().map(StoreResponse::from).toList();
     }
 
     @Transactional
