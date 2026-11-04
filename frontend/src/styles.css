@@ -733,15 +733,11 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .usermenu-pop a:hover, .usermenu-pop button:hover { background: var(--bg); }
 
 /* 로그인·회원가입 */
-/* 폼은 화면 가운데, 캐릭터는 폼 왼쪽 칸에 (가운데 정렬을 흔들지 않게 3칸 격자) */
 .auth {
-  min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px) minmax(0, 1fr);
-  align-items: center; column-gap: var(--s10); padding: var(--s10) var(--s4);
-  background: radial-gradient(1200px 600px at 50% -10%, var(--primary-tint) 0%, transparent 60%), var(--bg);
+  min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: var(--s10) var(--s4);
+  background: radial-gradient(900px 480px at 50% 0%, var(--primary-tint) 0%, transparent 70%), var(--bg);
 }
-.auth-col { grid-column: 2; width: 100%; display: flex; flex-direction: column; align-items: center; gap: var(--s5); }
-.auth-hero { grid-column: 1; grid-row: 1; justify-self: end; display: flex; flex-direction: column; align-items: center; gap: var(--s3); }
-.auth-tagline { font-size: var(--fs-section); line-height: var(--lh-section); font-weight: 600; color: var(--navy); text-align: center; }
+.auth-col { width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: var(--s5); }
 .auth-brand .brand-name { font-size: 24px; }
 .auth-card {
   width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: var(--s5); padding: var(--s8);
@@ -939,11 +935,8 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .helpchat-title { flex: 1; min-width: 0; }
 .helpchat-avatar { margin: -6px 0; }
 
-@media (max-width: 860px) {
-  .auth { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: var(--s4); padding-top: var(--s6); }
-  .auth-col { max-width: 420px; }
-  .auth-hero .mascot { height: 112px !important; }
-  .auth-tagline { display: none; }
+@media (max-width: 720px) {
+  .auth { align-items: flex-start; padding-top: var(--s8); }
 }
 @media (max-width: 720px) {
   .gen-mascot { height: 48px !important; }
@@ -1073,6 +1066,24 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   .mode-card { padding: var(--s3); }
   .mode-card-icon { width: 32px; height: 32px; }
   .entry-table { --dt-cols: 28px minmax(0, 1fr) 32px; }
-  .auth-hero { display: none; }
   .entry-summary-text { display: none; }
+}
+
+/* 로고 캐릭터: 처음 뜰 때 한 번 폴짝, 마우스를 올리면 날개짓하듯 흔들림 */
+.brand-logo img { transform-origin: 50% 90%; animation: logo-hop 900ms cubic-bezier(.3, 1.4, .5, 1) 200ms 1 both; }
+.brand-logo:hover img, a:hover > .brand-logo img { animation: logo-wiggle 700ms ease-in-out 1; }
+@keyframes logo-hop {
+  0% { transform: translateY(6px) scale(.9); opacity: 0; }
+  50% { transform: translateY(-5px) scale(1.04); opacity: 1; }
+  75% { transform: translateY(0) scale(.98, 1.02); }
+  100% { transform: none; }
+}
+@keyframes logo-wiggle {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(-10deg) translateY(-2px); }
+  45% { transform: rotate(8deg) translateY(-3px); }
+  70% { transform: rotate(-4deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-logo img, .brand-logo:hover img { animation: none; }
 }

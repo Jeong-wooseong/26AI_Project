@@ -3,25 +3,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { auth } from '../api.js';
 import Icon from '../components/Icon.jsx';
-import Mascot, { BrandLogo } from '../components/Mascot.jsx';
+import { BrandLogo } from '../components/Mascot.jsx';
 import { Alert, FormInput, PrimaryButton, SecondaryButton } from '../components/ui.jsx';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const passwordProblem = (pw) =>
   pw.length < 8 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw) ? '8자 이상, 영문과 숫자를 모두 포함하십시오.' : null;
 
-/** pose: 왼쪽(모바일은 위)에 둘 캐릭터. null 이면 캐릭터 없이 */
-function AuthCard({ title, description, children, footer, pose = 'hero' }) {
+/** 로그인 계열 화면: 로고 · 제목 · 입력 폼만 화면 가운데에 */
+function AuthCard({ title, description, children, footer }) {
   return (
-    <div className={`auth ${pose ? 'has-mascot' : ''}`}>
-      {pose && (
-        <aside className="auth-hero">
-          <Mascot pose={pose} size={pose === 'hero' ? 240 : 180} />
-          <p className="auth-tagline">리뷰와 사장님을 잇는,<br />AI 답글 파트너</p>
-        </aside>
-      )}
+    <div className="auth">
       <div className="auth-col">
-        <BrandLogo size={40} className="auth-brand" />
+        <BrandLogo size={44} className="auth-brand" />
         <section className="auth-card">
           <div className="auth-head">
             <h1>{title}</h1>
@@ -148,7 +142,7 @@ export function SignupPage() {
 
   if (sentTo) {
     return (
-      <AuthCard pose="happy" title="인증 메일을 보냈습니다" description={`${sentTo} 메일함에서 인증 링크를 눌러 가입을 마치십시오.`}
+      <AuthCard title="인증 메일을 보냈습니다" description={`${sentTo} 메일함에서 인증 링크를 눌러 가입을 마치십시오.`}
                 footer={<a href="#login">로그인 화면으로</a>}>
         <ul className="auth-steps">
           <li>링크는 24시간 동안 유효합니다.</li>
@@ -228,9 +222,9 @@ export function VerifyPage({ token }) {
       .catch((e) => setState({ status: 'error', message: e.message }));
   }, [token]);
 
-  if (state.status === 'loading') return <AuthCard pose="analyzing" title="이메일 인증 중" description="잠시만 기다리십시오." />;
+  if (state.status === 'loading') return <AuthCard title="이메일 인증 중" description="잠시만 기다리십시오." />;
   return (
-    <AuthCard pose={state.status === 'done' ? 'done' : 'help'} title={state.status === 'done' ? '이메일 인증 완료' : '인증하지 못했습니다'} description={state.message}>
+    <AuthCard title={state.status === 'done' ? '이메일 인증 완료' : '인증하지 못했습니다'} description={state.message}>
       <PrimaryButton className="auth-submit" onClick={() => { window.location.hash = 'login'; }}>로그인하기</PrimaryButton>
     </AuthCard>
   );
@@ -260,7 +254,7 @@ export function ForgotPage() {
   }
 
   return (
-    <AuthCard pose="thinking" title="비밀번호 찾기" description="가입한 이메일로 비밀번호 재설정 링크를 보냅니다."
+    <AuthCard title="비밀번호 찾기" description="가입한 이메일로 비밀번호 재설정 링크를 보냅니다."
               footer={<a href="#login">로그인 화면으로</a>}>
       {done ? (
         <p className="notice notice-info"><Icon name="mail" size={16} />{done}</p>
@@ -305,13 +299,13 @@ export function ResetPage({ token }) {
 
   if (done) {
     return (
-      <AuthCard pose="done" title="비밀번호를 바꿨습니다" description="새 비밀번호로 로그인하십시오.">
+      <AuthCard title="비밀번호를 바꿨습니다" description="새 비밀번호로 로그인하십시오.">
         <PrimaryButton className="auth-submit" onClick={() => { window.location.hash = 'login'; }}>로그인하기</PrimaryButton>
       </AuthCard>
     );
   }
   return (
-    <AuthCard pose="smile" title="새 비밀번호 설정" description="링크는 30분 동안 한 번만 쓸 수 있습니다." footer={<a href="#login">로그인 화면으로</a>}>
+    <AuthCard title="새 비밀번호 설정" description="링크는 30분 동안 한 번만 쓸 수 있습니다." footer={<a href="#login">로그인 화면으로</a>}>
       <form className="auth-form" onSubmit={submit} noValidate>
         <FormInput label="새 비밀번호" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)}
                    error={errors.pw} hint="8자 이상, 영문과 숫자를 모두 포함" maxLength={64} />
@@ -345,7 +339,6 @@ export function LegalPage({ kind }) {
   const items = kind === 'terms' ? TERMS : PRIVACY;
   return (
     <AuthCard
-      pose={null}
       title={kind === 'terms' ? '서비스 이용약관' : '개인정보 처리방침'}
       description="수업 프로젝트용 초안입니다. 실제 서비스로 운영하려면 법률 검토가 필요합니다."
       footer={<a href="#signup">회원가입으로</a>}
