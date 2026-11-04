@@ -170,12 +170,22 @@ public class ReportService {
                         .thenComparing(TopicStat::topic))
                 .limit(TOP_TOPICS)
                 .toList();
+        List<TopicStat> resolved = before.entrySet().stream()
+                .filter(e -> !now.containsKey(e.getKey()))
+                .map(e -> TopicStat.of(e.getKey(), 0, e.getValue()))
+                .sorted(Comparator.comparingInt(TopicStat::previousCount).reversed().thenComparing(TopicStat::topic))
+                .limit(TOP_TOPICS)
+                .toList();
 
         return new WeeklyStats(weekStart, weekEnd, current.size(), previous.size(),
                 average(current), average(previous), typeCounts,
                 complaints.size(), previousComplaints.size(),
-                current.isEmpty() ? null : (int) Math.round(complaints.size() * 100.0 / current.size()),
-                topics, representatives(complaints, topics), replyStats(current));
+                rate(complaints.size(), current.size()), rate(previousComplaints.size(), previous.size()),
+                topics, resolved, representatives(complaints, topics), replyStats(current), replyStats(previous));
+    }
+
+    private static Integer rate(int part, int total) {
+        return total == 0 ? null : (int) Math.round(part * 100.0 / total);
     }
 
     private List<Review> inWeek(Long storeId, LocalDate weekStart) {

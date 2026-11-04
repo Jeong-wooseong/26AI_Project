@@ -258,6 +258,11 @@ class AccountAndSupportTest {
                         .content(json(Map.of("message", "인증 메일이 안 와요"))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.source").value("FAQ"))
                 .andExpect(jsonPath("$.faqIds[0]").value("mail"));
+        // AI 를 못 쓸 때도 최근 오류 코드(인터넷 끊김 등)가 있으면 그에 맞춰 안내한다
+        mvc.perform(post("/api/support/assistant").session(b).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("message", "답글이 안 만들어져요", "page", "reviews/wait", "lastErrorCode", "NETWORK"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.source").value("FAQ"))
+                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.containsString("인터넷")));
 
         org.mockito.Mockito.reset(llm);
         when(llm.generateJson(any())).thenReturn(mapper.readTree("""
@@ -268,6 +273,10 @@ class AccountAndSupportTest {
                                 List.of(Map.of("role", "user", "text", "안녕하세요"))))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.source").value("AI"))
                 .andExpect(jsonPath("$.faqIds.length()").value(1)).andExpect(jsonPath("$.suggestInquiry").value(false));
+        // 서비스 안내서와 사용자 상황을 함께 보낸다
+        ArgumentCaptor<com.replyboss.ai.LlmRequest> sent = ArgumentCaptor.forClass(com.replyboss.ai.LlmRequest.class);
+        verify(llm).generateJson(sent.capture());
+        assertThat(sent.getValue().user()).contains("[서비스 안내서]").contains("[사용자 상황]");
     }
 
     @Test

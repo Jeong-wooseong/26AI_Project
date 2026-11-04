@@ -1,7 +1,7 @@
 // ReplyBoss 도우미: 자주 묻는 질문을 근거로 안내하고, 해결이 안 되면 문의 접수로 연결한다.
 // 대화는 서버에 저장하지 않는다 (창을 닫았다 열어도 이 탭에서만 유지).
 import { useEffect, useRef, useState } from 'react';
-import { support } from '../api.js';
+import { recentErrorCode, support } from '../api.js';
 import Icon from './Icon.jsx';
 import Spinner from './Spinner.jsx';
 import Mascot from './Mascot.jsx';
@@ -11,7 +11,20 @@ const GREETING = {
   role: 'assistant',
   text: '안녕하세요! ReplyBoss 도우미입니다. 서비스 이용 중 궁금한 점이나 문제가 있으신가요?',
 };
-const SUGGESTIONS = ['AI 답글이 생성되지 않아요', '인증 메일이 안 와요', '작성 완료하면 배달앱에 올라가나요?'];
+function offlineHelp() {
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  return [
+    offline
+      ? '지금 이 기기의 인터넷 연결이 끊겨 있어요. 인터넷이 없으면 리뷰 분류, 답글 생성, 저장이 모두 되지 않아요.'
+      : 'ReplyBoss 서버에 연결할 수 없어요. 인터넷 연결이 불안정하거나 서버가 잠시 멈췄을 수 있어요.',
+    '1. 와이파이나 인터넷이 연결되어 있는지, 다른 사이트가 열리는지 확인해 주세요.',
+    '2. 매장·회사 와이파이가 막혀 있으면 휴대폰 데이터 등 다른 네트워크로 시도해 주세요.',
+    '3. 새로고침(F5)한 뒤 다시 시도해 주세요. 연결이 끊긴 동안 입력한 내용은 저장되지 않았을 수 있어요.',
+    '연결이 돌아왔는데도 계속되면 고객 지원에서 오류 제보를 남겨 주세요.',
+  ].join('\n');
+}
+
+const SUGGESTIONS = ['AI 답글이 생성되지 않아요', '인터넷이 끊기면 어떻게 되나요?', '여러 리뷰를 한 번에 처리하고 싶어요'];
 
 export default function HelpChat() {
   const [open, setOpen] = useState(false);
@@ -48,13 +61,17 @@ export default function HelpChat() {
     setMessages((m) => [...m, { role: 'user', text: message }]);
     setInput('');
     setBusy(true);
+    // 지금 화면과 최근 오류 코드를 함께 보내 상황에 맞게 안내받는다 (개인정보 없음)
+    const page = window.location.hash.slice(1).split('?')[0].toLowerCase().replace(/[^a-z/-]/g, '').slice(0, 40);
+    const code = recentErrorCode();
     try {
-      const r = await support.ask(message.slice(0, 500), history);
+      const r = await support.ask(message.slice(0, 500), history, page || undefined, code ?? undefined);
       setMessages((m) => [...m, { role: 'assistant', text: r.answer, faqIds: r.faqIds, suggestInquiry: r.suggestInquiry,
         inquiryType: r.inquiryType, source: r.source }]);
     } catch (e) {
-      setMessages((m) => [...m, { role: 'assistant', error: true, suggestInquiry: true, inquiryType: 'BUG',
-        text: `답변을 가져오지 못했어요. ${e.message}` }]);
+      // 인터넷·서버 연결이 끊기면 도우미도 서버에 닿지 못하므로, 연결 문제 안내는 화면에서 바로 보여준다
+      const text = e.code === 'NETWORK' ? offlineHelp() : `답변을 가져오지 못했어요. ${e.message}`;
+      setMessages((m) => [...m, { role: 'assistant', error: e.code !== 'NETWORK', offline: e.code === 'NETWORK', suggestInquiry: e.code !== 'NETWORK', inquiryType: 'BUG', text }]);
     } finally {
       setBusy(false);
     }
@@ -74,7 +91,7 @@ export default function HelpChat() {
             <Mascot pose="smile" size={44} className="helpchat-avatar" />
             <div className="helpchat-title">
               <strong>ReplyBoss 도우미</strong>
-              <p className="hint">자주 묻는 질문을 바탕으로 안내합니다</p>
+              <p className="hint">서비스 안내와 자주 묻는 질문을 바탕으로 안내합니다</p>
             </div>
             <button type="button" className="icon-btn" aria-label="도우미 닫기" onClick={() => setOpen(false)}>
               <Icon name="remove" />
@@ -97,8 +114,9 @@ export default function HelpChat() {
                     <Icon name="go" size={14} />
                   </button>
                 )}
+                {m.offline && <span className="bubble-source">연결 없이 화면에서 바로 보여드린 안내예요</span>}
                 {m.source && (
-                  <span className="bubble-source">{m.source === 'AI' ? 'AI 안내 · 자주 묻는 질문 기반' : '자주 묻는 질문 검색 결과'}</span>
+                  <span className="bubble-source">{m.source === 'AI' ? 'AI 안내 · 서비스 안내서 기반, 틀릴 수 있어요' : '자주 묻는 질문 검색 결과'}</span>
                 )}
               </div>
             ))}

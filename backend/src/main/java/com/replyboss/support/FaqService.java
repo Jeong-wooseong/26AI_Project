@@ -23,6 +23,7 @@ public class FaqService {
     }
 
     private final List<Faq> faqs;
+    private final String guide;
 
     public FaqService(ObjectMapper mapper) {
         try (InputStream in = new ClassPathResource("support/faq.json").getInputStream()) {
@@ -30,6 +31,16 @@ public class FaqService {
         } catch (IOException e) {
             throw new UncheckedIOException("FAQ 를 읽을 수 없습니다", e);
         }
+        try (InputStream in = new ClassPathResource("support/service_guide.md").getInputStream()) {
+            this.guide = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException("서비스 안내서를 읽을 수 없습니다", e);
+        }
+    }
+
+    /** 도우미가 근거로 쓰는 서비스 안내서 (resources/support/service_guide.md) */
+    public String guide() {
+        return guide;
     }
 
     public List<Faq> all() {

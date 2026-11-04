@@ -109,6 +109,10 @@ class ReportServiceTest {
         assertThat(s.replies().completed()).isZero();
         assertThat(s.replies().completionRate()).isZero();
         assertThat(s.replies().editRate()).isNull();
+        // 지난주와 비교할 수치도 서버가 같이 준다
+        assertThat(s.previousComplaintRate()).isEqualTo(Math.round(s.previousComplaints() * 100f / s.previousTotal()));
+        assertThat(s.previousReplies().completed()).isZero();
+        assertThat(s.resolvedTopics()).allMatch(t -> t.count() == 0 && t.previousCount() > 0);
     }
 
     @Test

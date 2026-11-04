@@ -51,9 +51,14 @@ public final class ReportDtos {
             int complaints,
             int previousComplaints,
             Integer complaintRate,
+            Integer previousComplaintRate,
             List<TopicStat> topics,
+            /** 지난주에는 있었지만 이번 주에는 없어진 불만 주제 (개선된 점) */
+            List<TopicStat> resolvedTopics,
             List<RepresentativeReview> representatives,
-            ReplyStats replies
+            ReplyStats replies,
+            /** 지난주 리뷰 기준 답글 현황 (지난주와 비교용) */
+            ReplyStats previousReplies
     ) {
     }
 

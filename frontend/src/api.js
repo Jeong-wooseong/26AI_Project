@@ -8,6 +8,16 @@ export class ApiError extends Error {
   }
 }
 
+// 최근에 화면에 나온 오류 (도우미가 '방금 무슨 오류였는지' 참고). 10분 지나면 버린다
+let lastError = null;
+export function recentErrorCode() {
+  return lastError && Date.now() - lastError.at < 10 * 60 * 1000 ? lastError.code : null;
+}
+function remember(err) {
+  if (err.code && err.code !== 'UNKNOWN') lastError = { code: err.code, at: Date.now() };
+  return err;
+}
+
 // 로그인이 풀렸을 때(401) 앱이 로그인 화면을 보여주도록 알린다
 let onUnauthorized = null;
 export function setUnauthorizedHandler(fn) {
@@ -37,7 +47,7 @@ async function request(method, path, body, { retried = false, quiet401 = false }
       body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
     });
   } catch {
-    throw new ApiError('NETWORK', '서버에 연결할 수 없습니다. 백엔드 실행 상태를 확인하십시오.', 0);
+    throw remember(new ApiError('NETWORK', '서버에 연결할 수 없습니다. 인터넷 연결과 서버 상태를 확인하십시오.', 0));
   }
   const text = await res.text();
   let data = null;
@@ -45,7 +55,7 @@ async function request(method, path, body, { retried = false, quiet401 = false }
     data = text ? JSON.parse(text) : null;
   } catch {
     // 백엔드가 꺼져 있으면 개발 서버 프록시가 JSON 이 아닌 오류를 돌려준다
-    throw new ApiError('NETWORK', '서버에 연결할 수 없습니다. 백엔드 실행 상태를 확인하십시오.', res.status);
+    throw remember(new ApiError('NETWORK', '서버에 연결할 수 없습니다. 인터넷 연결과 서버 상태를 확인하십시오.', res.status));
   }
   if (!res.ok) {
     // 보안 토큰이 없거나 바뀐 경우: 토큰을 새로 받고 한 번만 다시 시도
@@ -54,7 +64,9 @@ async function request(method, path, body, { retried = false, quiet401 = false }
       return request(method, path, body, { retried: true, quiet401 });
     }
     if (res.status === 401 && !quiet401 && onUnauthorized) onUnauthorized();
-    throw new ApiError(data?.code ?? 'UNKNOWN', data?.message ?? `요청 실패 (${res.status})`, res.status);
+    const err = new ApiError(data?.code ?? 'UNKNOWN', data?.message ?? `요청 실패 (${res.status})`, res.status);
+    if (!quiet401) remember(err);
+    throw err;
   }
   return data;
 }
@@ -134,7 +146,9 @@ export const support = {
   myInquiries: () => request('GET', '/api/support/inquiries'),
   attachmentUrl: (id) => `/api/support/inquiries/${id}/attachment`,
   // history: [{ role: 'user' | 'assistant', text }] 최근 6개
-  ask: (message, history) => request('POST', '/api/support/assistant', { message, history }),
+  // page: 지금 화면, lastErrorCode: 최근 오류 코드 (도우미가 상황에 맞게 안내)
+  ask: (message, history, page, lastErrorCode) =>
+    request('POST', '/api/support/assistant', { message, history, page, lastErrorCode }),
 };
 
 export const admin = {

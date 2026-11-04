@@ -591,7 +591,9 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .topic-bar .bar { height: 8px; min-width: 4px; background: var(--primary); border-radius: 0 4px 4px 0; }
 .topic-bar .count { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .change { color: var(--text-sub); }
-.change.is-up, .change.is-new { color: var(--text); font-weight: 600; }
+/* 불만 주제는 늘면 나빠진 것(빨강), 줄면 좋아진 것(초록) */
+.change.is-up, .change.is-new { color: var(--danger); font-weight: 600; }
+.change.is-down { color: var(--success); font-weight: 600; }
 .type-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .type-list li { display: flex; justify-content: space-between; gap: var(--s3); padding: 6px 0; font-size: var(--fs-label); line-height: var(--lh-label); color: var(--text-muted); }
 .type-list li + li { border-top: 1px solid var(--border-subtle); }
@@ -1128,4 +1130,26 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   .bulk-panel-body { grid-template-columns: minmax(0, 1fr); gap: var(--s4); }
   .bulk-panel-foot .end, .bulk-panel-foot .end .btn { width: 100%; }
   .rt-done .del-pop { left: auto; right: 0; }
+}
+
+/* 지난주 대비 */
+.delta { display: inline-flex; align-items: center; gap: 2px; margin-left: var(--s2); padding: 0 6px; border-radius: 10px; font-size: var(--fs-micro); line-height: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.delta.is-good { color: var(--success); background: var(--success-tint); }
+.delta.is-bad { color: var(--danger); background: var(--danger-tint); }
+.delta.is-neutral { color: var(--primary); background: var(--primary-tint); }
+.delta.is-flat { color: var(--text-sub); background: var(--bg); font-weight: 500; }
+.compare-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s3); }
+.compare-col { padding: var(--s4); border-radius: var(--radius-sm); border: 1px solid; display: flex; flex-direction: column; gap: var(--s2); }
+.compare-col.is-good { background: var(--success-tint); border-color: #bfe5d2; }
+.compare-col.is-bad { background: var(--danger-tint); border-color: #f1c4c4; }
+.compare-col.is-empty { background: var(--surface-sub); border-color: var(--border-subtle); }
+.compare-col h3 { display: flex; align-items: center; gap: 6px; font-size: var(--fs-label); font-weight: 700; }
+.compare-col.is-good h3 { color: var(--success); }
+.compare-col.is-bad h3 { color: var(--danger); }
+.compare-n { margin-left: auto; font-variant-numeric: tabular-nums; }
+.compare-col ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-label); line-height: 22px; color: var(--text); }
+@media (max-width: 720px) {
+  .compare-grid { grid-template-columns: minmax(0, 1fr); }
+  .delta { margin-left: 0; }
+  .figure-compare { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 }

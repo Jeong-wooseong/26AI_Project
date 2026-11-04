@@ -41,7 +41,20 @@ import static com.replyboss.ai.Schemas.stringEnum;
 public class AssistantService {
 
     private static final Logger log = LoggerFactory.getLogger(AssistantService.class);
-    static final String PROMPT = "support_assistant_v1";
+    static final String PROMPT = "support_assistant_v2";
+    /** AI 를 쓸 수 없을 때 최근 오류 코드로 먼저 안내할 말 */
+    static final Map<String, String> ERROR_HINTS = Map.ofEntries(
+            Map.entry("NETWORK", "인터넷이나 ReplyBoss 서버 연결이 끊겼을 수 있어요. 와이파이·인터넷 연결을 확인하고, 다른 사이트가 열리는지 본 뒤 새로고침(F5)해서 다시 시도해 주세요."),
+            Map.entry("LLM_TIMEOUT", "AI 응답이 늦어 시간이 초과됐어요. 잠시 뒤 다시 시도해 주세요."),
+            Map.entry("LLM_RATE_LIMIT", "짧은 시간에 요청이 많았어요. 1분쯤 뒤 다시 시도해 주세요."),
+            Map.entry("LLM_HTTP_429", "짧은 시간에 요청이 많았어요. 1분쯤 뒤 다시 시도해 주세요."),
+            Map.entry("LLM_QUOTA", "서비스의 AI 사용 한도가 소진된 상태일 수 있어요. 사장님이 해결할 수 없는 문제라 오류 제보를 남겨 주세요."),
+            Map.entry("LLM_NOT_CONFIGURED", "서비스의 AI 연결 설정 문제일 수 있어요. 오류 제보를 남겨 주세요."),
+            Map.entry("LLM_UNSAFE", "리뷰 내용 때문에 규칙에 맞는 답글을 만들기 어려웠어요. 다시 생성하거나 직접 작성해 주세요."),
+            Map.entry("UNAUTHORIZED", "로그인이 풀린 것 같아요. 다시 로그인해 주세요."),
+            Map.entry("CSRF", "보안 토큰이 만료됐어요. 새로고침한 뒤 다시 시도해 주세요."));
+    private static final java.util.Set<String> OPERATOR_ERRORS = java.util.Set.of(
+            "LLM_QUOTA", "LLM_NOT_CONFIGURED", "LLM_HTTP_401", "LLM_HTTP_403", "MAIL_NOT_CONFIGURED", "MAIL_FAILED");
     static final int LIMIT_PER_WINDOW = 20;
     static final long WINDOW_SECONDS = 600;
 
@@ -73,18 +86,19 @@ public class AssistantService {
         checkRate(userId);
         String question = masking.mask(request.message());
         try {
-            AssistantResponse r = askLlm(question, request.history() == null ? List.of() : request.history());
+            AssistantResponse r = askLlm(question, request.history() == null ? List.of() : request.history(),
+                    request.page(), request.lastErrorCode());
             if (r != null) {
                 return r;
             }
         } catch (RuntimeException e) {
             log.info("도우미 AI 응답 실패, FAQ 검색으로 대신 답함: {}", e.getMessage());
         }
-        return fallback(question);
+        return fallback(question, request.lastErrorCode());
     }
 
-    private AssistantResponse askLlm(String question, List<ChatMessage> history) {
-        StringBuilder sb = new StringBuilder("[자주 묻는 질문]\n");
+    private AssistantResponse askLlm(String question, List<ChatMessage> history, String page, String lastErrorCode) {
+        StringBuilder sb = new StringBuilder("[서비스 안내서]\n").append(faqs.guide()).append("\n\n[자주 묻는 질문]\n");
         for (Faq f : faqs.all()) {
             sb.append("- id: ").append(f.id()).append(" / Q: ").append(f.question()).append("\n  A: ").append(f.answer()).append('\n');
         }
@@ -96,10 +110,12 @@ public class AssistantService {
                         .append(text.length() > 300 ? text.substring(0, 300) + "…" : text).append('\n');
             }
         }
+        sb.append("[사용자 상황]\n- 지금 화면: ").append(page == null || page.isBlank() ? "알 수 없음" : page)
+                .append("\n- 최근 오류 코드: ").append(lastErrorCode == null || lastErrorCode.isBlank() ? "없음" : lastErrorCode).append('\n');
         sb.append("[이번 질문]\n<question>\n").append(question.replace("<", "‹").replace(">", "›")).append("\n</question>")
                 .append(UntrustedText.injectionNotice(question));
         JsonNode json = llm.generateJson(new LlmRequest(props.classifyModel(), prompts.render(PROMPT, Map.of()),
-                sb.toString(), "support_answer", SCHEMA, 1500));
+                sb.toString(), "support_answer", SCHEMA, 2000));
         String answer = json.path("answer").asText("").strip();
         if (answer.isEmpty() || MARKDOWN.matcher(answer).find()) {
             return null;
@@ -123,10 +139,17 @@ public class AssistantService {
         return new AssistantResponse(answer, ids, suggest, suggest ? type : null, "AI");
     }
 
-    /** AI 없이: FAQ 검색 상위 결과를 그대로 보여주고, 맞는 항목이 없으면 문의를 권한다 */
-    AssistantResponse fallback(String question) {
+    /** AI 없이: 최근 오류 코드가 있으면 그 안내를, 아니면 FAQ 검색 상위 결과를 보여주고, 맞는 항목이 없으면 문의를 권한다 */
+    AssistantResponse fallback(String question, String lastErrorCode) {
+        String hint = lastErrorCode == null ? null : ERROR_HINTS.get(lastErrorCode);
         List<FaqService.Match> matches = faqs.search(question, 1);
-        if (matches.isEmpty() || matches.get(0).score() < 2) {
+        boolean found = !matches.isEmpty() && matches.get(0).score() >= 2;
+        if (hint != null) {
+            boolean operator = OPERATOR_ERRORS.contains(lastErrorCode);
+            return new AssistantResponse("최근 화면에 오류 코드 " + lastErrorCode + "가 나왔어요. " + hint,
+                    found ? List.of(matches.get(0).faq().id()) : List.of(), operator, operator ? InquiryType.BUG : null, "FAQ");
+        }
+        if (!found) {
             return new AssistantResponse(
                     "자주 묻는 질문에서 맞는 답을 찾지 못했어요. 고객 지원에서 문의를 남겨 주시면 확인해 드릴게요.",
                     List.of(), true, InquiryType.GENERAL, "FAQ");

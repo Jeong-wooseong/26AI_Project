@@ -57,8 +57,15 @@ public final class SupportDtos {
 
     public record AssistantRequest(
             @NotBlank(message = "질문을 입력하십시오.") @Size(max = 500, message = "질문은 500자 이내여야 합니다.") String message,
-            @Size(max = 6) List<@Valid ChatMessage> history
+            @Size(max = 6) List<@Valid ChatMessage> history,
+            /** 지금 보고 있는 화면 (예: reviews/wait) */
+            @Pattern(regexp = "[a-z/-]{0,40}", message = "화면 정보가 올바르지 않습니다.") String page,
+            /** 최근에 화면에 나온 오류 코드 (예: NETWORK, LLM_TIMEOUT) */
+            @Pattern(regexp = "[A-Z0-9_]{0,40}", message = "오류 코드가 올바르지 않습니다.") String lastErrorCode
     ) {
+        public AssistantRequest(String message, List<ChatMessage> history) {
+            this(message, history, null, null);
+        }
     }
 
     /**
