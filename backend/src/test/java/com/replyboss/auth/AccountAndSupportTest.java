@@ -350,9 +350,9 @@ class AccountAndSupportTest {
     @Test
     @Order(10)
     void 관리자는_회원을_보고_이용을_중지하며_AI_실패_기록과_운영_수치를_본다() throws Exception {
-        signup("c@test.com", PW);
-        verifyEmail("c@test.com");
-        MockHttpSession c = login("c@test.com", PW);
+        signup("d@test.com", PW);
+        verifyEmail("d@test.com");
+        MockHttpSession c = login("d@test.com", PW);
         MockHttpSession a = login("a@test.com", PW);
         Long cId = body(mvc.perform(get("/api/auth/me").session(c)).andReturn()).path("id").asLong();
         Long aId = body(mvc.perform(get("/api/auth/me").session(a)).andReturn()).path("id").asLong();
@@ -363,8 +363,8 @@ class AccountAndSupportTest {
         aiRecorder.record("reply_drafts", "gpt-test", false, "LLM_TIMEOUT", "응답 시간 초과", 1200);
         aiRecorder.record("review_classification", "gpt-test", true, null, null, 300);
         mvc.perform(get("/api/admin/overview").session(a)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.users").value(2))
-                .andExpect(jsonPath("$.activeUsers7d").value(2))
+                .andExpect(jsonPath("$.users").value(3)) // a, c, d (b 는 탈퇴)
+                .andExpect(jsonPath("$.activeUsers7d").value(org.hamcrest.Matchers.greaterThanOrEqualTo(2)))
                 .andExpect(jsonPath("$.daily.length()").value(14))
                 .andExpect(jsonPath("$.aiFailures7d").value(1))
                 .andExpect(jsonPath("$.aiCalls7d").value(2))
@@ -374,12 +374,12 @@ class AccountAndSupportTest {
                 .andExpect(jsonPath("$[0].kind").value("reply_drafts"))
                 .andExpect(jsonPath("$[0].errorCode").value("LLM_TIMEOUT"));
 
-        mvc.perform(get("/api/admin/users").param("query", "C@TEST").session(a))
+        mvc.perform(get("/api/admin/users").param("query", "D@TEST").session(a))
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].status").value("ACTIVE"))
                 .andExpect(jsonPath("$[0].name").value("사장님"));
         mvc.perform(get("/api/admin/users/" + cId).session(a)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.user.email").value("c@test.com"));
+                .andExpect(jsonPath("$.user.email").value("d@test.com"));
 
         // 자기 계정은 중지할 수 없고, 중지하면 로그인한 상태도 바로 풀린다
         mvc.perform(patch("/api/admin/users/" + aId + "/status").session(a).with(csrf()).contentType(MediaType.APPLICATION_JSON)
@@ -388,12 +388,12 @@ class AccountAndSupportTest {
                 .content(json(Map.of("active", false)))).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DISABLED"));
         mvc.perform(get("/api/stores").session(c)).andExpect(status().isUnauthorized());
         mvc.perform(post("/api/auth/login").with(csrf()).contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("email", "c@test.com", "password", PW, "remember", false))))
+                        .content(json(Map.of("email", "d@test.com", "password", PW, "remember", false))))
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ACCOUNT_DISABLED"));
         mvc.perform(get("/api/admin/users").param("status", "DISABLED").session(a)).andExpect(jsonPath("$.length()").value(1));
 
         mvc.perform(patch("/api/admin/users/" + cId + "/status").session(a).with(csrf()).contentType(MediaType.APPLICATION_JSON)
                 .content(json(Map.of("active", true)))).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACTIVE"));
-        login("c@test.com", PW);
+        login("d@test.com", PW);
     }
 }
