@@ -51,13 +51,25 @@ const ENTRY_COLUMNS = [
   { label: '리뷰 내용' },
   { label: '삭제', className: 'entry-act' },
 ];
-const emptyRow = () => ({ key: crypto.randomUUID(), rating: 5, content: '' });
+// 새 행은 별점을 비워 둔다: 아무것도 고르지 않은 행은 '빈 행'으로 보고 등록하지 않는다
+const emptyRow = () => ({ key: crypto.randomUUID(), rating: null, content: '' });
+const LEAVE_MS = 180;
+const reduceMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/** 행 상태: empty(빈 행) | rating(평점만) | full(내용+별점) | missing(내용은 있는데 별점 없음) */
+function rowState(r) {
+  const text = r.content.trim().length > 0;
+  if (r.rating == null) return text ? 'missing' : 'empty';
+  return text ? 'full' : 'rating';
+}
 
 /** 화면 ② 리뷰 입력: 별점 + 본문 여러 줄 → 분류하기 */
 export default function ReviewInput({ store, toast, go }) {
   const [platform, setPlatform] = useState('BAEMIN');
   const [rows, setRows] = useState([emptyRow()]);
   const [busy, setBusy] = useState(false);
+  const [checked, setChecked] = useState(false); // 등록을 눌렀을 때만 별점 누락을 표시
+  const [leaving, setLeaving] = useState(() => new Set()); // 삭제 중인 행 (짧게 사라지는 효과 뒤에 지움)
   const [error, setError] = useState(null);
   const inputs = useRef({});
   const [mode, setMode] = useState('manual');
@@ -99,8 +111,17 @@ export default function ReviewInput({ store, toast, go }) {
   function removeRow(key) {
     const i = rows.findIndex((r) => r.key === key);
     const next = rows[i + 1] ?? rows[i - 1];
-    setRows((rs) => rs.filter((x) => x.key !== key));
-    if (next) setTimeout(() => inputs.current[next.key]?.focus(), 0);
+    const drop = () => {
+      setRows((rs) => rs.filter((x) => x.key !== key));
+      setLeaving((s) => { const n = new Set(s); n.delete(key); return n; });
+      if (next) setTimeout(() => inputs.current[next.key]?.focus(), 0);
+    };
+    if (reduceMotion()) {
+      drop();
+      return;
+    }
+    setLeaving((s) => new Set(s).add(key));
+    setTimeout(drop, LEAVE_MS);
   }
 
   // Enter: 다음 행으로 이동, 마지막 행이면 새 행 추가 (폼이 실수로 제출되지 않게)
@@ -114,13 +135,24 @@ export default function ReviewInput({ store, toast, go }) {
   async function submit(e) {
     e.preventDefault();
     if (busy) return; // 분류 요청 중 중복 제출 방지
+    setChecked(true);
+    const missing = rows.map((r, i) => (rowState(r) === 'missing' ? i + 1 : null)).filter(Boolean);
+    if (missing.length) {
+      setError(`별점을 고르지 않은 리뷰가 있습니다 (${missing.join(', ')}번 행). 별점을 고른 뒤 다시 등록하십시오.`);
+      return;
+    }
+    const targets = rows.filter((r) => r.rating != null);
+    if (targets.length === 0) {
+      setError('등록할 리뷰가 없습니다. 별점을 고르고, 리뷰 내용이 있으면 함께 입력하십시오.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const results = await api.createReviews(
         store.id,
         platform,
-        rows.map((r) => ({ rating: Number(r.rating), content: r.content })),
+        targets.map((r) => ({ rating: Number(r.rating), content: r.content })),
       );
       const failed = results.filter((r) => r.status === 'FAILED').length;
       toast.show(
@@ -129,6 +161,7 @@ export default function ReviewInput({ store, toast, go }) {
           : `리뷰 ${results.length}건 등록 및 분류 완료`,
       );
       setRows([emptyRow()]);
+      setChecked(false);
       go('reviews/wait'); // 방금 등록한 리뷰는 작성 대기에서 답글을 만든다
     } catch (err) {
       setError(err.message);
@@ -138,18 +171,26 @@ export default function ReviewInput({ store, toast, go }) {
   }
 
   const full = rows.length >= MAX_ROWS;
-  const withText = rows.filter((r) => r.content.trim()).length;
-  const avg = rows.reduce((sum, r) => sum + Number(r.rating), 0) / rows.length;
+  // 입력 현황: 빈 행은 빼고, 별점이 있는 행만 유효한 리뷰로 센다 (평균 별점도 유효한 리뷰 기준)
+  const states = rows.map(rowState);
+  const nFull = states.filter((s) => s === 'full').length;
+  const nRating = states.filter((s) => s === 'rating').length;
+  const nEmpty = states.filter((s) => s === 'empty').length;
+  const valid = rows.filter((r) => r.rating != null);
+  const avg = valid.length ? valid.reduce((sum, r) => sum + r.rating, 0) / valid.length : null;
+  // 머리말 진행 단계와 캐릭터: 실제 입력·등록 상태를 따른다
+  const step = busy ? 2 : 1;
+  const pose = busy ? 'analyzing' : valid.length > 0 ? 'happy' : 'smile';
 
   return (
     <>
       <PageHero
         title="리뷰 입력"
         description="오늘 들어온 리뷰를 등록하면 AI가 유형을 분류하고, 작성 대기에서 답글 초안을 만듭니다. 별점만 있는 리뷰는 초안이 바로 만들어집니다."
-        pose="happy"
+        pose={pose}
         steps={[
-          { label: '리뷰 등록', state: 'current' },
-          { label: 'AI 분류', state: 'todo' },
+          { label: '리뷰 등록', state: step > 1 ? 'done' : 'current' },
+          { label: 'AI 분류', state: step === 2 ? 'current' : 'todo' },
           { label: '답글 작성 완료', state: 'todo' },
         ]}
         stats={today && [
@@ -175,14 +216,19 @@ export default function ReviewInput({ store, toast, go }) {
         stickyFooter
         footerStart={mode === 'manual' && (
           <div className="entry-summary" aria-live="polite">
-            <span className="row-count">
-              {full && <span className="row-count-full">최대 개수 도달</span>}
-              <strong>{rows.length}</strong> / {MAX_ROWS}건
-            </span>
-            <span className="count-bar" aria-hidden="true"><span style={{ width: `${(rows.length / MAX_ROWS) * 100}%` }} /></span>
-            <span className="entry-summary-text">
-              내용 있음 {withText} · 별점만 {rows.length - withText} · 평균 <Icon name="star" size={14} className="star-inline" />{avg.toFixed(1)}
-            </span>
+            <div className="entry-meter" role="img"
+                 aria-label={`최대 ${MAX_ROWS}건 중 내용 있는 리뷰 ${nFull}건, 평점만 ${nRating}건`}>
+              <span className="entry-meter-full" style={{ width: `${(nFull / MAX_ROWS) * 100}%` }} />
+              <span className="entry-meter-rating" style={{ width: `${(nRating / MAX_ROWS) * 100}%` }} />
+            </div>
+            <dl className="entry-stats">
+              <div><dt>입력 행</dt><dd>{rows.length}<span>/{MAX_ROWS}</span></dd></div>
+              <div><dt><i className="key key-full" aria-hidden="true" />내용 있음</dt><dd>{nFull}</dd></div>
+              <div><dt><i className="key key-rating" aria-hidden="true" />평점만</dt><dd>{nRating}</dd></div>
+              <div><dt>평균 별점</dt><dd>{avg == null ? '-' : <><Icon name="star" size={14} className="star-inline" />{avg.toFixed(1)}</>}</dd></div>
+            </dl>
+            {full && <span className="row-count-full">최대 개수 도달</span>}
+            {nEmpty > 0 && valid.length > 0 && <span className="hint">빈 행 {nEmpty}개는 등록하지 않습니다</span>}
           </div>
         )}
         footer={mode === 'manual' && (
@@ -201,11 +247,18 @@ export default function ReviewInput({ store, toast, go }) {
             <DataTable label="입력할 리뷰" className="entry-table" aria-rowcount={rows.length + 1}>
               <DataTableHead columns={ENTRY_COLUMNS} />
               {rows.map((r, i) => (
-                <DataTableRow key={r.key} className={`entry-row ${r.content.trim() ? 'is-filled' : ''}`}>
-                  <span className="entry-no" role="cell">{i + 1}</span>
+                <DataTableRow key={r.key}
+                              className={`entry-row is-${states[i]} ${leaving.has(r.key) ? 'is-leaving' : ''} ${checked && states[i] === 'missing' ? 'is-invalid' : ''}`}>
+                  <span className="entry-no" role="cell">
+                    {states[i] === 'full' || states[i] === 'rating'
+                      ? <><Icon name="confirm" size={14} className="entry-done" /><span className="sr-only">입력됨 </span></>
+                      : null}
+                    {i + 1}
+                  </span>
                   <div className="cell-rating" role="cell">
-                    <StarRating label={`리뷰 ${i + 1} 별점`} value={Number(r.rating)}
+                    <StarRating label={`리뷰 ${i + 1} 별점`} value={r.rating}
                                 onChange={(n) => update(r.key, { rating: n })} />
+                    {checked && states[i] === 'missing' && <span className="field-error rating-missing">별점을 고르십시오</span>}
                   </div>
                   <div className="cell-content" role="cell">
                     <FormInput aria-label={`리뷰 ${i + 1} 본문`} value={r.content} maxLength={MAX_LENGTH}

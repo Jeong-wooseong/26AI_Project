@@ -7,8 +7,9 @@ export default function StarRating({ value, onChange, label = '별점', size = 2
   const shown = hover ?? value;
 
   function onKeyDown(e) {
-    const next = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? Math.min(5, value + 1)
-      : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? Math.max(1, value - 1) : null;
+    const cur = value ?? 0;
+    const next = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? Math.min(5, cur + 1)
+      : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? Math.max(1, cur - 1) : null;
     if (next == null) return;
     e.preventDefault();
     onChange(next);
@@ -19,12 +20,13 @@ export default function StarRating({ value, onChange, label = '별점', size = 2
     <div className="stars" role="radiogroup" aria-label={label} onMouseLeave={() => setHover(null)}>
       {[1, 2, 3, 4, 5].map((n) => (
         <button key={n} type="button" role="radio" aria-checked={value === n} aria-label={`${n}점`}
-                tabIndex={value === n ? 0 : -1} className={`star ${n <= shown ? 'is-on' : ''}`}
+                tabIndex={value === n || (value == null && n === 1) ? 0 : -1}
+                className={`star ${shown != null && n <= shown ? 'is-on' : ''} ${hover != null && n <= hover ? 'is-preview' : ''}`}
                 onClick={() => onChange(n)} onMouseEnter={() => setHover(n)} onKeyDown={onKeyDown}>
           <Icon name="star" size={size} />
         </button>
       ))}
-      <span className="stars-value" aria-hidden="true">{shown}</span>
+      <span className={`stars-value ${shown == null ? 'is-empty' : ''}`} aria-hidden="true">{shown ?? '선택'}</span>
     </div>
   );
 }
