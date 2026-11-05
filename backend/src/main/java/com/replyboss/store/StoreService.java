@@ -73,6 +73,13 @@ public class StoreService {
         return StoreResponse.from(store);
     }
 
+    @Transactional
+    public StoreResponse updateReplySettings(Long id, StoreDtos.ReplySettings settings) {
+        Store store = get(id);
+        store.updateReplySettings(settings.defaultTone(), settings.avoidDuplicates());
+        return StoreResponse.from(store);
+    }
+
     public Store get(Long id) {
         return storeRepository.findById(id).orElseThrow(() -> ApiException.notFound("매장"));
     }

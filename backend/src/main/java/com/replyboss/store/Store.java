@@ -46,6 +46,14 @@ public class Store {
     @Column(name = "sample_replies", columnDefinition = "TEXT")
     private String sampleReplies;
 
+    /** 답글 기본 설정: 처음 보여줄 초안 말투 (POLITE·FRIENDLY·CONCISE). null 이면 정중형 */
+    @Column(name = "default_tone", length = 20)
+    private String defaultTone;
+
+    /** 답글 기본 설정: 이전 답글과 겹치지 않게 다시 만들기. null(기존 매장)이면 켜짐 */
+    @Column(name = "avoid_duplicates")
+    private Boolean avoidDuplicates;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -94,6 +102,19 @@ public class Store {
         if (sampleRepliesJson != null) {
             this.sampleReplies = sampleRepliesJson;
         }
+    }
+
+    public void updateReplySettings(String defaultTone, boolean avoidDuplicates) {
+        this.defaultTone = defaultTone;
+        this.avoidDuplicates = avoidDuplicates;
+    }
+
+    public String getDefaultTone() {
+        return defaultTone == null ? "POLITE" : defaultTone;
+    }
+
+    public boolean isAvoidDuplicates() {
+        return avoidDuplicates == null || avoidDuplicates;
     }
 
     public Long getId() {

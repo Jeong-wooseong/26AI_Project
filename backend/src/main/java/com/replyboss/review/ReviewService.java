@@ -181,11 +181,13 @@ public class ReviewService {
             throw ApiException.badRequest("NO_TONE", "매장 설정에서 답글 스타일을 먼저 저장하십시오.");
         }
 
-        // 중복 방지 2·3단: 같은 묶음·최근 최종 답글을 프롬프트에 보여주고, 생성 후 유사도로 다시 검사한다
+        // 중복 방지 2·3단: 같은 묶음·최근 최종 답글을 프롬프트에 보여주고, 생성 후 유사도로 다시 검사한다.
+        // 매장 설정에서 중복 답글 방지를 끄면 이전 답글을 넘기지 않아 비교·재생성을 하지 않는다.
+        List<ReplyGenerationService.PastReply> past = store.isAvoidDuplicates() ? duplicateGuard.pastReplies(review) : List.of();
         ReplyGenerationService.Result result = replyGenerationService.generate(new ReplyGenerationService.Context(
                 store.getName(), store.getCategory(), store.getInfo(), tone,
                 review.getRating(), review.getType(), review.getSentiment(), review.getKeywords(),
-                review.getMaskedContent(), duplicateGuard.pastReplies(review)));
+                review.getMaskedContent(), past));
         Map<ReplyTone, ReplyGenerationService.Draft> drafts = result.drafts();
 
         // 생성하는 동안 최종 답글이 바뀌었을 수 있으므로 다시 읽는다. 최종 확정한 답글은 지우지 않는다.

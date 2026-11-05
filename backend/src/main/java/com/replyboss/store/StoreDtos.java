@@ -42,6 +42,15 @@ public final class StoreDtos {
     ) {
     }
 
+    /** 답글 기본 설정 */
+    public record ReplySettings(
+            @NotNull(message = "기본 답글 말투를 고르십시오.")
+            @jakarta.validation.constraints.Pattern(regexp = "POLITE|FRIENDLY|CONCISE", message = "기본 답글 말투는 정중형·친근형·간결형 중 하나여야 합니다.")
+            String defaultTone,
+            boolean avoidDuplicates
+    ) {
+    }
+
     public record StoreResponse(
             Long id,
             String name,
@@ -49,6 +58,7 @@ public final class StoreDtos {
             String info,
             ToneProfile toneProfile,
             List<String> sampleReplies,
+            ReplySettings replySettings,
             LocalDateTime updatedAt
     ) {
         public static StoreResponse from(Store store) {
@@ -59,6 +69,7 @@ public final class StoreDtos {
                     store.getInfo(),
                     JsonText.read(store.getToneProfile(), ToneProfile.class),
                     JsonText.readStringList(store.getSampleReplies()),
+                    new ReplySettings(store.getDefaultTone(), store.isAvoidDuplicates()),
                     store.getUpdatedAt()
             );
         }

@@ -393,6 +393,43 @@ class ReviewFlowTest {
     }
 
     @Test
+    void 답글_기본_설정은_기본값이_정중형_중복방지_켜짐이고_끄면_이전_답글과_비교하지_않는다() throws Exception {
+        var initial = storeService.findOne(storeId).replySettings();
+        assertThat(initial.defaultTone()).isEqualTo("POLITE");
+        assertThat(initial.avoidDuplicates()).isTrue();
+
+        var saved = storeService.updateReplySettings(storeId, new com.replyboss.store.StoreDtos.ReplySettings("FRIENDLY", false));
+        assertThat(saved.replySettings().defaultTone()).isEqualTo("FRIENDLY");
+        assertThat(saved.replySettings().avoidDuplicates()).isFalse();
+
+        // 같은 표현의 최종 답글이 있어도, 중복 방지를 끄면 다시 만들지 않는다
+        embedBy(t -> t.contains("같은표현") ? vec(1, 0, 0, 0) : vec(0, 1, 0, 0));
+        String same = """
+                {"polite":"같은표현 치즈볼 감사합니다. 또 뵙겠습니다.","friendly":"같은표현 치즈볼 고마워요. 또 와요.","concise":"같은표현 치즈볼 감사해요."}
+                """;
+        String praise = """
+                {"type":"PRAISE","sentiment":"POSITIVE","keywords":["치즈볼"],"confidence":0.95}
+                """;
+        when(llmClient.generateJson(any())).thenReturn(mapper.readTree(praise), mapper.readTree(same));
+        ReviewResponse first = reviewService.createBatch(storeId, new ReviewBatchRequest(
+                Platform.BAEMIN, List.of(new ReviewItem(5, "치즈볼 맛있어요")))).get(0);
+        ReviewResponse firstDrafts = reviewService.generateReplies(first.id());
+        reviewService.completeReply(first.id(), new CompleteReplyRequest(firstDrafts.replies().get(0).id(), firstDrafts.replies().get(0).content()));
+
+        reset(llmClient);
+        when(llmClient.generateJson(any())).thenReturn(mapper.readTree(praise), mapper.readTree(same));
+        ReviewResponse second = reviewService.createBatch(storeId, new ReviewBatchRequest(
+                Platform.COUPANG_EATS, List.of(new ReviewItem(5, "치즈볼이 바삭해요")))).get(0);
+        ReviewResponse drafted = reviewService.generateReplies(second.id());
+
+        verify(llmClient, times(2)).generateJson(any()); // 분류 1 + 생성 1 (다시 만들지 않음)
+        assertThat(drafted.replies()).hasSize(3).allSatisfy(r -> {
+            assertThat(r.regenCount()).isZero();
+            assertThat(r.maxSimilarity()).isNull();
+        });
+    }
+
+    @Test
     void 악성_리뷰는_전략_근거_확인할_것과_답글을_만들고_확인해야_확정된다() throws Exception {
         when(llmClient.generateJson(any())).thenReturn(
                 mapper.readTree("""

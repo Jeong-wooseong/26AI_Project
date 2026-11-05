@@ -117,6 +117,19 @@ class ReportServiceTest {
         assertThat(s.ratingCounts()).hasSize(5);
         assertThat(s.ratingCounts().stream().mapToInt(Integer::intValue).sum()).isEqualTo(s.total());
         assertThat(s.previousRatingCounts().stream().mapToInt(Integer::intValue).sum()).isEqualTo(s.previousTotal());
+        // 긍정 비율 (감정 긍정 / 전체)과 날짜별 추이 (월~일 7일, 합계가 리뷰 수와 같다)
+        assertThat(s.positiveRate()).isEqualTo(25);
+        assertThat(s.previousPositiveRate()).isZero();
+        assertThat(s.daily()).hasSize(7);
+        assertThat(s.daily().get(0).date()).isEqualTo(MONDAY);
+        assertThat(s.daily().stream().mapToInt(ReportDtos.DailyStat::total).sum()).isEqualTo(s.total());
+        assertThat(s.daily().get(0).complaints()).isEqualTo(1);
+        assertThat(s.daily().get(0).avgRating()).isEqualTo(2.0);
+        assertThat(s.daily().get(1).total()).isZero();
+        assertThat(s.daily().get(1).avgRating()).isNull();
+        assertThat(s.daily().get(6).positive()).isEqualTo(1);
+        assertThat(s.previousDaily().get(4).total()).isEqualTo(1); // 지난주 금요일
+        assertThat(s.previousDaily().stream().mapToInt(ReportDtos.DailyStat::total).sum()).isEqualTo(s.previousTotal());
     }
 
     @Test
@@ -128,7 +141,7 @@ class ReportServiceTest {
                         {"summary":"이번 주 리뷰는 4건이고 불만은 80%입니다.","suggestions":["배달 시간을 확인해 볼 만합니다."]}
                         """),
                 mapper.readTree("""
-                        {"summary":"이번 주 리뷰 4건 중 불만이 3건(75%)이며, 배달 지연이 2건으로 가장 많았습니다.","suggestions":["배달 지연이 생긴 시간대를 확인해 볼 만합니다.","양 부족 의견은 지난주 2건에서 줄었습니다."]}
+                        {"summary":"이번 주 리뷰 4건 중 불만이 3건(75%)이며, 배달 지연이 2건으로 가장 많았습니다.","positives":["양 부족 의견은 지난주 2건에서 줄었습니다."],"improvements":["배달 지연 불만이 새로 2건 나왔습니다."],"suggestions":["배달 지연이 생긴 시간대를 확인해 볼 만합니다.","포장 상태를 한 번 더 확인해 볼 만합니다."]}
                         """));
 
         ReportResponse r = reportService.generateInsight(storeId, MONDAY);
@@ -140,6 +153,9 @@ class ReportServiceTest {
         assertThat(captor.getAllValues().get(1).user()).contains("집계에 없는 숫자를 씀: 80");
         assertThat(r.insight().summary()).contains("75%");
         assertThat(r.insight().stale()).isFalse();
+        assertThat(r.insight().positives()).containsExactly("양 부족 의견은 지난주 2건에서 줄었습니다.");
+        assertThat(r.insight().improvements()).hasSize(1);
+        assertThat(captor.getAllValues().get(0).user()).contains("긍정 리뷰 비율: 25%");
 
         // 다시 조회하면 저장된 요약이 나오고, 리뷰가 늘면 stale
         assertThat(reportService.report(storeId, MONDAY).insight().suggestions()).hasSize(2);

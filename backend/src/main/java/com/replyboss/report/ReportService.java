@@ -18,6 +18,8 @@ import com.replyboss.report.ReportDtos.ReportResponse;
 import com.replyboss.report.ReportDtos.RepresentativeReview;
 import com.replyboss.report.ReportDtos.TopicStat;
 import com.replyboss.report.ReportDtos.WeeklyStats;
+import com.replyboss.report.ReportDtos.DailyStat;
+import com.replyboss.review.Sentiment;
 import com.replyboss.review.Review;
 import com.replyboss.review.ReviewRepository;
 import com.replyboss.review.ReviewStatus;
@@ -63,12 +65,14 @@ import static com.replyboss.ai.Schemas.string;
 public class ReportService {
 
     private static final Logger log = LoggerFactory.getLogger(ReportService.class);
-    static final String PROMPT = "weekly_report_v2";
+    static final String PROMPT = "weekly_report_v3";
     static final int TOP_TOPICS = 5;
     static final int REPRESENTATIVES = 3;
 
     private static final Map<String, Object> SCHEMA = object(props(
             "summary", string(),
+            "positives", arrayOf(string()),
+            "improvements", arrayOf(string()),
             "suggestions", arrayOf(string())
     ));
     private static final Pattern NUMBER = Pattern.compile("\\d+(?:\\.\\d+)?");
@@ -107,7 +111,7 @@ public class ReportService {
                 .filter(r -> r.getResult() != null)
                 .map(r -> {
                     InsightText text = JsonText.read(r.getResult(), InsightText.class);
-                    return new Insight(text.summary(), text.suggestions(), r.getGeneratedAt(), !statsKey(stats).equals(r.getStatsKey()));
+                    return Insight.of(text, r.getGeneratedAt(), !statsKey(stats).equals(r.getStatsKey()));
                 })
                 .orElse(null);
         return new ReportResponse(stats, insight);
@@ -143,7 +147,7 @@ public class ReportService {
         LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
         saved.update(JsonText.write(text), statsKey(stats), now);
         reportRepository.save(saved);
-        return new ReportResponse(stats, new Insight(text.summary(), text.suggestions(), now, false));
+        return new ReportResponse(stats, Insight.of(text, now, false));
     }
 
     // ── 집계 ─────────────────────────────────────────
@@ -181,7 +185,29 @@ public class ReportService {
                 average(current), average(previous), ratingCounts(current), ratingCounts(previous), typeCounts,
                 complaints.size(), previousComplaints.size(),
                 rate(complaints.size(), current.size()), rate(previousComplaints.size(), previous.size()),
-                topics, resolved, representatives(complaints, topics), replyStats(current), replyStats(previous));
+                topics, resolved, representatives(complaints, topics), replyStats(current), replyStats(previous),
+                rate(positivesOf(current), current.size()), rate(positivesOf(previous), previous.size()),
+                daily(current, weekStart), daily(previous, weekStart.minusWeeks(1)));
+    }
+
+    private static int positivesOf(List<Review> reviews) {
+        return (int) reviews.stream().filter(r -> r.getSentiment() == Sentiment.POSITIVE).count();
+    }
+
+    /** 리뷰 날짜: 고객 작성일이 있으면 작성일, 없으면 등록일 (주 구분과 같은 기준) */
+    static LocalDate dateOf(Review r) {
+        return r.getWrittenOn() != null ? r.getWrittenOn() : r.getCreatedAt().toLocalDate();
+    }
+
+    /** 월요일부터 7일, 하루씩 리뷰 수·평균 별점·긍정·불만 (리뷰 없는 날도 0으로 채움) */
+    static List<DailyStat> daily(List<Review> reviews, LocalDate weekStart) {
+        List<DailyStat> out = new ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            LocalDate day = weekStart.plusDays(i);
+            List<Review> of = reviews.stream().filter(r -> day.equals(dateOf(r))).toList();
+            out.add(new DailyStat(day, of.size(), average(of), positivesOf(of), complaintsOf(of).size()));
+        }
+        return out;
     }
 
     private static Integer rate(int part, int total) {
@@ -262,8 +288,7 @@ public class ReportService {
     }
 
     private static RepresentativeReview representative(Review r, String topic) {
-        LocalDate date = r.getWrittenOn() != null ? r.getWrittenOn() : r.getCreatedAt().toLocalDate();
-        return new RepresentativeReview(r.getId(), r.getPlatform(), r.getRating(), r.getMaskedContent(), topic, date);
+        return new RepresentativeReview(r.getId(), r.getPlatform(), r.getRating(), r.getMaskedContent(), topic, dateOf(r));
     }
 
     private ReplyStats replyStats(List<Review> reviews) {
@@ -290,17 +315,22 @@ public class ReportService {
         JsonNode json = llmClient.generateJson(new LlmRequest(
                 props.generateModel(), prompts.render(PROMPT, Map.of()), user, "weekly_insight", SCHEMA, 2000));
         String summary = json.path("summary").asText("").strip();
-        List<String> suggestions = new ArrayList<>();
-        json.path("suggestions").forEach(n -> {
-            String item = n.asText("").strip();
-            if (!item.isEmpty() && suggestions.size() < 3) {
-                suggestions.add(item);
-            }
-        });
         if (summary.isEmpty()) {
             throw new LlmException("요약이 비어 있습니다", null, "LLM_INVALID");
         }
-        return new InsightText(summary, suggestions);
+        return new InsightText(summary, items(json.path("positives"), 2), items(json.path("improvements"), 2),
+                items(json.path("suggestions"), 3));
+    }
+
+    private static List<String> items(JsonNode array, int max) {
+        List<String> out = new ArrayList<>();
+        array.forEach(n -> {
+            String item = n.asText("").strip();
+            if (!item.isEmpty() && out.size() < max) {
+                out.add(item);
+            }
+        });
+        return out;
     }
 
     static String userMessage(Store store, WeeklyStats s) {
@@ -313,6 +343,8 @@ public class ReportService {
         sb.append("- 불만 리뷰: ").append(s.complaints()).append("건")
                 .append(s.complaintRate() == null ? "" : " (전체의 " + s.complaintRate() + "%)")
                 .append(", 지난주: ").append(s.previousComplaints()).append("건\n");
+        sb.append("- 긍정 리뷰 비율: ").append(s.positiveRate() == null ? "없음" : s.positiveRate() + "%")
+                .append(", 지난주: ").append(s.previousPositiveRate() == null ? "없음" : s.previousPositiveRate() + "%").append('\n');
         sb.append("- 유형별: ");
         s.typeCounts().forEach((k, v) -> sb.append(k).append(' ').append(v).append("건 "));
         sb.append('\n');
@@ -351,8 +383,10 @@ public class ReportService {
         List<Number> values = new ArrayList<>(List.of(s.total(), s.previousTotal(), s.complaints(), s.previousComplaints(),
                 Math.abs(s.total() - s.previousTotal()), Math.abs(s.complaints() - s.previousComplaints()),
                 s.replies().target(), s.replies().completed(), s.replies().edited(), s.replies().regenerated()));
-        if (s.complaintRate() != null) {
-            values.add(s.complaintRate());
+        for (Integer rate : new Integer[]{s.complaintRate(), s.previousComplaintRate(), s.positiveRate(), s.previousPositiveRate()}) {
+            if (rate != null) {
+                values.add(rate);
+            }
         }
         if (s.replies().completionRate() != null) {
             values.add(s.replies().completionRate());
@@ -386,16 +420,23 @@ public class ReportService {
         return allowed;
     }
 
+    /** 요약과 모든 항목 문장 */
+    private static List<String> parts(InsightText text) {
+        List<String> parts = new ArrayList<>();
+        parts.add(text.summary());
+        parts.addAll(ReportDtos.orEmpty(text.positives()));
+        parts.addAll(ReportDtos.orEmpty(text.improvements()));
+        parts.addAll(ReportDtos.orEmpty(text.suggestions()));
+        return parts;
+    }
+
     static boolean hasMeta(InsightText text) {
-        return UntrustedText.META.matcher(text.summary()).find()
-                || text.suggestions().stream().anyMatch(t -> UntrustedText.META.matcher(t).find());
+        return parts(text).stream().anyMatch(t -> UntrustedText.META.matcher(t).find());
     }
 
     static List<String> unknownNumbers(InsightText text, Set<String> allowed) {
         List<String> unknown = new ArrayList<>();
-        List<String> parts = new ArrayList<>(text.suggestions());
-        parts.add(text.summary());
-        for (String part : parts) {
+        for (String part : parts(text)) {
             Matcher m = NUMBER.matcher(part);
             while (m.find()) {
                 if (!allowed.contains(m.group()) && !unknown.contains(m.group())) {

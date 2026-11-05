@@ -156,6 +156,17 @@ class AccountAndSupportTest {
         MockHttpSession a = login("a@test.com", PW);
         mvc.perform(get("/api/stores/" + bStoreId).session(a)).andExpect(status().isNotFound());
         mvc.perform(get("/api/stores").session(a)).andExpect(jsonPath("$.length()").value(1));
+
+        // 답글 기본 설정: 자기 매장만, 정해진 말투만
+        mvc.perform(put("/api/stores/" + bStoreId + "/reply-settings").session(a).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("defaultTone", "FRIENDLY", "avoidDuplicates", false)))).andExpect(status().isNotFound());
+        mvc.perform(put("/api/stores/" + bStoreId + "/reply-settings").session(b).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("defaultTone", "LOUD", "avoidDuplicates", true)))).andExpect(status().isBadRequest());
+        mvc.perform(put("/api/stores/" + bStoreId + "/reply-settings").session(b).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("defaultTone", "CONCISE", "avoidDuplicates", false))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.replySettings.defaultTone").value("CONCISE"))
+                .andExpect(jsonPath("$.replySettings.avoidDuplicates").value(false));
     }
 
     @Test

@@ -61,17 +61,39 @@ public final class ReportDtos {
             List<RepresentativeReview> representatives,
             ReplyStats replies,
             /** 지난주 리뷰 기준 답글 현황 (지난주와 비교용) */
-            ReplyStats previousReplies
+            ReplyStats previousReplies,
+            /** 긍정 리뷰 비율 % (감정이 긍정인 리뷰 / 전체, 이번 주 / 지난주) */
+            Integer positiveRate,
+            Integer previousPositiveRate,
+            /** 날짜별 집계 (월~일 7일, 이번 주 / 지난주 같은 요일) */
+            List<DailyStat> daily,
+            List<DailyStat> previousDaily
     ) {
     }
 
-    /** AI 가 쓴 요약·개선 제안. stale 이면 만든 뒤 리뷰가 바뀐 것 */
-    public record Insight(String summary, List<String> suggestions, LocalDateTime generatedAt, boolean stale) {
+    /** 하루 집계: 리뷰 수, 평균 별점(리뷰 없으면 null), 긍정·불만 리뷰 수 */
+    public record DailyStat(LocalDate date, int total, Double avgRating, int positive, int complaints) {
+    }
+
+    /**
+     * AI 가 쓴 분석. summary 요약, positives 좋아진 점, improvements 개선이 필요한 점, suggestions 바로 해볼 제안.
+     * stale 이면 만든 뒤 리뷰가 바뀐 것
+     */
+    public record Insight(String summary, List<String> positives, List<String> improvements, List<String> suggestions,
+                          LocalDateTime generatedAt, boolean stale) {
+        static Insight of(InsightText t, LocalDateTime at, boolean stale) {
+            return new Insight(t.summary(), orEmpty(t.positives()), orEmpty(t.improvements()), orEmpty(t.suggestions()), at, stale);
+        }
+    }
+
+    static List<String> orEmpty(List<String> list) {
+        return list == null ? List.of() : list;
     }
 
     public record ReportResponse(WeeklyStats stats, Insight insight) {
     }
 
-    public record InsightText(String summary, List<String> suggestions) {
+    /** 저장 형식. 예전에 저장한 요약에는 positives·improvements 가 없다 (null) */
+    public record InsightText(String summary, List<String> positives, List<String> improvements, List<String> suggestions) {
     }
 }

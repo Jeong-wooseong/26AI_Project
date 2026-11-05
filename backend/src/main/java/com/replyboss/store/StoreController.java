@@ -69,6 +69,13 @@ public class StoreController {
         return toneProfileService.extract(request.sampleReplies());
     }
 
+    /** 답글 기본 설정 (처음 보여줄 말투, 중복 답글 방지) */
+    @PutMapping("/{id}/reply-settings")
+    public StoreResponse updateReplySettings(@PathVariable Long id, @Valid @RequestBody StoreDtos.ReplySettings request) {
+        guard.requireStore(id);
+        return storeService.updateReplySettings(id, request);
+    }
+
     @PutMapping("/{id}/tone-profile")
     public StoreResponse updateTone(@PathVariable Long id, @Valid @RequestBody ToneUpdateRequest request) {
         guard.requireStore(id);
