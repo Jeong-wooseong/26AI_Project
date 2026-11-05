@@ -11,6 +11,7 @@ import HelpChat from './components/HelpChat.jsx';
 import { BrandLogo } from './components/Mascot.jsx';
 import { Toast, useToast } from './components/Toast.jsx';
 import Icon from './components/Icon.jsx';
+import { CATEGORY_ICON } from './labels.js';
 import { EmptyState, PrimaryButton, SecondaryButton } from './components/ui.jsx';
 
 const VIEWS = [
@@ -199,6 +200,8 @@ export default function App() {
 
   return (
     <div className="app">
+      <Sidebar me={me} store={store} active={active} onLogout={logout} />
+      {/* 좁은 화면에서는 사이드바 대신 위쪽 머리글 */}
       <header className="header">
         <div className="header-inner">
           <div className="brand">
@@ -268,5 +271,49 @@ function UserMenu({ me, active, onLogout }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** 넓은 화면의 왼쪽 메뉴: 매장 · 화면 메뉴 · 고객 지원/관리자 · 계정 */
+function Sidebar({ me, store, active, onLogout }) {
+  const ready = !!store?.toneProfile;
+  return (
+    <aside className="sidebar">
+      <a className="sidebar-brand" href="#reviews" aria-label="ReplyBoss 오늘의 리뷰로 이동"><BrandLogo size={34} /></a>
+      <a className="sidebar-store" href="#setup" title="매장 설정 열기">
+        <span className="sidebar-store-icon"><Icon name={CATEGORY_ICON[store?.category] ?? 'store'} size={18} /></span>
+        <span className="sidebar-store-text">
+          <strong>{store?.name ?? '매장 미등록'}</strong>
+          <small className={ready ? 'is-ready' : 'is-todo'}>
+            {store ? `${store.category} 매장` : '매장 정보 필요'}
+            <span>{ready ? '답글 스타일 저장됨' : '답글 스타일 설정 필요'}</span>
+          </small>
+        </span>
+      </a>
+      <nav className="side-nav" aria-label="화면">
+        {VIEWS.map(([key, label]) => (
+          <a key={key} href={`#${key}`} aria-current={active === key ? 'page' : undefined}>
+            <Icon name={VIEW_ICON[key]} />
+            {label}
+          </a>
+        ))}
+      </nav>
+      <nav className="side-nav is-sub" aria-label="지원">
+        <a href="#support" aria-current={active === 'support' ? 'page' : undefined}><Icon name="support" />고객 지원</a>
+        {me.role === 'ADMIN' && (
+          <a href="#admin" aria-current={active === 'admin' ? 'page' : undefined}><Icon name="admin" />관리자</a>
+        )}
+      </nav>
+      <div className="sidebar-account">
+        <span className="sidebar-avatar" aria-hidden="true"><Icon name="user" size={18} /></span>
+        <span className="sidebar-who">
+          <strong title={me.email}>{me.email}</strong>
+          <small>{me.role === 'ADMIN' ? '관리자 계정' : '사장님 계정'}</small>
+        </span>
+        <button type="button" className="icon-btn" aria-label="로그아웃" title="로그아웃" onClick={onLogout}>
+          <Icon name="logout" size={18} />
+        </button>
+      </div>
+    </aside>
   );
 }

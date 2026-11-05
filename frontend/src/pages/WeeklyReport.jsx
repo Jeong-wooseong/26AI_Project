@@ -114,16 +114,16 @@ export default function WeeklyReport({ store, go }) {
         <article className="report">
           <p className="report-headline">{headline(s)}</p>
           <dl className="report-figures">
-            <Figure label="리뷰" value={`${s.total}건`} compare={s.previousTotal ? `지난주 ${s.previousTotal}건` : '지난주 없음'}
+            <Figure label="리뷰" icon="reviews" tone="primary" value={`${s.total}건`} compare={s.previousTotal ? `지난주 ${s.previousTotal}건` : '지난주 없음'}
                     delta={s.previousTotal ? <Delta diff={s.total - s.previousTotal} unit="건" /> : null} />
-            <Figure label="평균 별점" value={s.avgRating?.toFixed(1) ?? '-'}
+            <Figure label="평균 별점" icon="star" tone="star" value={s.avgRating?.toFixed(1) ?? '-'}
                     compare={s.previousAvgRating != null ? `지난주 ${s.previousAvgRating.toFixed(1)}` : '지난주 없음'}
                     delta={s.avgRating != null && s.previousAvgRating != null
                       ? <Delta diff={round1(s.avgRating - s.previousAvgRating)} unit="점" better="up" digits={1} /> : null} />
-            <Figure label="불만 리뷰" value={`${s.complaints}건`} unit={s.complaintRate != null ? `전체의 ${s.complaintRate}%` : null}
+            <Figure label="불만 리뷰" icon="error" tone="complaint" value={`${s.complaints}건`} unit={s.complaintRate != null ? `전체의 ${s.complaintRate}%` : null}
                     compare={s.previousTotal ? `지난주 ${s.previousComplaints}건` : '지난주 없음'}
                     delta={s.previousTotal ? <Delta diff={s.complaints - s.previousComplaints} unit="건" better="down" /> : null} />
-            <Figure label="답글 작성 완료" value={`${s.replies.completed}/${s.replies.target}`}
+            <Figure label="답글 작성 완료" icon="confirm" tone="success" value={`${s.replies.completed}/${s.replies.target}`}
                     unit={s.replies.completionRate != null ? `${s.replies.completionRate}%` : null}
                     compare={s.previousReplies?.completionRate != null ? `지난주 ${s.previousReplies.completionRate}%` : '분류된 리뷰 기준'}
                     delta={s.replies.completionRate != null && s.previousReplies?.completionRate != null
@@ -166,12 +166,12 @@ export default function WeeklyReport({ store, go }) {
             <section className="report-section" aria-labelledby="topics-title">
               <div className="report-section-head">
                 <h2 id="topics-title">불만 주제 순위</h2>
-                <p>불만 리뷰의 키워드별 리뷰 수입니다.</p>
+                <p>불만 리뷰 {s.complaints}건을 키워드별로 셌습니다. 한 리뷰에 키워드가 여럿이면 각각 셉니다.</p>
               </div>
               {s.topics.length === 0 ? (
                 <p className="report-empty">이 주에는 불만 리뷰가 없습니다.</p>
               ) : (
-                <TopicTable topics={s.topics} />
+                <TopicRanking topics={s.topics} complaints={s.complaints} reps={s.representatives} />
               )}
             </section>
 
@@ -204,10 +204,10 @@ export default function WeeklyReport({ store, go }) {
   );
 }
 
-function Figure({ label, value, unit, compare, delta }) {
+function Figure({ label, icon, tone, value, unit, compare, delta }) {
   return (
-    <div className="figure">
-      <dt>{label}</dt>
+    <div className={`figure is-${tone}`}>
+      <dt>{label}<span className="figure-icon" aria-hidden="true"><Icon name={icon} size={18} /></span></dt>
       <dd>
         <span className="figure-value">{value}</span>
         {unit && <span className="figure-unit">{unit}</span>}
@@ -366,37 +366,32 @@ function Comparison({ stats: s }) {
   );
 }
 
-/** 이번 주 리뷰 수를 막대로 (한 가지 색, 가장 많은 주제 기준 길이). 숫자는 항상 글자로 함께 표시 */
-function TopicTable({ topics }) {
+/** 불만 주제 순위: 주제 · 대표 리뷰 한 줄 · 막대(가장 많은 주제 기준) · 건수와 비율 · 지난주 대비. 숫자는 항상 글자로 함께 */
+function TopicRanking({ topics, complaints, reps }) {
   const max = Math.max(...topics.map((t) => t.count), 1);
+  const quoteOf = (topic) => reps.find((r) => r.topic === topic)?.maskedContent;
   return (
-    <table className="topic-table">
-      <thead>
-        <tr>
-          <th scope="col">순위</th>
-          <th scope="col">주제</th>
-          <th scope="col">이번 주</th>
-          <th scope="col" className="num">지난주</th>
-          <th scope="col" className="num">변화</th>
-        </tr>
-      </thead>
-      <tbody>
-        {topics.map((t, i) => (
-          <tr key={t.topic}>
-            <td className="rank">{i + 1}</td>
-            <th scope="row">{t.topic}</th>
-            <td>
-              <span className="topic-bar">
-                <span className="bar" style={{ width: `${(t.count / max) * 100}%` }} aria-hidden="true" />
-                <span className="count">{t.count}건</span>
-              </span>
-            </td>
-            <td className="num">{t.previousCount}건</td>
-            <td className="num"><Change topic={t} /></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <ol className="topic-rank">
+      {topics.map((t, i) => {
+        const quote = quoteOf(t.topic);
+        return (
+          <li key={t.topic} className={i === 0 ? 'is-top' : undefined}>
+            <span className="rank-no" aria-label={`${i + 1}위`}>{i + 1}</span>
+            <span className="rank-main">
+              <strong>{t.topic}</strong>
+              {quote && <span className="rank-quote">{quote}</span>}
+            </span>
+            <span className="rank-bar" aria-hidden="true"><span style={{ width: `${(t.count / max) * 100}%` }} /></span>
+            <span className="rank-count">
+              {t.count}건{complaints > 0 && <small>{Math.round((t.count / complaints) * 100)}%</small>}
+            </span>
+            <span className="rank-change">
+              <span className="sr-only">지난주 {t.previousCount}건, </span><Change topic={t} />
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

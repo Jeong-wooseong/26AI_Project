@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { support } from '../api.js';
 import Icon from '../components/Icon.jsx';
 import {
-  Alert, EmptyState, FormInput, FormSelect, PageHeader, PrimaryButton, SecondaryButton, SegmentedTabs, StatusIndicator,
+  Alert, EmptyState, FormInput, FormSelect, PageHeader, PrimaryButton, SecondaryButton, StatusIndicator,
 } from '../components/ui.jsx';
 import { formatDateTime } from '../components/reply/replyModel.js';
 
@@ -24,11 +24,6 @@ const LOCATION_OF = { setup: '매장 설정', input: '리뷰 입력', reviews: '
 const MAX_FILE = 5 * 1024 * 1024;
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 
-const TABS = [
-  { key: 'faq', label: '자주 묻는 질문' },
-  { key: 'new', label: '문의하기' },
-  { key: 'mine', label: '내 문의' },
-];
 
 /** 다른 화면에서 문의 화면을 여는 주소 (오류 제보: 위치·오류 코드 자동 기록) */
 export function supportLink({ type = 'BUG', location, code, from } = {}) {
@@ -49,18 +44,40 @@ export function ReportErrorLink({ location, code }) {
   );
 }
 
+/**
+ * 넓은 화면: 왼쪽 자주 묻는 질문, 오른쪽 내 문의 현황 + 새 문의. 좁은 화면은 같은 순서로 쌓는다.
+ * 예전 주소(#support/new, #support/mine)로 들어오면 해당 영역으로 스크롤한다.
+ */
 export default function Support({ sub, params, from, toast }) {
-  const tab = TABS.some((t) => t.key === sub) ? sub : 'faq';
-  const go = (key) => {
-    window.location.hash = `support/${key}`;
-  };
+  const [refresh, setRefresh] = useState(0); // 문의를 접수하면 내 문의 목록을 다시 불러온다
+  const formRef = useRef(null);
+  const mineRef = useRef(null);
+
+  useEffect(() => {
+    const el = sub === 'new' ? formRef.current : sub === 'mine' ? mineRef.current : null;
+    if (!el) return;
+    el.scrollIntoView({ block: 'start' });
+    if (sub === 'new') el.querySelector('input:not([type=radio]), textarea')?.focus({ preventScroll: true });
+  }, [sub, params]);
+
+  function onDone() {
+    setRefresh((n) => n + 1);
+    window.history.replaceState(null, '', '#support/mine');
+    requestAnimationFrame(() => mineRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  }
+
   return (
     <>
       <PageHeader title="고객 지원" description="서비스 이용 중 궁금한 점이나 불편한 점을 알려주십시오. 담당자가 확인한 뒤 답변합니다." />
-      <SegmentedTabs tabs={TABS} value={tab} onChange={go} label="고객 지원" idPrefix="support" />
-      {tab === 'faq' && <FaqTab />}
-      {tab === 'new' && <InquiryForm key={params.toString()} params={params} from={from} toast={toast} onDone={() => go('mine')} />}
-      {tab === 'mine' && <MyInquiries />}
+      <div className="support-layout">
+        <FaqTab />
+        <aside className="support-side" aria-label="내 문의와 새 문의">
+          <div ref={mineRef} className="support-anchor"><MyInquiries key={refresh} /></div>
+          <div ref={formRef} className="support-anchor">
+            <InquiryForm key={`${params.toString()}-${refresh}`} params={params} from={from} toast={toast} onDone={onDone} />
+          </div>
+        </aside>
+      </div>
     </>
   );
 }
@@ -69,29 +86,49 @@ function FaqTab() {
   const [items, setItems] = useState(null);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState('');
+  const [category, setCategory] = useState(null);
   const [open, setOpen] = useState(null);
 
   useEffect(() => {
     support.faq().then(setItems).catch((e) => setError(e.message));
   }, []);
 
+  const categories = useMemo(() => [...new Set((items ?? []).map((f) => f.category))], [items]);
   const shown = useMemo(() => {
     if (!items) return [];
     const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((f) => [f.question, f.answer, ...(f.keywords ?? [])].some((t) => t.toLowerCase().includes(q)));
-  }, [items, query]);
+    return items.filter((f) => (!category || f.category === category)
+      && (!q || [f.question, f.answer, ...(f.keywords ?? [])].some((t) => t.toLowerCase().includes(q))));
+  }, [items, query, category]);
 
-  if (error) return <Alert>{error}</Alert>;
-  if (!items) return <EmptyState loading description="불러오는 중…" />;
   return (
-    <section className="section">
-      <div className="section-body">
-        <FormInput icon="search" label="자주 묻는 질문 검색" hideLabel placeholder="예: 인증 메일, 말투, 작성 완료"
+    <div className="support-main">
+      <section className="faq-search" aria-labelledby="faq-search-title">
+        <h2 id="faq-search-title">무엇을 도와드릴까요?</h2>
+        <p className="hint">증상이나 기능 이름으로 찾아보십시오. 답이 없으면 오른쪽 아래 도우미에게 물어보거나 문의를 남겨 주십시오.</p>
+        <FormInput icon="search" label="자주 묻는 질문 검색" hideLabel placeholder="예: 인증 메일, 말투, 작성 완료, 인터넷"
                    value={query} onChange={(e) => setQuery(e.target.value)} />
-        {shown.length === 0 ? (
+        {categories.length > 0 && (
+          <div className="faq-cats" role="group" aria-label="주제로 거르기">
+            <button type="button" className="type-chip" aria-pressed={!category} onClick={() => setCategory(null)}>전체</button>
+            {categories.map((c) => (
+              <button key={c} type="button" className="type-chip" aria-pressed={category === c}
+                      onClick={() => setCategory(category === c ? null : c)}>{c}</button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="faq-panel" aria-labelledby="faq-title">
+        <div className="faq-panel-head">
+          <h2 id="faq-title">자주 묻는 질문</h2>
+          {items && <span className="hint">{shown.length}개</span>}
+        </div>
+        {error && <Alert>{error}</Alert>}
+        {!items && !error && <EmptyState loading description="불러오는 중…" />}
+        {items && (shown.length === 0 ? (
           <p className="dt-empty">
-            찾는 내용이 없으면 오른쪽 아래 도우미에게 물어보거나 <a href="#support/new?type=GENERAL">문의를 남겨 주십시오</a>.
+            찾는 내용이 없습니다. 도우미에게 물어보거나 <a href="#support/new?type=GENERAL">문의를 남겨 주십시오</a>.
           </p>
         ) : (
           <ul className="faq">
@@ -106,9 +143,9 @@ function FaqTab() {
               </li>
             ))}
           </ul>
-        )}
-      </div>
-    </section>
+        ))}
+      </section>
+    </div>
   );
 }
 
@@ -166,8 +203,9 @@ function InquiryForm({ params, from, toast, onDone }) {
   }
 
   return (
-    <form className="section" onSubmit={submit} noValidate>
+    <form className="section inquiry-form" onSubmit={submit} noValidate aria-labelledby="inquiry-form-title">
       <div className="section-body">
+        <h2 id="inquiry-form-title" className="side-title">새 문의 남기기</h2>
         <fieldset className="type-picker">
           <legend className="label">문의 유형</legend>
           <div className="type-options">
@@ -243,50 +281,62 @@ function MyInquiries() {
     support.myInquiries().then(setItems).catch((e) => setError(e.message));
   }, []);
 
-  if (error) return <Alert>{error}</Alert>;
-  if (!items) return <EmptyState loading description="불러오는 중…" />;
-  if (items.length === 0) {
-    return (
-      <EmptyState title="남긴 문의가 없습니다" description="궁금한 점이나 오류가 있으면 문의를 남겨 주십시오." pose="smile"
-                  action={<PrimaryButton icon="send" onClick={() => { window.location.hash = 'support/new'; }}>문의하기</PrimaryButton>} />
-    );
-  }
+  const counts = (items ?? []).reduce((m, q) => ({ ...m, [q.status]: (m[q.status] ?? 0) + 1 }), {});
   return (
-    <ul className="inquiry-list">
-      {items.map((q) => {
-        const [label, tone] = STATUS[q.status] ?? [q.status, 'neutral'];
-        const isOpen = open === q.id;
-        return (
-          <li key={q.id} className="section inquiry">
-            <button type="button" className="inquiry-head" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : q.id)}>
-              <span className="tag">{TYPE_LABEL[q.type] ?? q.type}</span>
-              <span className="inquiry-title">{q.title}</span>
-              <span className="inquiry-date">{formatDateTime(q.createdAt)}</span>
-              <StatusIndicator tone={tone}>{label}</StatusIndicator>
-            </button>
-            {isOpen && (
-              <div className="inquiry-body">
-                <InquiryMeta q={q} />
-                <p className="inquiry-content">{q.content}</p>
-                {q.attachmentName && (
-                  <a className="attach-link" href={support.attachmentUrl(q.id)} target="_blank" rel="noreferrer">
-                    <Icon name="attach" size={16} />{q.attachmentName}
-                  </a>
-                )}
-                {q.answer ? (
-                  <div className="inquiry-answer">
-                    <span className="final-label">답변 {q.answeredAt && <span className="final-tone">{formatDateTime(q.answeredAt)}</span>}</span>
-                    <p>{q.answer}</p>
+    <section className="my-inquiries" aria-labelledby="my-inquiries-title">
+      <div className="my-inquiries-head">
+        <h2 id="my-inquiries-title" className="side-title">내 문의</h2>
+        {items?.length > 0 && (
+          <p className="my-inquiries-counts">
+            <span>전체 {items.length}</span>
+            {Object.entries(STATUS).map(([k, [label, tone]]) => (counts[k]
+              ? <span key={k} className={`is-${tone}`}>{label} {counts[k]}</span> : null))}
+          </p>
+        )}
+      </div>
+      {error && <Alert>{error}</Alert>}
+      {!items && !error && <EmptyState loading description="불러오는 중…" />}
+      {items?.length === 0 && <p className="hint my-inquiries-empty">아직 남긴 문의가 없습니다. 아래에서 문의를 남기면 처리 상태와 답변이 여기에 표시됩니다.</p>}
+      {items?.length > 0 && (
+        <ul className="inquiry-list">
+          {items.map((q) => {
+            const [label, tone] = STATUS[q.status] ?? [q.status, 'neutral'];
+            const isOpen = open === q.id;
+            return (
+              <li key={q.id} className="inquiry">
+                <button type="button" className="inquiry-head" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : q.id)}>
+                  <span className="inquiry-top">
+                    <span className="tag">{TYPE_LABEL[q.type] ?? q.type}</span>
+                    <StatusIndicator tone={tone}>{label}</StatusIndicator>
+                    <span className="inquiry-date">{formatDateTime(q.createdAt)}</span>
+                  </span>
+                  <span className="inquiry-title">{q.title}</span>
+                </button>
+                {isOpen && (
+                  <div className="inquiry-body">
+                    <InquiryMeta q={q} />
+                    <p className="inquiry-content">{q.content}</p>
+                    {q.attachmentName && (
+                      <a className="attach-link" href={support.attachmentUrl(q.id)} target="_blank" rel="noreferrer">
+                        <Icon name="attach" size={16} />{q.attachmentName}
+                      </a>
+                    )}
+                    {q.answer ? (
+                      <div className="inquiry-answer">
+                        <span className="final-label">답변 {q.answeredAt && <span className="final-tone">{formatDateTime(q.answeredAt)}</span>}</span>
+                        <p>{q.answer}</p>
+                      </div>
+                    ) : (
+                      <p className="hint">아직 답변이 없습니다. 답변이 등록되면 메일로 알려 드립니다.</p>
+                    )}
                   </div>
-                ) : (
-                  <p className="hint">아직 답변이 없습니다. 답변이 등록되면 메일로 알려 드립니다.</p>
                 )}
-              </div>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 

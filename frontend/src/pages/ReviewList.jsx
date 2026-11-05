@@ -22,6 +22,22 @@ const TABS = [
   ['fail', '분류 실패'],
 ];
 const TYPE_TONE = { PRAISE: 'praise', COMPLAINT: 'complaint', MALICIOUS: 'malicious', INQUIRY: 'inquiry', RATING_ONLY: 'rating' };
+// 이 폭 이상이면 왼쪽 목록 + 오른쪽 작업 공간, 좁으면 한 줄로 쌓인 대화 목록
+const WIDE_QUERY = '(min-width: 1180px)';
+
+function useMediaQuery(query) {
+  const get = () => typeof window !== 'undefined' && window.matchMedia?.(query).matches;
+  const [match, setMatch] = useState(get);
+  useEffect(() => {
+    const m = window.matchMedia?.(query);
+    if (!m) return undefined;
+    const on = () => setMatch(m.matches);
+    on();
+    m.addEventListener('change', on);
+    return () => m.removeEventListener('change', on);
+  }, [query]);
+  return !!match;
+}
 
 /**
  * 화면 ③ 오늘의 리뷰.
@@ -37,6 +53,9 @@ export default function ReviewList({ store, toast, go, initialTab }) {
   const [reviews, setReviews] = useState(null);
   const [error, setError] = useState(null);
   const [bulkOpen, setBulkOpen] = useState(false); // 답글 일괄 처리 패널
+  const [selectedId, setSelectedId] = useState(null); // 넓은 화면: 오른쪽에서 작업 중인 리뷰
+  const wide = useMediaQuery(WIDE_QUERY);
+  const detailRef = useRef(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -92,10 +111,20 @@ export default function ReviewList({ store, toast, go, initialTab }) {
 
   const remove = (id) => setReviews((rs) => rs.filter((x) => x.id !== id));
 
-  const typeOptions = [
-    ['ALL', `전체 유형 (${byStatus.length})`],
-    ...TYPES.map(([key, label]) => [key, `${label} (${typeCounts[key] ?? 0})`]),
-  ];
+  // 작성 완료하거나 삭제해서 목록에서 빠지면 같은 자리의 다음 리뷰로 넘어간다
+  const selectedIndex = paged.findIndex((r) => r.id === selectedId);
+  const lastIndex = useRef(0);
+  if (selectedIndex >= 0) lastIndex.current = selectedIndex;
+  const selected = selectedIndex >= 0 ? paged[selectedIndex] : paged[Math.min(lastIndex.current, paged.length - 1)];
+
+  function select(id) {
+    setSelectedId(id);
+    detailRef.current?.scrollTo({ top: 0 });
+  }
+  const step = (d) => {
+    const i = paged.indexOf(selected) + d;
+    if (paged[i]) select(paged[i].id);
+  };
 
   return (
     <>
@@ -120,8 +149,6 @@ export default function ReviewList({ store, toast, go, initialTab }) {
             </SecondaryButton>
             <FormSelect id="platformFilter" label="리뷰 출처" hideLabel value={platform}
                         options={[['ALL', '전체 출처'], ...usedPlatforms]} onChange={(e) => setPlatform(e.target.value)} />
-            <FormSelect id="typeFilter" label="유형" hideLabel value={filter} options={typeOptions}
-                        onChange={(e) => setFilter(e.target.value)} />
           </>
         )}
         end={(
@@ -129,6 +156,20 @@ export default function ReviewList({ store, toast, go, initialTab }) {
                      placeholder="리뷰·답글 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
         )}
       />
+
+      {all.length > 0 && (
+        <div className="type-chips" role="group" aria-label="유형으로 거르기">
+          <button type="button" className="type-chip" aria-pressed={filter === 'ALL'} onClick={() => setFilter('ALL')}>
+            전체<span className="type-chip-n">{byStatus.length}</span>
+          </button>
+          {TYPES.map(([key, label]) => (
+            <button key={key} type="button" className={`type-chip is-${TYPE_TONE[key]}`} aria-pressed={filter === key}
+                    onClick={() => setFilter(filter === key ? 'ALL' : key)}>
+              <i aria-hidden="true" />{label}<span className="type-chip-n">{typeCounts[key] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <Alert action={<SecondaryButton tone="neutral" size="sm" icon="retry" onClick={load}>다시 불러오기</SecondaryButton>}>
@@ -178,13 +219,43 @@ export default function ReviewList({ store, toast, go, initialTab }) {
             <BulkReplyPanel reviews={visible} onUpdated={replace} onClose={() => setBulkOpen(false)} toast={toast} />
           )}
 
-          <section className="feed" aria-label="리뷰 목록">
-            {visible.length === 0 ? (
+          {visible.length === 0 ? (
+            <section className="feed" aria-label="리뷰 목록">
               <EmptyTab status={status} searching={!!q} waitCount={statusCounts.wait} onShowWait={() => changeTab('wait')} />
-            ) : paged.map((r) => (isDone
-              ? <CompletedRow key={r.id} review={r} onUpdated={replace} onDeleted={remove} toast={toast} />
-              : <Ticket key={r.id} review={r} onUpdated={replace} onDeleted={remove} toast={toast} />))}
-          </section>
+            </section>
+          ) : (
+            <div className={wide ? 'workspace' : undefined}>
+              {wide && (
+                <section className="queue" aria-label="리뷰 목록">
+                  <ul>
+                    {paged.map((r) => (
+                      <QueueItem key={r.id} review={r} selected={r === selected} onSelect={() => select(r.id)} />
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {/* 좁은 화면: 모든 리뷰를 쌓아서 / 넓은 화면: 선택한 리뷰만 보이고 나머지는 작업 상태를 유지한 채 숨김 */}
+              <section className={wide ? 'detail' : 'feed'} ref={detailRef}
+                       aria-label={wide ? '선택한 리뷰의 답글 작업' : '리뷰 목록'}>
+                {wide && selected && (
+                  <div className="detail-bar">
+                    <span>{paged.indexOf(selected) + 1} / {paged.length}건</span>
+                    <span className="detail-nav">
+                      <IconButton icon="prev" size="sm" label="이전 리뷰" disabled={paged.indexOf(selected) === 0} onClick={() => step(-1)} />
+                      <IconButton icon="next" size="sm" label="다음 리뷰" disabled={paged.indexOf(selected) === paged.length - 1}
+                                  onClick={() => step(1)} />
+                    </span>
+                  </div>
+                )}
+                {paged.map((r) => {
+                  const hidden = wide && r !== selected;
+                  return isDone
+                    ? <CompletedRow key={r.id} review={r} hidden={hidden} onUpdated={replace} onDeleted={remove} toast={toast} />
+                    : <Ticket key={r.id} review={r} hidden={hidden} onUpdated={replace} onDeleted={remove} toast={toast} />;
+                })}
+              </section>
+            </div>
+          )}
         </>
       )}
 
@@ -230,7 +301,7 @@ function EmptyTab({ status, searching, waitCount, onShowWait }) {
 }
 
 /** 작성 완료 행: 리뷰 원문 → 최종 답글. 초안은 보여주지 않는다. */
-function CompletedRow({ review: r, onUpdated, onDeleted, toast }) {
+function CompletedRow({ review: r, hidden, onUpdated, onDeleted, toast }) {
   const reply = finalReplyOf(r);
   // 완료한 뒤 다른 시각(분 단위)에 고쳤을 때만 수정 시각을 따로 보여준다
   const edited = r.finalUpdatedAt && r.completedAt && formatDateTime(r.finalUpdatedAt) !== formatDateTime(r.completedAt);
@@ -248,7 +319,7 @@ function CompletedRow({ review: r, onUpdated, onDeleted, toast }) {
   }
 
   return (
-    <article className="thread is-done">
+    <article className="thread is-done" hidden={hidden}>
       <ThreadHead review={r}>
         <StatusIndicator tone={TYPE_TONE[r.type]}>{TYPE_LABEL[r.type]}</StatusIndicator>
         <span className="done-mark" title={edited ? `마지막 수정 ${formatDateTime(r.finalUpdatedAt)}` : undefined}>
@@ -264,7 +335,7 @@ function CompletedRow({ review: r, onUpdated, onDeleted, toast }) {
 }
 
 /** 작성 대기·분류 실패 행: 분류 결과와 답글 초안 작업 */
-function Ticket({ review: r, onUpdated, onDeleted, toast }) {
+function Ticket({ review: r, hidden, onUpdated, onDeleted, toast }) {
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState(null);
   const [generation, setGeneration] = useState({ state: 'idle' });
@@ -331,7 +402,7 @@ function Ticket({ review: r, onUpdated, onDeleted, toast }) {
   const hasReplyArea = !failed && !malicious && (r.replies.length > 0 || DRAFT_TYPES.includes(r.type));
 
   return (
-    <article className={`thread ${failed ? 'is-failed' : ''} ${malicious ? 'is-malicious' : ''}`}>
+    <article className={`thread ${failed ? 'is-failed' : ''} ${malicious ? 'is-malicious' : ''}`} hidden={hidden}>
       <ThreadHead review={r}>
         {failed
           ? <StatusIndicator tone="danger">미분류</StatusIndicator>
@@ -409,6 +480,35 @@ function ReviewQuote({ review: r, showAnalysis = true }) {
         )}
       </p>
     </div>
+  );
+}
+
+/** 넓은 화면 왼쪽 목록의 한 줄: 별점·출처·유형·시각, 리뷰 앞부분, 답글 상태 */
+function QueueItem({ review: r, selected, onSelect }) {
+  const failed = r.status === 'FAILED';
+  const drafts = r.replies.filter((p) => p.id !== r.finalReplyId).length;
+  let state;
+  if (failed) state = <span className="queue-state is-fail">분류 실패</span>;
+  else if (statusOf(r) === 'done') state = <span className="queue-state is-done"><Icon name="confirm" size={14} />작성 완료 {formatDateTime(r.completedAt)}</span>;
+  else if (r.type === 'MALICIOUS') state = <span className="queue-state is-guide">{drafts ? '대응 가이드 확인 전' : '대응 가이드 필요'}</span>;
+  else state = <span className="queue-state">{drafts ? `초안 ${drafts}개` : '초안 없음'}</span>;
+  return (
+    <li>
+      <button type="button" className="queue-item" aria-current={selected ? 'true' : undefined} onClick={onSelect}>
+        <span className="queue-top">
+          <span className="thread-stars" role="img" aria-label={`별점 ${r.rating}점`}>
+            {[1, 2, 3, 4, 5].map((n) => <Icon key={n} name="star" size={12} className={n <= r.rating ? 'is-on' : ''} />)}
+          </span>
+          <span className="platform">{PLATFORM_LABEL[r.platform]}</span>
+          {failed
+            ? <StatusIndicator tone="danger">미분류</StatusIndicator>
+            : <StatusIndicator tone={TYPE_TONE[r.type]}>{TYPE_LABEL[r.type]}</StatusIndicator>}
+          <span className="queue-time">{r.writtenAt ? r.writtenAt.slice(5).replace('-', '.') : formatDateTime(r.createdAt)}</span>
+        </span>
+        <span className={`queue-text ${r.maskedContent ? '' : 'is-empty'}`}>{r.maskedContent || '본문 없이 별점만 남긴 리뷰'}</span>
+        {state}
+      </button>
+    </li>
   );
 }
 
