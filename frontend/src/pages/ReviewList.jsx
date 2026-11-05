@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { PLATFORMS, PLATFORM_LABEL, SENTIMENT_LABEL, TYPES, TYPE_LABEL, todayISO } from '../labels.js';
 import Icon from '../components/Icon.jsx';
 import {
-  Alert, DataTable, DataTableHead, DataTableRow, EmptyState, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton,
+  Alert, EmptyState, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton,
   SecondaryButton, StatusIndicator, Toolbar,
 } from '../components/ui.jsx';
 import ReplyDraftPanel from '../components/reply/ReplyDraftPanel.jsx';
@@ -16,22 +16,6 @@ import BulkReplyPanel from '../components/reply/BulkReplyPanel.jsx';
 
 const PAGE_SIZE = 10;
 // 작성 완료: 리뷰 원문과 최종 답글 중심 / 작성 대기·분류 실패: 분류 결과와 초안 작업
-const DONE_COLUMNS = [
-  { label: '번호' },
-  { label: '출처' },
-  { label: '별점' },
-  { label: '리뷰와 최종 답글' },
-  { label: '상태' },
-];
-const WORK_COLUMNS = [
-  { label: '번호' },
-  { label: '출처' },
-  { label: '별점' },
-  { label: '리뷰 내용' },
-  { label: '분류' },
-  { label: '답글 상태' },
-  { label: '관리', className: 'rt-actions-head' },
-];
 const TABS = [
   ['done', '작성 완료'],
   ['wait', '작성 대기'],
@@ -163,13 +147,10 @@ export default function ReviewList({ store, toast, go, initialTab }) {
         />
       )}
 
-      {bulkOpen && status === 'wait' && visible.length > 0 && (
-        <BulkReplyPanel reviews={visible} onUpdated={replace} onClose={() => setBulkOpen(false)} toast={toast} />
-      )}
-
       {all.length > 0 && (
-        <DataTable label="리뷰 목록" className={`review-table ${isDone ? 'is-done-view' : ''}`}>
-          <div className="dt-caption">
+        <>
+          <StatusMeter counts={statusCounts} />
+          <div className="list-bar">
             <div className="status-tabs" role="group" aria-label="답글 상태로 거르기">
               {TABS.map(([key, label]) => (
                 <button key={key} type="button" aria-pressed={status === key} className={`status-tab is-${key}`}
@@ -179,31 +160,32 @@ export default function ReviewList({ store, toast, go, initialTab }) {
                 </button>
               ))}
             </div>
-            {status === 'wait' && visible.length > 0 && (
-              <SecondaryButton size="sm" icon="classify" aria-expanded={bulkOpen} onClick={() => setBulkOpen((v) => !v)}>
-                답글 일괄 처리
-              </SecondaryButton>
-            )}
-            {visible.length > 0 && (
-              <span className="page-range">
-                {visible.length}건 중 {(current - 1) * PAGE_SIZE + 1}–{Math.min(current * PAGE_SIZE, visible.length)}
-              </span>
-            )}
+            <div className="list-bar-end">
+              {visible.length > 0 && (
+                <span className="page-range">
+                  {visible.length}건 중 {(current - 1) * PAGE_SIZE + 1}–{Math.min(current * PAGE_SIZE, visible.length)}
+                </span>
+              )}
+              {status === 'wait' && visible.length > 0 && (
+                <SecondaryButton size="sm" icon="classify" aria-expanded={bulkOpen} onClick={() => setBulkOpen((v) => !v)}>
+                  답글 일괄 처리
+                </SecondaryButton>
+              )}
+            </div>
           </div>
-          {visible.length === 0 ? (
-            <EmptyTab status={status} searching={!!q} waitCount={statusCounts.wait} onShowWait={() => changeTab('wait')} />
-          ) : (
-            <>
-              <DataTableHead columns={isDone ? DONE_COLUMNS : WORK_COLUMNS} />
-              {paged.map((r, i) => {
-                const no = (current - 1) * PAGE_SIZE + i + 1;
-                return isDone
-                  ? <CompletedRow key={r.id} no={no} review={r} onUpdated={replace} onDeleted={remove} toast={toast} />
-                  : <Ticket key={r.id} no={no} review={r} onUpdated={replace} onDeleted={remove} toast={toast} />;
-              })}
-            </>
+
+          {bulkOpen && status === 'wait' && visible.length > 0 && (
+            <BulkReplyPanel reviews={visible} onUpdated={replace} onClose={() => setBulkOpen(false)} toast={toast} />
           )}
-        </DataTable>
+
+          <section className="feed" aria-label="리뷰 목록">
+            {visible.length === 0 ? (
+              <EmptyTab status={status} searching={!!q} waitCount={statusCounts.wait} onShowWait={() => changeTab('wait')} />
+            ) : paged.map((r) => (isDone
+              ? <CompletedRow key={r.id} review={r} onUpdated={replace} onDeleted={remove} toast={toast} />
+              : <Ticket key={r.id} review={r} onUpdated={replace} onDeleted={remove} toast={toast} />))}
+          </section>
+        </>
       )}
 
       {pageCount > 1 && (
@@ -248,7 +230,7 @@ function EmptyTab({ status, searching, waitCount, onShowWait }) {
 }
 
 /** 작성 완료 행: 리뷰 원문 → 최종 답글. 초안은 보여주지 않는다. */
-function CompletedRow({ no, review: r, onUpdated, onDeleted, toast }) {
+function CompletedRow({ review: r, onUpdated, onDeleted, toast }) {
   const reply = finalReplyOf(r);
   // 완료한 뒤 다른 시각(분 단위)에 고쳤을 때만 수정 시각을 따로 보여준다
   const edited = r.finalUpdatedAt && r.completedAt && formatDateTime(r.finalUpdatedAt) !== formatDateTime(r.completedAt);
@@ -266,50 +248,23 @@ function CompletedRow({ no, review: r, onUpdated, onDeleted, toast }) {
   }
 
   return (
-    <DataTableRow className="rt-item is-done">
-      <span className="rt-no" role="cell">{no}</span>
-      <span className="rt-platform" role="cell"><span className="platform">{PLATFORM_LABEL[r.platform]}</span></span>
-      <span className="rt-rating" role="cell">
-        <span className="rating" aria-label={`별점 ${r.rating}점`}><Icon name="star" size={16} />{r.rating}</span>
-      </span>
-      <div className="rt-content" role="cell">
-        <p className={`review-text ${r.maskedContent ? '' : 'is-empty'}`}>
-          {r.maskedContent ? <Masked text={r.maskedContent} /> : '(본문 없음, 별점만 등록)'}
-        </p>
-        <p className="meta">
-          <span>{TYPE_LABEL[r.type]}</span>
-          {r.writtenAt && <span>작성일 {r.writtenAt}</span>}
-          {r.similarCount > 0 && <SimilarNote count={r.similarCount} />}
-          {r.injectionSuspected && <InjectionNote />}
-          {r.ratingMismatch && (
-            <span className="similar-note" title={r.ratingMismatch === 'HIGH_RATING_NEGATIVE'
-              ? '별점은 높지만 본문에 불만이 있습니다. 답글은 본문의 불만을 중심으로 만듭니다.'
-              : '별점은 낮지만 본문은 긍정적입니다. 답글은 칭찬에 감사하고 아쉬운 점을 부드럽게 묻습니다.'}>
-              별점과 내용이 다름
-            </span>
-          )}
-          {r.riskSignals?.length > 0 && (
-            <span className="risk-note" title="원인 인정이나 환불·보상 약속 없이 매장 연락을 안내하는 초안을 만듭니다. 답글을 쓰기 전에 주문 내역과 상황을 직접 확인하십시오.">
-              사장님 확인 필요: {r.riskSignals.join(', ')}
-            </span>
-          )}
-        </p>
-        {reply && <FinalReply reply={reply} onSave={save} toast={toast} />}
-      </div>
-      <div className="rt-done" role="cell">
-        <span className="done-mark"><Icon name="confirm" size={16} />작성 완료</span>
-        <time dateTime={r.completedAt} title={edited ? `마지막 수정 ${formatDateTime(r.finalUpdatedAt)}` : undefined}>
-          {formatDateTime(r.completedAt)}
-        </time>
-        {edited && <span className="done-sub">수정 {formatDateTime(r.finalUpdatedAt)}</span>}
+    <article className="thread is-done">
+      <ThreadHead review={r}>
+        <StatusIndicator tone={TYPE_TONE[r.type]}>{TYPE_LABEL[r.type]}</StatusIndicator>
+        <span className="done-mark" title={edited ? `마지막 수정 ${formatDateTime(r.finalUpdatedAt)}` : undefined}>
+          <Icon name="confirm" size={16} />작성 완료 <time dateTime={r.completedAt}>{formatDateTime(r.completedAt)}</time>
+        </span>
         <DeleteReview review={r} onDeleted={onDeleted} toast={toast} />
-      </div>
-    </DataTableRow>
+      </ThreadHead>
+      <ReviewQuote review={r} />
+      {reply && <FinalReply reply={reply} onSave={save} toast={toast} />}
+      {edited && <p className="done-sub">수정 {formatDateTime(r.finalUpdatedAt)}</p>}
+    </article>
   );
 }
 
 /** 작성 대기·분류 실패 행: 분류 결과와 답글 초안 작업 */
-function Ticket({ no, review: r, onUpdated, onDeleted, toast }) {
+function Ticket({ review: r, onUpdated, onDeleted, toast }) {
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState(null);
   const [generation, setGeneration] = useState({ state: 'idle' });
@@ -376,63 +331,24 @@ function Ticket({ no, review: r, onUpdated, onDeleted, toast }) {
   const hasReplyArea = !failed && !malicious && (r.replies.length > 0 || DRAFT_TYPES.includes(r.type));
 
   return (
-    <DataTableRow className={`rt-item ${failed ? 'is-failed' : ''}`}>
-      <span className="rt-no" role="cell">{no}</span>
-      <span className="rt-platform" role="cell"><span className="platform">{PLATFORM_LABEL[r.platform]}</span></span>
-      <span className="rt-rating" role="cell">
-        <span className="rating" aria-label={`별점 ${r.rating}점`}><Icon name="star" size={16} />{r.rating}</span>
-      </span>
-
-      <div className="rt-content" role="cell">
-        <p className={`review-text ${r.maskedContent ? '' : 'is-empty'}`}>
-          {r.maskedContent ? <Masked text={r.maskedContent} /> : '(본문 없음, 별점만 등록)'}
-        </p>
-        <p className="meta">
-          <time dateTime={r.createdAt} title="등록 시각">{timeOf(r.createdAt)}</time>
-          {r.writtenAt && <span>작성일 {r.writtenAt}</span>}
-          {!failed && r.keywords.length > 0 && (
-            <span className="kw">{r.keywords.map((k) => `#${k}`).join(' ')}</span>
-          )}
-          {!failed && r.type !== 'RATING_ONLY' && r.sentiment && <span>{SENTIMENT_LABEL[r.sentiment]}</span>}
-          {!failed && r.type !== 'RATING_ONLY' && r.confidence != null && (
-            <span>확신도 {Math.round(r.confidence * 100)}%</span>
-          )}
-          {r.similarCount > 0 && <SimilarNote count={r.similarCount} />}
-          {r.injectionSuspected && <InjectionNote />}
-          {r.ratingMismatch && (
-            <span className="similar-note" title={r.ratingMismatch === 'HIGH_RATING_NEGATIVE'
-              ? '별점은 높지만 본문에 불만이 있습니다. 답글은 본문의 불만을 중심으로 만듭니다.'
-              : '별점은 낮지만 본문은 긍정적입니다. 답글은 칭찬에 감사하고 아쉬운 점을 부드럽게 묻습니다.'}>
-              별점과 내용이 다름
-            </span>
-          )}
-          {r.riskSignals?.length > 0 && (
-            <span className="risk-note" title="원인 인정이나 환불·보상 약속 없이 매장 연락을 안내하는 초안을 만듭니다. 답글을 쓰기 전에 주문 내역과 상황을 직접 확인하십시오.">
-              사장님 확인 필요: {r.riskSignals.join(', ')}
-            </span>
-          )}
-        </p>
-      </div>
-
-      <span className="rt-type" role="cell">
-        <span className="cell-label">분류</span>
+    <article className={`thread ${failed ? 'is-failed' : ''} ${malicious ? 'is-malicious' : ''}`}>
+      <ThreadHead review={r}>
         {failed
           ? <StatusIndicator tone="danger">미분류</StatusIndicator>
           : <StatusIndicator tone={TYPE_TONE[r.type]}>{TYPE_LABEL[r.type]}</StatusIndicator>}
-      </span>
-      <span className="rt-status" role="cell">
         <ReplyStatus review={r} generation={generation} />
-      </span>
+        <span className="thread-actions">
+          {failed && (
+            <IconButton icon={retrying ? 'loading' : 'retry'} className={retrying ? 'is-loading' : undefined}
+                        label="재분류" onClick={retry} disabled={retrying} size="sm" />
+          )}
+          <DeleteReview review={r} onDeleted={onDeleted} toast={toast} disabled={generation.state === 'loading'} />
+        </span>
+      </ThreadHead>
+      <ReviewQuote review={r} showAnalysis={!failed} />
 
-      <div className="rt-actions" role="cell">
-        {failed && (
-          <IconButton icon={retrying ? 'loading' : 'retry'} className={retrying ? 'is-loading' : undefined}
-                      label="재분류" onClick={retry} disabled={retrying} />
-        )}
-        <DeleteReview review={r} onDeleted={onDeleted} toast={toast} disabled={generation.state === 'loading'} />
-      </div>
       {failed && (
-        <p className="rt-error">
+        <p className="thread-error">
           {retryError ? retryError.message : failureText(r.failureCode)}
           <span className="error-code">오류 코드 {retryError?.code ?? r.failureCode ?? 'LLM_FAILED'}</span>
         </p>
@@ -445,7 +361,72 @@ function Ticket({ no, review: r, onUpdated, onDeleted, toast }) {
       {malicious && (
         <MaliciousGuidePanel review={r} generation={generation} onGenerate={generateGuide} onComplete={complete} toast={toast} />
       )}
-    </DataTableRow>
+    </article>
+  );
+}
+
+/** 리뷰 한 건의 머리줄: 별점(별 5개), 출처, 시각 + 오른쪽에 분류·상태·관리 */
+function ThreadHead({ review: r, children }) {
+  return (
+    <header className="thread-head">
+      <span className="thread-stars" role="img" aria-label={`별점 ${r.rating}점`}>
+        {[1, 2, 3, 4, 5].map((n) => <Icon key={n} name="star" size={14} className={n <= r.rating ? 'is-on' : ''} />)}
+        <strong>{r.rating}</strong>
+      </span>
+      <span className="platform">{PLATFORM_LABEL[r.platform]}</span>
+      <span className="thread-time">
+        {r.writtenAt ? `작성일 ${r.writtenAt}` : <time dateTime={r.createdAt} title="등록 시각">{formatDateTime(r.createdAt)}</time>}
+      </span>
+      <span className="thread-head-end">{children}</span>
+    </header>
+  );
+}
+
+/** 손님이 쓴 리뷰: 회색 선 + 한 단계 큰 글자. 아래 줄에 분석 결과와 표시 */
+function ReviewQuote({ review: r, showAnalysis = true }) {
+  return (
+    <div className="thread-review">
+      <p className={`review-text ${r.maskedContent ? '' : 'is-empty'}`}>
+        {r.maskedContent ? <Masked text={r.maskedContent} /> : '본문 없이 별점만 남긴 리뷰'}
+      </p>
+      <p className="meta">
+        {showAnalysis && r.keywords?.length > 0 && <span className="kw">{r.keywords.map((k) => `#${k}`).join(' ')}</span>}
+        {showAnalysis && r.type !== 'RATING_ONLY' && r.sentiment && <span>{SENTIMENT_LABEL[r.sentiment]}</span>}
+        {showAnalysis && r.type !== 'RATING_ONLY' && r.confidence != null && <span>확신도 {Math.round(r.confidence * 100)}%</span>}
+        {r.similarCount > 0 && <SimilarNote count={r.similarCount} />}
+        {r.injectionSuspected && <InjectionNote />}
+        {r.ratingMismatch && (
+          <span className="similar-note" title={r.ratingMismatch === 'HIGH_RATING_NEGATIVE'
+            ? '별점은 높지만 본문에 불만이 있습니다. 답글은 본문의 불만을 중심으로 만듭니다.'
+            : '별점은 낮지만 본문은 긍정적입니다. 답글은 칭찬에 감사하고 아쉬운 점을 부드럽게 묻습니다.'}>
+            별점과 내용이 다름
+          </span>
+        )}
+        {r.riskSignals?.length > 0 && (
+          <span className="risk-note" title="원인 인정이나 환불·보상 약속 없이 매장 연락을 안내하는 초안을 만듭니다. 답글을 쓰기 전에 주문 내역과 상황을 직접 확인하십시오.">
+            사장님 확인 필요: {r.riskSignals.join(', ')}
+          </span>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/** 지금 조건의 답글 상태 비율 (실제 목록에서 셈) */
+function StatusMeter({ counts }) {
+  const total = counts.done + counts.wait + counts.fail;
+  if (!total) return null;
+  const pct = (n) => `${(n / total) * 100}%`;
+  return (
+    <div className="status-meter">
+      <p><strong>{counts.done}</strong> / {total}건 답글 작성 완료</p>
+      <div className="status-meter-bar" role="img"
+           aria-label={`작성 완료 ${counts.done}건, 작성 대기 ${counts.wait}건, 분류 실패 ${counts.fail}건`}>
+        <span className="is-done" style={{ width: pct(counts.done) }} />
+        <span className="is-wait" style={{ width: pct(counts.wait) }} />
+        <span className="is-fail" style={{ width: pct(counts.fail) }} />
+      </div>
+    </div>
   );
 }
 
@@ -551,11 +532,6 @@ function failureText(code) {
   return retryable ? `${text} 재분류 버튼으로 다시 시도할 수 있습니다.` : text;
 }
 
-function timeOf(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
 
 
 /** [전화번호] 같은 가림 표시를 눈에 띄게 */

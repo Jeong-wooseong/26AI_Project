@@ -89,7 +89,7 @@ export default function Admin({ toast }) {
             <p className="stat-big">
               {fbTotal ? Math.round((stats.feedbackUp / fbTotal) * 100) : 0}<span>% 마음에 들어요</span>
             </p>
-            <p className="hint">마음에 들어요 {stats.feedbackUp} · 개선하고 싶어요 {stats.feedbackDown}</p>
+            <p className="hint meta-row"><span>마음에 들어요 {stats.feedbackUp}</span><span>개선하고 싶어요 {stats.feedbackDown}</span></p>
             <h3>개선 이유</h3>
             <Bars data={stats.downReasons} labels={REASON_LABEL} />
             <h3>개선 요청 말투</h3>
@@ -124,7 +124,7 @@ export default function Admin({ toast }) {
                         {q.attachmentName && <Icon name="attach" size={14} />}
                       </span>
                       <span className="admin-item-title">{q.title}</span>
-                      <span className="hint">{q.userEmail} · {formatDateTime(q.createdAt)}</span>
+                      <span className="hint meta-row"><span>{q.userEmail}</span><span>{formatDateTime(q.createdAt)}</span></span>
                     </button>
                   </li>
                 );
@@ -168,7 +168,7 @@ function InquiryDetail({ q, onSaved }) {
         <div>
           <span className="tag">{TYPE_LABEL[q.type] ?? q.type}</span>
           <h2 className="admin-detail-title">{q.title}</h2>
-          <p className="hint">{q.userEmail} · {formatDateTime(q.createdAt)}</p>
+          <p className="hint meta-row"><span>{q.userEmail}</span><span>{formatDateTime(q.createdAt)}</span></p>
           <InquiryMeta q={q} />
         </div>
         <p className="inquiry-content">{q.content}</p>

@@ -3,9 +3,10 @@ import { api } from '../api.js';
 import { PLATFORMS, todayISO } from '../labels.js';
 import { statusOf } from '../components/reply/replyModel.js';
 import StarRating from '../components/StarRating.jsx';
+import Mascot from '../components/Mascot.jsx';
 import Icon from '../components/Icon.jsx';
 import {
-  Alert, DataTable, DataTableHead, DataTableRow, FormInput, FormSelect, IconButton, PageHero, PrimaryButton,
+  Alert, DataTable, DataTableHead, DataTableRow, FlowSteps, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton,
   SecondaryButton, SectionCard, TabPanel,
 } from '../components/ui.jsx';
 import PastePanel from '../components/import/PastePanel.jsx';
@@ -180,24 +181,24 @@ export default function ReviewInput({ store, toast, go }) {
   const avg = valid.length ? valid.reduce((sum, r) => sum + r.rating, 0) / valid.length : null;
   // 머리말 진행 단계와 캐릭터: 실제 입력·등록 상태를 따른다
   const step = busy ? 2 : 1;
-  const pose = busy ? 'analyzing' : valid.length > 0 ? 'happy' : 'smile';
+  const steps = [
+    { label: '리뷰 등록', state: step > 1 ? 'done' : 'current' },
+    { label: 'AI 분류', state: step === 2 ? 'current' : 'todo' },
+    { label: '답글 작성 완료', state: 'todo' },
+  ];
 
   return (
     <>
-      <PageHero
+      <PageHeader
         title="리뷰 입력"
-        description="오늘 들어온 리뷰를 등록하면 AI가 유형을 분류하고, 작성 대기에서 답글 초안을 만듭니다. 별점만 있는 리뷰는 초안이 바로 만들어집니다."
-        pose={pose}
-        steps={[
-          { label: '리뷰 등록', state: step > 1 ? 'done' : 'current' },
-          { label: 'AI 분류', state: step === 2 ? 'current' : 'todo' },
-          { label: '답글 작성 완료', state: 'todo' },
-        ]}
-        stats={today && [
-          { label: '오늘 등록', value: today.total, unit: '건' },
-          { label: '작성 완료', value: today.done, unit: '건' },
-          { label: '작성 대기', value: today.wait, unit: '건' },
-        ]}
+        description="손님 리뷰를 등록하면 AI가 유형을 나누고, 작성 대기에서 답글 초안을 만듭니다."
+        actions={today && (
+          <dl className="inline-stats" aria-label="오늘 등록한 리뷰">
+            <div><dt>오늘 등록</dt><dd>{today.total}</dd></div>
+            <div><dt>작성 완료</dt><dd>{today.done}</dd></div>
+            <div><dt>작성 대기</dt><dd>{today.wait}</dd></div>
+          </dl>
+        )}
       />
 
       {error && <Alert>{error}</Alert>}
@@ -208,13 +209,15 @@ export default function ReviewInput({ store, toast, go }) {
         aria-label="리뷰 입력"
         header={(
           <>
-            <span className="section-label">{MODES.find((m) => m.key === mode)?.label}</span>
             <FormSelect id="platform" label="리뷰 출처" fieldClassName="field-inline platform-field" value={platform}
                         options={PLATFORMS} onChange={(e) => setPlatform(e.target.value)} />
           </>
         )}
         stickyFooter
         footerStart={mode === 'manual' && (
+          <div className="workbench-status">
+          {busy && <Mascot pose="analyzing" size={36} />}
+          <FlowSteps steps={steps} className="is-compact" />
           <div className="entry-summary" aria-live="polite">
             <div className="entry-meter" role="img"
                  aria-label={`최대 ${MAX_ROWS}건 중 내용 있는 리뷰 ${nFull}건, 평점만 ${nRating}건`}>
@@ -229,6 +232,7 @@ export default function ReviewInput({ store, toast, go }) {
             </dl>
             {full && <span className="row-count-full">최대 개수 도달</span>}
             {nEmpty > 0 && valid.length > 0 && <span className="hint">빈 행 {nEmpty}개는 등록하지 않습니다</span>}
+          </div>
           </div>
         )}
         footer={mode === 'manual' && (
@@ -278,7 +282,14 @@ export default function ReviewInput({ store, toast, go }) {
 
             <div className="table-tools">
               <SecondaryButton icon="add" onClick={addRow} disabled={full}>행 추가</SecondaryButton>
-              <span className="hint">Enter로 다음 행 이동, 마지막 행에서는 새 행 추가</span>
+              {valid.length === 0 && !busy ? (
+                <span className="table-start">
+                  <Mascot pose="smile" size={40} />
+                  <span className="hint">별점을 누르고 리뷰 내용을 붙여 넣으세요. Enter로 다음 행으로 넘어갑니다.</span>
+                </span>
+              ) : (
+                <span className="hint">Enter로 다음 행 이동, 마지막 행에서는 새 행 추가</span>
+              )}
             </div>
           </form>
         </TabPanel>

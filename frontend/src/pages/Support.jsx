@@ -185,9 +185,9 @@ function InquiryForm({ params, from, toast, onDone }) {
                       options={[['', '선택 안 함'], ...LOCATIONS.map((l) => [l, l])]} />
           <div className="field">
             <span className="label">자동 기록</span>
-            <p className="auto-record">
-              {fromPage ? `화면 #${fromPage}` : '화면 정보 없음'}
-              {errorCode && ` · 오류 코드 ${errorCode}`}
+            <p className="auto-record meta-row">
+              <span>{fromPage ? `화면 #${fromPage}` : '화면 정보 없음'}</span>
+              {errorCode && <span>오류 코드 {errorCode}</span>}
             </p>
           </div>
         </div>
@@ -293,6 +293,6 @@ function MyInquiries() {
 export function InquiryMeta({ q }) {
   const parts = [q.location && `위치 ${q.location}`, q.pagePath && `화면 ${q.pagePath}`, q.errorCode && `오류 코드 ${q.errorCode}`]
     .filter(Boolean);
-  return parts.length ? <p className="inquiry-meta">{parts.join(' · ')}</p> : null;
+  return parts.length ? <p className="inquiry-meta meta-row">{parts.map((t) => <span key={t}>{t}</span>)}</p> : null;
 }
 

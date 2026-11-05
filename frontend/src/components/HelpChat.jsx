@@ -111,12 +111,11 @@ export default function HelpChat() {
                 {m.suggestInquiry && (
                   <button type="button" className="bubble-cta" onClick={() => openInquiry(m.inquiryType)}>
                     {m.inquiryType === 'BUG' ? '오류 제보 접수하기' : m.inquiryType === 'SUGGESTION' ? '개선 제안 남기기' : '문의 접수하기'}
-                    <Icon name="go" size={14} />
                   </button>
                 )}
                 {m.offline && <span className="bubble-source">연결 없이 화면에서 바로 보여드린 안내예요</span>}
                 {m.source && (
-                  <span className="bubble-source">{m.source === 'AI' ? 'AI 안내 · 서비스 안내서 기반, 틀릴 수 있어요' : '자주 묻는 질문 검색 결과'}</span>
+                  <span className="bubble-source">{m.source === 'AI' ? 'AI 안내: 서비스 안내서를 바탕으로 해서 틀릴 수 있어요' : '자주 묻는 질문 검색 결과'}</span>
                 )}
               </div>
             ))}

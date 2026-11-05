@@ -113,6 +113,10 @@ class ReportServiceTest {
         assertThat(s.previousComplaintRate()).isEqualTo(Math.round(s.previousComplaints() * 100f / s.previousTotal()));
         assertThat(s.previousReplies().completed()).isZero();
         assertThat(s.resolvedTopics()).allMatch(t -> t.count() == 0 && t.previousCount() > 0);
+        // 별점 분포: 합계가 리뷰 수와 같다
+        assertThat(s.ratingCounts()).hasSize(5);
+        assertThat(s.ratingCounts().stream().mapToInt(Integer::intValue).sum()).isEqualTo(s.total());
+        assertThat(s.previousRatingCounts().stream().mapToInt(Integer::intValue).sum()).isEqualTo(s.previousTotal());
     }
 
     @Test

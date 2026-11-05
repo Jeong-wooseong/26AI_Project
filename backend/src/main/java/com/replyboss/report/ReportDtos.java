@@ -47,6 +47,9 @@ public final class ReportDtos {
             int previousTotal,
             Double avgRating,
             Double previousAvgRating,
+            /** 별점별 리뷰 수 [1점, 2점, 3점, 4점, 5점] (이번 주 / 지난주) */
+            List<Integer> ratingCounts,
+            List<Integer> previousRatingCounts,
             Map<String, Integer> typeCounts,
             int complaints,
             int previousComplaints,

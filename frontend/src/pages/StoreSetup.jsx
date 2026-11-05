@@ -3,10 +3,11 @@ import { api } from '../api.js';
 import { CATEGORIES, CATEGORY_ICON, EMOJI_LEVELS, FORMALITIES, LENGTHS } from '../labels.js';
 import Icon from '../components/Icon.jsx';
 import {
-  Alert, FormInput, FormSelect, IconButton, PageHero, PrimaryButton, SecondaryButton, SettingsSection, StatusIndicator,
+  Alert, FlowSteps, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton, SecondaryButton, SettingsSection, StatusIndicator,
 } from '../components/ui.jsx';
 import { previewText } from '../tonePreview.js';
 import AccountSection from '../components/AccountSection.jsx';
+import Mascot from '../components/Mascot.jsx';
 
 const MIN_SAMPLES = 3;
 const MAX_SAMPLES = 5;
@@ -138,20 +139,32 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
   if (store?.toneProfile) toneStatus = <StatusIndicator tone="success" icon="confirm">저장됨</StatusIndicator>;
   else if (tone) toneStatus = <StatusIndicator tone="complaint">분석 완료, 저장 전</StatusIndicator>;
 
+  // 지금 무엇이 부족한지 한 문장으로 (캐릭터가 하는 말)
+  let setupMessage;
+  if (!store) setupMessage = '매장을 등록하면 예시 답글을 넣을 수 있어요.';
+  else if (!sampleReady) setupMessage = `말투를 배우려면 예시 답글이 ${MIN_SAMPLES - filledSamples.length}개 더 필요해요.`;
+  else if (!tone) setupMessage = '예시 답글이 준비됐어요. 답글 스타일 분석을 눌러 주세요.';
+  else if (!store.toneProfile) setupMessage = '분석이 끝났어요. 결과를 확인하고 스타일을 저장해 주세요.';
+  else setupMessage = '설정을 마쳤어요. 이 말투로 답글 초안을 만들어요.';
+
   return (
     <>
-      <PageHero
+      <PageHeader
         title="매장 설정"
-        description={store
-          ? `${store.name}의 기존 답글 3~5개로 AI가 말투를 배우고, 앞으로 만드는 모든 답글 초안에 반영합니다.`
-          : '매장을 등록하고 기존 답글 3~5개를 넣으면 AI가 매장의 말투를 배워 답글 초안에 반영합니다.'}
-        pose={store?.toneProfile ? 'happy' : 'thinking'}
-        steps={[
-          { label: '매장 정보', state: store ? 'done' : 'current' },
-          { label: '예시 답글', state: !store ? 'todo' : sampleReady ? 'done' : 'current' },
-          { label: '답글 스타일 저장', state: store?.toneProfile ? 'done' : sampleReady ? 'current' : 'todo' },
-        ]}
+        description="기존 답글 3~5개로 AI가 매장의 말투를 배우고, 앞으로 만드는 답글 초안에 반영합니다."
       />
+
+      <div className={`setup-status ${store?.toneProfile ? 'is-ready' : ''}`}>
+        <Mascot pose={store?.toneProfile ? 'happy' : 'thinking'} size={56} />
+        <div className="setup-status-text">
+          <p className="setup-status-msg">{setupMessage}</p>
+          <FlowSteps steps={[
+            { label: '매장 정보', state: store ? 'done' : 'current' },
+            { label: `예시 답글 ${filledSamples.length}개`, state: !store ? 'todo' : sampleReady ? 'done' : 'current' },
+            { label: '스타일 저장', state: store?.toneProfile ? 'done' : sampleReady ? 'current' : 'todo' },
+          ]} />
+        </div>
+      </div>
 
       {error && <Alert>{error}</Alert>}
 

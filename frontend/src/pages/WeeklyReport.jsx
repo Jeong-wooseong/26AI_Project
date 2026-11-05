@@ -112,6 +112,7 @@ export default function WeeklyReport({ store, go }) {
 
       {s && s.total > 0 && (
         <article className="report">
+          <p className="report-headline">{headline(s)}</p>
           <dl className="report-figures">
             <Figure label="리뷰" value={`${s.total}건`} compare={s.previousTotal ? `지난주 ${s.previousTotal}건` : '지난주 없음'}
                     delta={s.previousTotal ? <Delta diff={s.total - s.previousTotal} unit="건" /> : null} />
@@ -133,28 +134,20 @@ export default function WeeklyReport({ store, go }) {
 
           <Insight report={report} state={insightState} onMake={makeInsight} />
 
-          <div className="report-grid">
-            <section className="report-section" aria-labelledby="topics-title">
+          <div className="report-charts">
+            <section className="report-section" aria-labelledby="rating-title">
               <div className="report-section-head">
-                <h2 id="topics-title">불만 주제 순위</h2>
-                <p>불만 리뷰의 키워드별 리뷰 수입니다.</p>
+                <h2 id="rating-title">별점 분포</h2>
+                <ChartLegend items={s.previousTotal ? [['is-now', '이번 주'], ['is-prev', '지난주']] : [['is-now', '이번 주']]} />
               </div>
-              {s.topics.length === 0 ? (
-                <p className="report-empty">이 주에는 불만 리뷰가 없습니다.</p>
-              ) : (
-                <TopicTable topics={s.topics} />
-              )}
+              <RatingDistribution now={s.ratingCounts} prev={s.previousTotal ? s.previousRatingCounts : null} />
             </section>
-
             <section className="report-section" aria-labelledby="types-title">
               <div className="report-section-head">
-                <h2 id="types-title">유형별 리뷰</h2>
+                <h2 id="types-title">유형 구성</h2>
+                <p>이번 주 리뷰 {s.total}건</p>
               </div>
-              <ul className="type-list">
-                {TYPE_ORDER.filter((t) => s.typeCounts[t]).map((t) => (
-                  <li key={t}><span>{t === 'FAILED' ? '분류 실패' : TYPE_LABEL[t]}</span><strong>{s.typeCounts[t]}건</strong></li>
-                ))}
-              </ul>
+              <TypeComposition counts={s.typeCounts} total={s.total} />
               <div className="report-section-head is-sub">
                 <h2>답글</h2>
               </div>
@@ -167,6 +160,21 @@ export default function WeeklyReport({ store, go }) {
                 <li><span>중복·규칙 때문에 다시 만든 답글</span><strong>{s.replies.completed ? `${s.replies.regenerated}건` : '-'}</strong></li>
               </ul>
             </section>
+          </div>
+
+          <div className="report-grid is-single">
+            <section className="report-section" aria-labelledby="topics-title">
+              <div className="report-section-head">
+                <h2 id="topics-title">불만 주제 순위</h2>
+                <p>불만 리뷰의 키워드별 리뷰 수입니다.</p>
+              </div>
+              {s.topics.length === 0 ? (
+                <p className="report-empty">이 주에는 불만 리뷰가 없습니다.</p>
+              ) : (
+                <TopicTable topics={s.topics} />
+              )}
+            </section>
+
           </div>
 
           {s.representatives.length > 0 && (
@@ -210,6 +218,70 @@ function Figure({ label, value, unit, compare, delta }) {
 }
 
 const round1 = (n) => Math.round(n * 10) / 10;
+
+/** 리포트 첫 문장: 서버 집계 숫자로만 만든다 (AI 아님) */
+function headline(s) {
+  const first = `이번 주 리뷰 ${s.total}건 중 불만은 ${s.complaints}건입니다.`;
+  if (!s.previousTotal || s.avgRating == null || s.previousAvgRating == null) return first;
+  const d = round1(s.avgRating - s.previousAvgRating);
+  if (d === 0) return `${first} 평균 별점은 지난주와 같은 ${s.avgRating.toFixed(1)}점입니다.`;
+  return `${first} 평균 별점은 지난주보다 ${Math.abs(d).toFixed(1)}점 ${d > 0 ? '올랐습니다' : '내려갔습니다'}.`;
+}
+
+function ChartLegend({ items }) {
+  return (
+    <p className="chart-legend">
+      {items.map(([cls, label]) => <span key={label}><i className={`swatch ${cls}`} aria-hidden="true" />{label}</span>)}
+    </p>
+  );
+}
+
+/** 별점별 리뷰 수: 5점부터 1점까지, 이번 주(별색)와 지난주(회색) 막대를 나란히 */
+function RatingDistribution({ now, prev }) {
+  if (!now) return null;
+  const max = Math.max(1, ...now, ...(prev ?? []));
+  return (
+    <table className="rating-dist">
+      <caption className="sr-only">별점별 리뷰 수</caption>
+      <tbody>
+        {[5, 4, 3, 2, 1].map((star) => (
+          <tr key={star}>
+            <th scope="row"><Icon name="star" size={14} className="star-inline" />{star}점</th>
+            <td>
+              <span className="dist-bar is-now" style={{ width: `${(now[star - 1] / max) * 100}%` }} aria-hidden="true" />
+              {prev && <span className="dist-bar is-prev" style={{ width: `${(prev[star - 1] / max) * 100}%` }} aria-hidden="true" />}
+            </td>
+            <td className="num">
+              {now[star - 1]}건{prev && <span className="dist-prev">지난주 {prev[star - 1]}건</span>}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+const TYPE_COLOR = { COMPLAINT: 'complaint', MALICIOUS: 'malicious', PRAISE: 'praise', INQUIRY: 'inquiry', RATING_ONLY: 'rating', FAILED: 'failed' };
+
+/** 유형 구성: 한 줄 막대 + 유형별 개수 (색만으로 구분하지 않도록 이름과 숫자를 함께) */
+function TypeComposition({ counts, total }) {
+  const types = TYPE_ORDER.filter((t) => counts[t]);
+  return (
+    <>
+      <div className="type-bar" role="img" aria-label={types.map((t) => `${t === 'FAILED' ? '분류 실패' : TYPE_LABEL[t]} ${counts[t]}건`).join(', ')}>
+        {types.map((t) => <span key={t} className={`is-${TYPE_COLOR[t]}`} style={{ width: `${(counts[t] / total) * 100}%` }} />)}
+      </div>
+      <ul className="type-list">
+        {types.map((t) => (
+          <li key={t}>
+            <span><i className={`swatch is-${TYPE_COLOR[t]}`} aria-hidden="true" />{t === 'FAILED' ? '분류 실패' : TYPE_LABEL[t]}</span>
+            <strong>{counts[t]}건 <small>{Math.round((counts[t] / total) * 100)}%</small></strong>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
 
 /**
  * 지난주 대비 증감. better: 'up'(늘면 좋음) | 'down'(줄면 좋음) | 없음(좋고 나쁨 없음).

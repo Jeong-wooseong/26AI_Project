@@ -32,16 +32,7 @@ export function PageHero({ title, description, pose, stats, steps, actions }) {
       <div className="page-hero-main">
         <h1>{title}</h1>
         {description && <p className="page-hero-desc">{description}</p>}
-        {steps && (
-          <ol className="flow-steps" aria-label="진행 단계">
-            {steps.map((s, i) => (
-              <li key={s.label} className={`flow-step is-${s.state}`} aria-current={s.state === 'current' ? 'step' : undefined}>
-                <span className="flow-step-no">{s.state === 'done' ? <Icon name="confirm" size={14} /> : i + 1}</span>
-                {s.label}
-              </li>
-            ))}
-          </ol>
-        )}
+        {steps && <FlowSteps steps={steps} />}
         {actions && <div className="page-actions">{actions}</div>}
       </div>
       {stats && stats.length > 0 && (
@@ -56,6 +47,20 @@ export function PageHero({ title, description, pose, stats, steps, actions }) {
       )}
       {pose && <Mascot pose={pose} size={112} className="page-hero-mascot" />}
     </section>
+  );
+}
+
+/** 실제 작업 순서가 있는 진행 단계 (완료=체크, 진행 중=번호 강조, 대기=흰 원). steps: [{ label, state }] */
+export function FlowSteps({ steps, className }) {
+  return (
+    <ol className={cls('flow-steps', className)} aria-label="진행 단계">
+      {steps.map((s, i) => (
+        <li key={s.label} className={`flow-step is-${s.state}`} aria-current={s.state === 'current' ? 'step' : undefined}>
+          <span className="flow-step-no">{s.state === 'done' ? <Icon name="confirm" size={14} /> : i + 1}</span>
+          {s.label}
+        </li>
+      ))}
+    </ol>
   );
 }
 

@@ -178,7 +178,7 @@ public class ReportService {
                 .toList();
 
         return new WeeklyStats(weekStart, weekEnd, current.size(), previous.size(),
-                average(current), average(previous), typeCounts,
+                average(current), average(previous), ratingCounts(current), ratingCounts(previous), typeCounts,
                 complaints.size(), previousComplaints.size(),
                 rate(complaints.size(), current.size()), rate(previousComplaints.size(), previous.size()),
                 topics, resolved, representatives(complaints, topics), replyStats(current), replyStats(previous));
@@ -216,6 +216,16 @@ public class ReportService {
 
     static String normalize(String keyword) {
         return keyword == null ? "" : keyword.strip().replaceAll("\\s+", " ");
+    }
+
+    private static List<Integer> ratingCounts(List<Review> reviews) {
+        int[] counts = new int[5];
+        for (Review r : reviews) {
+            if (r.getRating() >= 1 && r.getRating() <= 5) {
+                counts[r.getRating() - 1]++;
+            }
+        }
+        return java.util.Arrays.stream(counts).boxed().toList();
     }
 
     private static Double average(List<Review> reviews) {

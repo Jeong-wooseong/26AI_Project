@@ -145,12 +145,12 @@ export default function BulkReplyPanel({ reviews, onUpdated, onClose, toast }) {
 
       {result && !running && (
         <div className={`bulk-result ${result.error ? 'has-error' : ''}`} role="status">
-          <p>
-            {result.completed > 0 && <>작성 완료 <strong>{result.completed}건</strong> · </>}
-            {result.drafted > 0 && <>초안 생성 <strong>{result.drafted}건</strong> · </>}
-            {result.guide > 0 && <>악성 대응 초안 <strong>{result.guide}건</strong> · </>}
-            초안만 남김 <strong>{result.held.length}건</strong>
-            {result.stopped && ' · 중간에 멈춤'}
+          <p className="meta-row">
+            {result.completed > 0 && <span>작성 완료 <strong>{result.completed}건</strong></span>}
+            {result.drafted > 0 && <span>초안 생성 <strong>{result.drafted}건</strong></span>}
+            {result.guide > 0 && <span>악성 대응 초안 <strong>{result.guide}건</strong></span>}
+            <span>초안만 남김 <strong>{result.held.length}건</strong></span>
+            {result.stopped && <span>중간에 멈춤</span>}
           </p>
           {result.held.length > 0 && (
             <ul className="bulk-held">
