@@ -163,4 +163,15 @@ export const admin = {
   handle: (id, status, answer) => request('PATCH', `/api/admin/inquiries/${id}`, { status, answer }),
   attachmentUrl: (id) => `/api/admin/inquiries/${id}/attachment`,
   stats: () => request('GET', '/api/admin/stats'),
+  overview: () => request('GET', '/api/admin/overview'),
+  users: ({ query, status } = {}) => {
+    const q = new URLSearchParams();
+    if (query) q.set('query', query);
+    if (status) q.set('status', status);
+    const qs = q.toString();
+    return request('GET', `/api/admin/users${qs ? `?${qs}` : ''}`);
+  },
+  user: (id) => request('GET', `/api/admin/users/${id}`),
+  setUserActive: (id, active) => request('PATCH', `/api/admin/users/${id}/status`, { active }),
+  aiLogs: ({ failedOnly = false, limit = 50 } = {}) => request('GET', `/api/admin/ai-logs?failedOnly=${failedOnly}&limit=${limit}`),
 };

@@ -179,7 +179,7 @@ export default function App() {
     page = <Support sub={sub} params={params} from={lastPage.current} toast={toast} />;
   } else if (active === 'admin') {
     page = me.role === 'ADMIN'
-      ? <Admin toast={toast} />
+      ? <Admin toast={toast} me={me} sub={sub} />
       : <EmptyState title="관리자만 볼 수 있습니다" description="관리자 계정으로 로그인하십시오." />;
   } else if (active === 'setup') {
     page = <StoreSetup store={store} onSaved={setStore} toast={toast} go={go} me={me} onAccountDeleted={onAccountDeleted} />;
@@ -280,9 +280,9 @@ function Sidebar({ me, store, active, needsSetup, onLogout, onClose }) {
         </div>
       )}
       <div className="sidebar-account">
-        <span className="sidebar-avatar" aria-hidden="true">{me.email.slice(0, 1).toUpperCase()}</span>
+        <span className="sidebar-avatar" aria-hidden="true">{(me.name || me.email).slice(0, 1).toUpperCase()}</span>
         <span className="sidebar-who">
-          <strong title={me.email}>{me.email}</strong>
+          <strong title={me.email}>{me.name || me.email}</strong>
           <small>{me.role === 'ADMIN' ? '관리자 계정' : '매장 운영자'}</small>
         </span>
         <button type="button" className="icon-btn" aria-label="로그아웃" title="로그아웃" onClick={onLogout}>
