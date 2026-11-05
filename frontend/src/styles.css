@@ -2405,3 +2405,12 @@ body:has(.page-admin) .helpchat { display: none; }
 .inq-filter span { font-variant-numeric: tabular-nums; font-weight: 700; }
 .inq-filter button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .my-inquiries-none { padding: var(--s4) 0; }
+/* 학습한 말투: 학습 결과를 바로 고치는 줄 (기본 설정과 합침) */
+.style-rows .option-row { flex-direction: column; align-items: stretch; gap: var(--s2); padding: 14px 0; }
+.style-rows .option-row-text { flex: none; }
+.style-rows .option-seg { width: 100%; }
+.style-rows .option-seg .seg-btn { padding: 0 8px; }
+.style-rows .inline-add .btn { flex: none; }
+.option-row-label { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.learned-tag { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 4px; background: #eef1f6; color: var(--text-sub); font-size: 11px; font-weight: 600; }
+.learned-tag.is-changed { background: var(--primary-tint); color: var(--primary); }

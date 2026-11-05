@@ -20,13 +20,6 @@ const LEARN_NOTE = '예시 답글은 말투 분석에만 쓰고, 답글에 그�
 const DEFAULT_TONES = [['POLITE', '정중형'], ['FRIENDLY', '친근형'], ['CONCISE', '간결형']];
 const DEFAULT_SETTINGS = { defaultTone: 'POLITE', avoidDuplicates: true };
 
-/** 학습 결과 한 칸에 보여줄 말 */
-const TRAIT_WORDS = {
-  formality: { 하십시오체: '격식 있게 (하십시오체)', 해요체: '부드럽게 (해요체)', '반말 섞임': '편하게 (반말 섞임)' },
-  emojiLevel: { 없음: '쓰지 않음', 가끔: '가끔 씀', 자주: '자주 씀' },
-  length: { '1~2문장': '짧게 (1~2문장)', '2~3문장': '보통 (2~3문장)', '3~4문장': '길게 (3~4문장)' },
-};
-
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 const padSamples = (list) => (list.length >= MIN_SAMPLES ? list : [...list, ...Array(MIN_SAMPLES - list.length).fill('')]);
 
@@ -43,8 +36,8 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
   const [tone, setTone] = useState(store?.toneProfile ?? null); // 적용할 말투 (고칠 수 있음)
   const [learned, setLearned] = useState(store?.toneProfile ?? null); // 예시 답글에서 배운 그대로
   const [settings, setSettings] = useState(store?.replySettings ?? DEFAULT_SETTINGS);
-  const [editing, setEditing] = useState(false);
   const [newPhrase, setNewPhrase] = useState('');
+  const [fresh, setFresh] = useState(false); // 이번에 새로 학습해 아직 저장 전인지 (아니면 기준은 저장된 값)
   const [busy, setBusy] = useState(null); // 'store' | 'learn' | 'style'
   const [error, setError] = useState(null);
   const [nameError, setNameError] = useState(null);
@@ -103,6 +96,7 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
       const result = await api.extractTone(store.id, filled);
       setTone(result);
       setLearned(result);
+      setFresh(true);
       toast.show('말투를 배웠습니다. 결과를 확인하고 저장하십시오.');
     } catch (err) {
       setError(err.message);
@@ -119,7 +113,8 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
       if (tone && (toneDirty || samplesDirty)) saved = await api.saveTone(store.id, tone, filled);
       if (settingsDirty) saved = await api.updateReplySettings(store.id, settings);
       onSaved(saved);
-      setEditing(false);
+      setLearned(saved.toneProfile ?? null);
+      setFresh(false);
       toast.show(learnedAll ? '답글 스타일을 저장했습니다.' : '답글 스타일을 저장했습니다. 이제 리뷰를 입력해 답글을 만들 수 있습니다.');
     } catch (err) {
       setError(err.message);
@@ -133,7 +128,7 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
     setTone(store?.toneProfile ?? null);
     setLearned(store?.toneProfile ?? null);
     setSettings(store?.replySettings ?? DEFAULT_SETTINGS);
-    setEditing(false);
+    setFresh(false);
   }
 
   const updateTone = (patch) => setTone((t) => ({ ...t, ...patch }));
@@ -257,8 +252,8 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
               {/* 답글 스타일 학습 */}
               <div className="sp-panel" ref={learnRef}>
                 <div className="sp-head">
-                  <h3>답글 스타일 학습</h3>
-                  <LearnState tone={tone} learnedAll={learnedAll} dirty={toneDirty || (samplesDirty && !!tone)} />
+                  <h3>학습한 말투</h3>
+                  <LearnState tone={tone} learnedAll={learnedAll} fresh={fresh} dirty={toneDirty || (samplesDirty && !!tone)} />
                 </div>
                 <div className="sp-body">
                   {busy === 'learn' ? (
@@ -274,23 +269,24 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
                     </div>
                   ) : (
                     <>
-                      <dl className="traits">
-                        <Trait label="존댓말 수준" value={TRAIT_WORDS.formality[learned.formality] ?? learned.formality} />
-                        <Trait label="이모지 사용 빈도" value={TRAIT_WORDS.emojiLevel[learned.emojiLevel] ?? learned.emojiLevel}
-                               extra={learned.emojiExamples?.length ? learned.emojiExamples.join(' ') : null}
-                               changed={tone.emojiLevel !== learned.emojiLevel && `기본 설정에서 '${tone.emojiLevel}'(으)로 바꿈`} />
-                        <Trait label="평균 답글 길이" value={TRAIT_WORDS.length[learned.length] ?? learned.length}
-                               changed={tone.length !== learned.length && `기본 설정에서 '${tone.length}'(으)로 바꿈`} />
-                        <Trait label="자주 쓰는 표현" value={tone.phrases.length ? null : '찾지 못함'}
-                               chips={tone.phrases} />
-                        <Trait label="마무리 인사" value={tone.closing || '정해진 인사 없음'} wide />
-                      </dl>
-                      {editing ? (
-                        <div className="trait-edit">
-                          <FormSelect id="formality" label="존댓말 수준" value={tone.formality} options={FORMALITIES}
-                                      onChange={(e) => updateTone({ formality: e.target.value })} />
-                          <div className="field">
-                            <label className="label" htmlFor="newPhrase">자주 쓰는 표현 (최대 8개)</label>
+                      <p className="hint">{fresh ? '예시 답글에서 배운 값입니다. 바꾸면 그 값으로 답글을 씁니다.' : '저장된 말투입니다. 바로 고치거나 예시 답글로 다시 학습할 수 있습니다.'}</p>
+                      <div className="style-rows">
+                        <OptionRow label="존댓말 수준" learned={learned.formality} fresh={fresh}
+                                   value={tone.formality} options={FORMALITIES.map((v) => [v, v])}
+                                   onChange={(v) => updateTone({ formality: v })} />
+                        <OptionRow label="이모지 사용" learned={learned.emojiLevel} fresh={fresh} wordMap={{ 없음: '쓰지 않음' }}
+                                   hint={learned.emojiExamples?.length ? `자주 쓴 이모지 ${learned.emojiExamples.join(' ')}` : null}
+                                   value={tone.emojiLevel} options={EMOJI_LEVELS.map((v) => [v, v === '없음' ? '쓰지 않음' : v])}
+                                   onChange={(v) => updateTone({ emojiLevel: v })} />
+                        <OptionRow label="답글 길이" learned={learned.length} fresh={fresh}
+                                   value={tone.length} options={LENGTHS.map((v) => [v, v])}
+                                   onChange={(v) => updateTone({ length: v })} />
+                        <div className="option-row">
+                          <div className="option-row-text">
+                            <label className="option-row-label" htmlFor="newPhrase">자주 쓰는 표현</label>
+                            <span className="hint">{tone.phrases.length ? '답글에 자연스럽게 섞어 씁니다. 최대 8개.' : '예시 답글에서 찾지 못했습니다. 직접 넣을 수 있습니다.'}</span>
+                          </div>
+                          {tone.phrases.length > 0 && (
                             <div className="tags">
                               {tone.phrases.map((p) => (
                                 <span className="tag" key={p}>
@@ -300,21 +296,29 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
                                 </span>
                               ))}
                             </div>
+                          )}
+                          {tone.phrases.length < 8 && (
                             <div className="inline-add">
-                              <FormInput id="newPhrase" placeholder="표현 입력 후 Enter" value={newPhrase}
+                              <FormInput id="newPhrase" label="표현 추가" hideLabel placeholder="표현 입력 후 Enter" value={newPhrase}
                                          onChange={(e) => setNewPhrase(e.target.value)}
                                          onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); addPhrase(); } }} />
                               <SecondaryButton tone="neutral" icon="add" onClick={addPhrase} disabled={!newPhrase.trim()}>추가</SecondaryButton>
                             </div>
+                          )}
+                        </div>
+                        <div className="option-row">
+                          <div className="option-row-text">
+                            <label className="option-row-label" htmlFor="closing">마무리 인사</label>
+                            <span className="hint">비우면 정해진 인사 없이 리뷰에 맞춰 끝맺습니다.</span>
                           </div>
-                          <FormInput id="closing" label="마무리 인사" value={tone.closing} placeholder="예: 오늘도 좋은 하루 되세요!"
+                          <FormInput id="closing" label="마무리 인사" hideLabel value={tone.closing} placeholder="예: 오늘도 좋은 하루 되세요!"
                                      onChange={(e) => updateTone({ closing: e.target.value })} />
                         </div>
-                      ) : null}
+                      </div>
                       <div className="learn-actions">
-                        <button type="button" className="text-link" aria-expanded={editing} onClick={() => setEditing((v) => !v)}>
-                          <Icon name="edit" size={15} />{editing ? '고치기 닫기' : '표현·인사 직접 고치기'}
-                        </button>
+                        {!same(tone, learned)
+                          ? <button type="button" className="text-link" onClick={() => setTone(learned)}><Icon name="restore" size={15} />{fresh ? '학습한 값으로 되돌리기' : '저장된 값으로 되돌리기'}</button>
+                          : <span />}
                         <SecondaryButton tone="neutral" size="sm" icon="retry" onClick={learn} disabled={!sampleReady}>다시 학습하기</SecondaryButton>
                       </div>
                     </>
@@ -354,12 +358,6 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
                 <OptionRow label="기본 답글 유형" hint="오늘의 리뷰와 일괄 처리에서 먼저 보여줄 말투입니다."
                            value={settings.defaultTone} options={DEFAULT_TONES}
                            onChange={(v) => setSettings((x) => ({ ...x, defaultTone: v }))} />
-                <OptionRow label="이모지 사용" hint={tone ? '학습한 값에서 바꿀 수 있습니다.' : '학습한 뒤 바꿀 수 있습니다.'}
-                           value={tone?.emojiLevel} options={EMOJI_LEVELS.map((v) => [v, v === '없음' ? '쓰지 않음' : v])}
-                           disabled={!tone} onChange={(v) => updateTone({ emojiLevel: v })} />
-                <OptionRow label="답글 길이" hint={tone ? '학습한 값에서 바꿀 수 있습니다.' : '학습한 뒤 바꿀 수 있습니다.'}
-                           value={tone?.length} options={LENGTHS.map((v) => [v, v])}
-                           disabled={!tone} onChange={(v) => updateTone({ length: v })} />
                 <div className="option-row">
                   <div className="option-row-text">
                     <span className="option-row-label" id="dup-label">중복 답글 방지</span>
@@ -402,33 +400,26 @@ function SaveState({ dirty, saved, at }) {
   return <span className="save-state">아직 등록하지 않았습니다</span>;
 }
 
-function LearnState({ tone, learnedAll, dirty }) {
+function LearnState({ tone, learnedAll, fresh, dirty }) {
   if (!tone) return <span className="learn-state">학습 전</span>;
+  if (learnedAll && !fresh && dirty) return <span className="learn-state is-pending"><i aria-hidden="true" />고친 내용 저장 전</span>;
   if (dirty || !learnedAll) return <span className="learn-state is-pending"><i aria-hidden="true" />학습 완료, 저장 전</span>;
   return <span className="learn-state is-done"><Icon name="confirm" size={14} />학습 완료</span>;
 }
 
-function Trait({ label, value, extra, chips, changed, wide }) {
-  return (
-    <div className={`trait ${wide ? 'is-wide' : ''}`}>
-      <dt>{label}</dt>
-      <dd>
-        {value && <strong>{value}</strong>}
-        {extra && <span className="trait-extra">{extra}</span>}
-        {chips?.length > 0 && <span className="trait-chips">{chips.map((c) => <span key={c} className="tag">{c}</span>)}</span>}
-        {changed && <span className="trait-changed">{changed}</span>}
-      </dd>
-    </div>
-  );
-}
-
 /** 라디오처럼 하나만 고르는 줄 (세그먼트) */
-function OptionRow({ label, hint, value, options, onChange, disabled }) {
+function OptionRow({ label, hint, value, options, onChange, disabled, learned, wordMap, fresh }) {
   const id = `opt-${label}`;
+  const changed = learned != null && value !== learned;
   return (
     <div className="option-row">
       <div className="option-row-text">
-        <span className="option-row-label" id={id}>{label}</span>
+        <span className="option-row-label" id={id}>
+          {label}
+          {learned != null && (changed
+            ? <span className="learned-tag is-changed">바꿈, {fresh ? '학습한' : '저장된'} 값은 {wordMap?.[learned] ?? learned}</span>
+            : <span className="learned-tag">{fresh ? '학습한 값' : '저장된 값'}</span>)}
+        </span>
         {hint && <span className="hint">{hint}</span>}
       </div>
       <div className="seg option-seg" role="radiogroup" aria-labelledby={id}>
