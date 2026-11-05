@@ -121,6 +121,10 @@ public class Store {
         return id;
     }
 
+    public AppUser getOwner() {
+        return owner;
+    }
+
     public String getName() {
         return name;
     }

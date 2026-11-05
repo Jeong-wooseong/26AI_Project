@@ -16,6 +16,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
+import org.springframework.security.web.authentication.rememberme.RememberMeAuthenticationFilter;
 import org.springframework.security.web.authentication.rememberme.TokenBasedRememberMeServices;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
@@ -61,7 +62,8 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, TokenBasedRememberMeServices rememberMe,
-                                            SecurityContextRepository contextRepository, ObjectMapper mapper) throws Exception {
+                                            SecurityContextRepository contextRepository, ObjectMapper mapper,
+                                            AppUserRepository users) throws Exception {
         CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfRepository.setCookieCustomizer(c -> c.sameSite("Lax").secure(false));
         CsrfTokenRequestAttributeHandler csrfHandler = new CsrfTokenRequestAttributeHandler();
@@ -81,6 +83,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll())
                 .rememberMe(r -> r.rememberMeServices(rememberMe))
+                .addFilterAfter(new ActiveUserFilter(users), RememberMeAuthenticationFilter.class)
                 .logout(l -> l.logoutUrl("/api/auth/logout")
                         .logoutSuccessHandler((req, res, auth) -> res.setStatus(HttpServletResponse.SC_NO_CONTENT)))
                 .formLogin(AbstractHttpConfigurer::disable)

@@ -11,6 +11,7 @@ public final class AuthDtos {
 
     public record SignupRequest(
             @NotBlank(message = "이메일을 입력하십시오.") @Email(message = "이메일 형식이 올바르지 않습니다.") @Size(max = 255) String email,
+            @NotBlank(message = "이름을 입력하십시오.") @Size(max = 30, message = "이름은 30자 이내여야 합니다.") String name,
             @NotBlank(message = "비밀번호를 입력하십시오.") @Size(max = 64, message = "비밀번호는 64자 이내여야 합니다.") String password,
             @NotBlank(message = "비밀번호 확인을 입력하십시오.") String passwordConfirm,
             boolean agreeTerms,
@@ -43,9 +44,9 @@ public final class AuthDtos {
     public record DeleteAccountRequest(@NotBlank(message = "비밀번호를 입력하십시오.") String password) {
     }
 
-    public record MeResponse(Long id, String email, Role role) {
+    public record MeResponse(Long id, String email, String name, Role role) {
         public static MeResponse of(AuthPrincipal p) {
-            return new MeResponse(p.id(), p.email(), p.role());
+            return new MeResponse(p.id(), p.email(), p.name(), p.role());
         }
     }
 

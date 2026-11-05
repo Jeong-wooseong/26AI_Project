@@ -8,10 +8,11 @@ import java.util.Collection;
 import java.util.List;
 
 /** 로그인한 사장님 (세션·로그인 유지 쿠키에 공통으로 쓰는 주체) */
-public record AuthPrincipal(Long id, String email, String passwordHash, Role role, boolean verified) implements UserDetails {
+public record AuthPrincipal(Long id, String email, String name, String passwordHash, Role role, boolean verified, boolean active) implements UserDetails {
 
     public static AuthPrincipal of(AppUser user) {
-        return new AuthPrincipal(user.getId(), user.getEmail(), user.getPasswordHash(), user.getRole(), user.isEmailVerified());
+        return new AuthPrincipal(user.getId(), user.getEmail(), user.getName(), user.getPasswordHash(), user.getRole(),
+                user.isEmailVerified(), !user.isDisabled());
     }
 
     @Override
@@ -33,6 +34,6 @@ public record AuthPrincipal(Long id, String email, String passwordHash, Role rol
 
     @Override
     public boolean isEnabled() {
-        return verified;
+        return verified && active; // 이용 중지된 계정은 로그인 유지 쿠키로도 들어오지 못한다
     }
 }

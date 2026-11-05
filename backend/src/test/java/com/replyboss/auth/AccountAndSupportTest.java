@@ -91,7 +91,7 @@ class AccountAndSupportTest {
 
     private void signup(String email, String password) throws Exception {
         mvc.perform(post("/api/auth/signup").with(csrf()).contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("email", email, "password", password, "passwordConfirm", password,
+                        .content(json(Map.of("email", email, "name", "사장님", "password", password, "passwordConfirm", password,
                                 "agreeTerms", true, "agreePrivacy", true))))
                 .andExpect(status().isCreated());
     }
@@ -115,11 +115,20 @@ class AccountAndSupportTest {
         legacyStoreId = storeService.create(new StoreRequest("옛 매장", "카페")).id();
 
         mvc.perform(post("/api/auth/signup").with(csrf()).contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("email", "a@test.com", "password", "short", "passwordConfirm", "short",
+                        .content(json(Map.of("email", "a@test.com", "name", "김사장", "password", "short", "passwordConfirm", "short",
                                 "agreeTerms", true, "agreePrivacy", true))))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("WEAK_PASSWORD"));
         mvc.perform(post("/api/auth/signup").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("email", "a@test.com", "name", "김사장", "password", PW, "passwordConfirm", PW,
+                                "agreeTerms", false, "agreePrivacy", true))))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("AGREEMENT_REQUIRED"));
+        // 이름은 꼭 받는다
+        mvc.perform(post("/api/auth/signup").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("email", "a@test.com", "password", PW, "passwordConfirm", PW,
+                                "agreeTerms", true, "agreePrivacy", true))))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/auth/signup").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("email", "a@test.com", "name", "김사장", "password", PW, "passwordConfirm", PW,
                                 "agreeTerms", false, "agreePrivacy", true))))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("AGREEMENT_REQUIRED"));
 
@@ -131,7 +140,8 @@ class AccountAndSupportTest {
 
         MockHttpSession a = login("a@test.com", PW);
         mvc.perform(get("/api/auth/me").session(a)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("a@test.com")).andExpect(jsonPath("$.role").value("ADMIN"));
+                .andExpect(jsonPath("$.email").value("a@test.com")).andExpect(jsonPath("$.role").value("ADMIN"))
+                .andExpect(jsonPath("$.name").value("사장님"));
         mvc.perform(get("/api/stores").session(a)).andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(legacyStoreId));
     }
@@ -332,5 +342,58 @@ class AccountAndSupportTest {
                 .andExpect(status().isUnauthorized());
         MockHttpSession a = login("a@test.com", PW);
         mvc.perform(get("/api/admin/inquiries").session(a)).andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Autowired
+    com.replyboss.ai.AiCallRecorder aiRecorder;
+
+    @Test
+    @Order(10)
+    void 관리자는_회원을_보고_이용을_중지하며_AI_실패_기록과_운영_수치를_본다() throws Exception {
+        signup("c@test.com", PW);
+        verifyEmail("c@test.com");
+        MockHttpSession c = login("c@test.com", PW);
+        MockHttpSession a = login("a@test.com", PW);
+        Long cId = body(mvc.perform(get("/api/auth/me").session(c)).andReturn()).path("id").asLong();
+        Long aId = body(mvc.perform(get("/api/auth/me").session(a)).andReturn()).path("id").asLong();
+
+        // 일반 회원은 관리자 API 를 못 쓴다
+        mvc.perform(get("/api/admin/overview").session(c)).andExpect(status().isForbidden());
+
+        aiRecorder.record("reply_drafts", "gpt-test", false, "LLM_TIMEOUT", "응답 시간 초과", 1200);
+        aiRecorder.record("review_classification", "gpt-test", true, null, null, 300);
+        mvc.perform(get("/api/admin/overview").session(a)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.users").value(2))
+                .andExpect(jsonPath("$.activeUsers7d").value(2))
+                .andExpect(jsonPath("$.daily.length()").value(14))
+                .andExpect(jsonPath("$.aiFailures7d").value(1))
+                .andExpect(jsonPath("$.aiCalls7d").value(2))
+                .andExpect(jsonPath("$.system.database").value(true));
+        mvc.perform(get("/api/admin/ai-logs").param("failedOnly", "true").session(a))
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].kind").value("reply_drafts"))
+                .andExpect(jsonPath("$[0].errorCode").value("LLM_TIMEOUT"));
+
+        mvc.perform(get("/api/admin/users").param("query", "C@TEST").session(a))
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$[0].name").value("사장님"));
+        mvc.perform(get("/api/admin/users/" + cId).session(a)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.email").value("c@test.com"));
+
+        // 자기 계정은 중지할 수 없고, 중지하면 로그인한 상태도 바로 풀린다
+        mvc.perform(patch("/api/admin/users/" + aId + "/status").session(a).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("active", false)))).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("SELF"));
+        mvc.perform(patch("/api/admin/users/" + cId + "/status").session(a).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("active", false)))).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DISABLED"));
+        mvc.perform(get("/api/stores").session(c)).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/auth/login").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("email", "c@test.com", "password", PW, "remember", false))))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ACCOUNT_DISABLED"));
+        mvc.perform(get("/api/admin/users").param("status", "DISABLED").session(a)).andExpect(jsonPath("$.length()").value(1));
+
+        mvc.perform(patch("/api/admin/users/" + cId + "/status").session(a).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("active", true)))).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACTIVE"));
+        login("c@test.com", PW);
     }
 }

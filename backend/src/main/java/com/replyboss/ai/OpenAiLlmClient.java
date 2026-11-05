@@ -36,6 +36,13 @@ public class OpenAiLlmClient implements LlmClient {
     private final OpenAiProperties props;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
+    /** 관리자 모니터링용 호출 기록 (테스트처럼 직접 만든 경우에는 없음) */
+    private AiCallRecorder recorder;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setRecorder(AiCallRecorder recorder) {
+        this.recorder = recorder;
+    }
 
     public OpenAiLlmClient(OpenAiProperties props, ObjectMapper objectMapper) {
         this.props = props;
@@ -54,6 +61,28 @@ public class OpenAiLlmClient implements LlmClient {
 
     @Override
     public JsonNode generateJson(LlmRequest request) {
+        long start = System.nanoTime();
+        try {
+            JsonNode result = call(request);
+            record(request, start, null);
+            return result;
+        } catch (RuntimeException e) {
+            record(request, start, e);
+            throw e;
+        }
+    }
+
+    private void record(LlmRequest request, long start, RuntimeException error) {
+        if (recorder == null) {
+            return;
+        }
+        String code = error instanceof LlmException le ? le.getReason()
+                : error instanceof ApiException ae ? ae.getCode() : error == null ? null : "LLM_FAILED";
+        recorder.record(request.schemaName(), request.model(), error == null, code,
+                error == null ? null : error.getMessage(), (System.nanoTime() - start) / 1_000_000);
+    }
+
+    private JsonNode call(LlmRequest request) {
         if (!props.hasApiKey()) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "LLM_NOT_CONFIGURED",
                     "OpenAI API 키가 설정되지 않았습니다. backend/.env의 OPENAI_API_KEY를 확인하십시오.");

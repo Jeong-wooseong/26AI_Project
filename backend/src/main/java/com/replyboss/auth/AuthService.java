@@ -82,7 +82,7 @@ public class AuthService {
         mail.requireConfigured();
         boolean first = users.count() == 0;
         Role role = first || props.isAdminEmail(email) ? Role.ADMIN : Role.USER;
-        AppUser user = users.save(new AppUser(email, encoder.encode(r.password()), role, LocalDateTime.now()));
+        AppUser user = users.save(new AppUser(email, r.name().strip(), encoder.encode(r.password()), role, LocalDateTime.now()));
         if (first) {
             // 계정 기능이 생기기 전에 만든 매장·리뷰·답글은 첫 가입자에게 넘긴다
             stores.findByOwnerIsNull().forEach(s -> s.assignOwner(user));
@@ -105,8 +105,8 @@ public class AuthService {
         users.findByEmail(normalize(email)).filter(u -> !u.isEmailVerified()).ifPresent(this::sendVerification);
     }
 
-    /** 로그인 확인. 성공하면 주체를 돌려준다 (세션 저장은 컨트롤러가 한다) */
-    @Transactional(readOnly = true)
+    /** 로그인 확인. 성공하면 최근 로그인 시각을 남기고 주체를 돌려준다 (세션 저장은 컨트롤러가 한다) */
+    @Transactional
     public AuthPrincipal authenticate(String rawEmail, String password) {
         String email = normalize(rawEmail);
         if (attempts.isLocked(email)) {
@@ -122,7 +122,12 @@ public class AuthService {
             throw new ApiException(HttpStatus.FORBIDDEN, "EMAIL_NOT_VERIFIED",
                     "이메일 인증을 마쳐야 로그인할 수 있습니다. 받은 메일의 인증 링크를 눌러 주십시오.");
         }
+        if (user.isDisabled()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "ACCOUNT_DISABLED",
+                    "이용이 중지된 계정입니다. 자세한 내용은 서비스 운영자에게 문의하십시오.");
+        }
         attempts.succeed(email);
+        user.recordLogin(LocalDateTime.now());
         return AuthPrincipal.of(user);
     }
 

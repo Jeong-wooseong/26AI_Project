@@ -30,12 +30,47 @@ public class AdminController {
 
     private final SupportService support;
     private final AdminService admin;
+    private final AdminOpsService ops;
     private final CurrentUser currentUser;
 
-    public AdminController(SupportService support, AdminService admin, CurrentUser currentUser) {
+    public AdminController(SupportService support, AdminService admin, AdminOpsService ops, CurrentUser currentUser) {
         this.support = support;
         this.admin = admin;
+        this.ops = ops;
         this.currentUser = currentUser;
+    }
+
+    public record StatusRequest(boolean active) {
+    }
+
+    /** 대시보드: 회원·리뷰·AI 호출·문의 수, 14일 일별 이용량, 작업별 AI 호출, 서비스 상태 */
+    @GetMapping("/overview")
+    public AdminOpsService.Overview overview() {
+        return ops.overview();
+    }
+
+    @GetMapping("/users")
+    public List<AdminOpsService.UserRow> users(@RequestParam(required = false) String query,
+                                               @RequestParam(required = false) String status) {
+        return ops.users(query, status);
+    }
+
+    @GetMapping("/users/{id}")
+    public AdminOpsService.UserDetail user(@PathVariable Long id) {
+        return ops.user(id);
+    }
+
+    /** 이용 중지(active=false) / 다시 이용(active=true) */
+    @PatchMapping("/users/{id}/status")
+    public AdminOpsService.UserRow setStatus(@PathVariable Long id, @RequestBody StatusRequest request) {
+        return ops.setActive(currentUser.id(), id, request.active());
+    }
+
+    /** AI 호출 기록 (failedOnly=true 면 실패만) */
+    @GetMapping("/ai-logs")
+    public List<AdminOpsService.AiLogRow> aiLogs(@RequestParam(defaultValue = "false") boolean failedOnly,
+                                                 @RequestParam(defaultValue = "50") int limit) {
+        return ops.aiLogs(failedOnly, limit);
     }
 
     public record HandleRequest(InquiryStatus status, @Size(max = 3000, message = "답변은 3000자 이내여야 합니다.") String answer) {
