@@ -144,19 +144,18 @@ export default function ReviewInput({ store, toast, go }) {
   return (
     <>
       <PageHero
-        eyebrow="리뷰 입력"
-        title="오늘 들어온 리뷰를 등록해 보세요"
-        description="등록하면 AI가 리뷰 유형을 분류하고, 작성 대기에서 답글 초안을 만듭니다. 별점만 있는 리뷰는 답글 초안이 바로 만들어집니다."
+        title="리뷰 입력"
+        description="오늘 들어온 리뷰를 등록하면 AI가 유형을 분류하고, 작성 대기에서 답글 초안을 만듭니다. 별점만 있는 리뷰는 초안이 바로 만들어집니다."
         pose="happy"
         steps={[
           { label: '리뷰 등록', state: 'current' },
           { label: 'AI 분류', state: 'todo' },
-          { label: '답글 초안 · 작성 완료', state: 'todo' },
+          { label: '답글 작성 완료', state: 'todo' },
         ]}
         stats={today && [
           { label: '오늘 등록', value: today.total, unit: '건' },
-          { label: '작성 완료', value: today.done, unit: '건', tone: 'success' },
-          { label: '작성 대기', value: today.wait, unit: '건', tone: today.wait ? 'warning' : undefined },
+          { label: '작성 완료', value: today.done, unit: '건' },
+          { label: '작성 대기', value: today.wait, unit: '건' },
         ]}
       />
 

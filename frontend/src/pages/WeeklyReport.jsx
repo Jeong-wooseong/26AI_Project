@@ -240,7 +240,8 @@ function compareItems(s) {
   }
   const dc = s.complaints - s.previousComplaints;
   if (dc !== 0) push(dc < 0, `불만 리뷰가 ${Math.abs(dc)}건 ${dc < 0 ? '줄었습니다' : '늘었습니다'} (${s.previousComplaints}건 → ${s.complaints}건)`);
-  if (s.complaintRate != null && s.previousComplaintRate != null) {
+  // 리뷰 수가 같으면 불만 비율 변화는 불만 수 변화와 같은 이야기라서 한 번만 보여준다
+  if (s.complaintRate != null && s.previousComplaintRate != null && s.total !== s.previousTotal) {
     const d = s.complaintRate - s.previousComplaintRate;
     if (d !== 0) push(d < 0, `불만 비율이 ${Math.abs(d)}%p ${d < 0 ? '낮아졌습니다' : '높아졌습니다'} (${s.previousComplaintRate}% → ${s.complaintRate}%)`);
   }
@@ -280,11 +281,11 @@ function Comparison({ stats: s }) {
       ) : (
         <div className="compare-grid">
           <div className={`compare-col is-good ${good.length ? '' : 'is-empty'}`}>
-            <h3><span aria-hidden="true">▲</span> 좋아진 점 <span className="compare-n">{good.length}</span></h3>
+            <h3>좋아진 점 <span className="compare-n">{good.length}건</span></h3>
             {good.length ? <ul>{good.map((t) => <li key={t}>{t}</li>)}</ul> : <p className="hint">없습니다.</p>}
           </div>
           <div className={`compare-col is-bad ${bad.length ? '' : 'is-empty'}`}>
-            <h3><span aria-hidden="true">▼</span> 나빠진 점 <span className="compare-n">{bad.length}</span></h3>
+            <h3>나빠진 점 <span className="compare-n">{bad.length}건</span></h3>
             {bad.length ? <ul>{bad.map((t) => <li key={t}>{t}</li>)}</ul> : <p className="hint">없습니다.</p>}
           </div>
         </div>

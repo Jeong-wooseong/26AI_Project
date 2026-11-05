@@ -21,15 +21,15 @@ export function PageHeader({ title, description, actions }) {
 }
 
 /**
- * 페이지 첫머리의 시각적 중심: 연한 블루 띠 + 캐릭터 + 지금 상태.
- * stats: [{ label, value, unit, tone }] — 실제 데이터만 넣는다 (없으면 생략)
+ * 페이지 머리말 + 지금 상태 (매장 설정·리뷰 입력처럼 진행 단계가 있는 화면만). 연한 블루 단색 띠, 캐릭터는 오른쪽.
+ * 제목 크기·위치는 다른 화면의 PageHeader 와 같다.
+ * stats: [{ label, value, unit }] — 실제 데이터만 넣는다 (없으면 생략)
  * steps: [{ label, state: 'done' | 'current' | 'todo' }] — 이 화면이 전체 흐름에서 어디인지
  */
-export function PageHero({ eyebrow, title, description, pose, stats, steps, actions }) {
+export function PageHero({ title, description, pose, stats, steps, actions }) {
   return (
     <section className="page-hero">
       <div className="page-hero-main">
-        {eyebrow && <p className="page-hero-eyebrow">{eyebrow}</p>}
         <h1>{title}</h1>
         {description && <p className="page-hero-desc">{description}</p>}
         {steps && (
@@ -47,14 +47,14 @@ export function PageHero({ eyebrow, title, description, pose, stats, steps, acti
       {stats && stats.length > 0 && (
         <dl className="hero-stats">
           {stats.map((s) => (
-            <div key={s.label} className={`hero-stat ${s.tone ? `is-${s.tone}` : ''}`}>
+            <div key={s.label} className="hero-stat">
               <dt>{s.label}</dt>
               <dd><strong>{s.value}</strong>{s.unit && <span>{s.unit}</span>}</dd>
             </div>
           ))}
         </dl>
       )}
-      {pose && <Mascot pose={pose} size={132} className="page-hero-mascot" />}
+      {pose && <Mascot pose={pose} size={112} className="page-hero-mascot" />}
     </section>
   );
 }

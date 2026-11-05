@@ -141,9 +141,10 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
   return (
     <>
       <PageHero
-        eyebrow="매장 설정"
-        title={store ? `${store.name}의 답글 스타일을 알려 주세요` : '먼저 매장을 등록해 보세요'}
-        description="기존 답글 3~5개로 AI가 매장의 말투를 배우고, 앞으로 만드는 모든 답글 초안에 반영합니다."
+        title="매장 설정"
+        description={store
+          ? `${store.name}의 기존 답글 3~5개로 AI가 말투를 배우고, 앞으로 만드는 모든 답글 초안에 반영합니다.`
+          : '매장을 등록하고 기존 답글 3~5개를 넣으면 AI가 매장의 말투를 배워 답글 초안에 반영합니다.'}
         pose={store?.toneProfile ? 'happy' : 'thinking'}
         steps={[
           { label: '매장 정보', state: store ? 'done' : 'current' },
@@ -160,7 +161,6 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
           onSubmit={saveStore}
           noValidate
           title="매장 정보"
-          icon={CATEGORY_ICON[category] ?? 'store'}
           description="매장명과 업종, 답글에 반영할 매장 소개입니다."
           status={store
             ? <StatusIndicator tone="success" icon="confirm">등록됨</StatusIndicator>
@@ -187,7 +187,6 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
 
         <SettingsSection
           title="예시 답글"
-          icon="input"
           description={`기존에 작성한 답글을 ${MIN_SAMPLES}~${MAX_SAMPLES}개 등록하면 AI가 매장의 응대 스타일을 분석합니다. 분석에만 사용됩니다.`}
           status={store && (
             <StatusIndicator tone={sampleReady ? 'success' : 'neutral'} icon={sampleReady ? 'confirm' : undefined}>
@@ -213,7 +212,6 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
               {samples.map((s, i) => (
                 <div className={`sample-card ${s.trim() ? 'is-filled' : ''}`} key={i}>
                   <div className="sample-head">
-                    <span className="sample-avatar" aria-hidden="true"><Icon name={CATEGORY_ICON[category] ?? 'store'} size={14} /></span>
                     <label className="sample-label" htmlFor={`sample${i}`}>사장님 답글 {i + 1}</label>
                     <span className="sample-count">{s.length}자</span>
                     {samples.length > MIN_SAMPLES && (
@@ -232,7 +230,6 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
 
         <SettingsSection
           title="답글 스타일"
-          icon="sparkles"
           description="분석된 높임말, 이모지, 문장 길이, 자주 쓰는 표현입니다. 항목별로 수정한 뒤 저장합니다."
           status={store && toneStatus}
           actionsStart={store && tone && store.toneProfile && (
