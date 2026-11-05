@@ -90,8 +90,8 @@ export default function HelpChat() {
           <header className="helpchat-head">
             <Mascot pose="smile" size={44} className="helpchat-avatar" />
             <div className="helpchat-title">
-              <strong>ReplyBoss 도우미</strong>
-              <p className="hint">서비스 안내와 자주 묻는 질문을 바탕으로 안내합니다</p>
+              <strong>ReplyBoss 도우미 <span className="helpchat-badge">자동 안내</span></strong>
+              <p className="hint">사람 상담원이 아닌 자동 안내입니다. 담당자 답변은 문의를 남기면 메일로 받습니다.</p>
             </div>
             <button type="button" className="icon-btn" aria-label="도우미 닫기" onClick={() => setOpen(false)}>
               <Icon name="remove" />
@@ -137,12 +137,15 @@ export default function HelpChat() {
               <Icon name="send" />
             </button>
           </form>
-          <p className="helpchat-note">계정·데이터 확인이 필요한 문제는 담당자가 확인하도록 문의를 남겨 주십시오.</p>
+          <p className="helpchat-note">
+            계정·데이터 확인이 필요한 문제는 담당자에게{' '}
+            <button type="button" className="text-btn" onClick={() => openInquiry('GENERAL')}>문의 접수하기</button>
+          </p>
         </section>
       )}
       <button type="button" className="helpchat-fab" aria-expanded={open} aria-label={open ? '도우미 닫기' : '도우미 열기'}
               onClick={() => setOpen((v) => !v)}>
-        <Icon name={open ? 'remove' : 'chat'} size={22} />
+        {open ? <Icon name="remove" size={22} /> : <Mascot pose="smile" size={30} className="helpchat-fab-mascot" />}
         {!open && <span>도우미</span>}
       </button>
     </div>

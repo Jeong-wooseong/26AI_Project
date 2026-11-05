@@ -27,8 +27,10 @@ const TYPE_TONE = { PRAISE: 'praise', COMPLAINT: 'complaint', MALICIOUS: 'malici
  *  요약 띠(등록·평균 별점·답글 필요·진행률) → 한 판 안에 왼쪽 리뷰 목록 + 오른쪽 선택한 리뷰의 답글 작업.
  *  같은 숫자는 한 번만: 상태별 개수는 요약 띠에만, 유형별 개수는 목록 탭에만 보여준다.
  */
-export default function ReviewList({ store, toast, go, initialTab }) {
-  const [date, setDate] = useState(todayISO()); // '' 이면 전체 기간 (이력 조회)
+export default function ReviewList({ store, toast, go, initialTab, params }) {
+  // 다른 화면(리포트 대표 리뷰)에서 특정 리뷰로 들어오면 전체 기간에서 그 리뷰를 연다
+  const focusId = Number(params?.get('review')) || null;
+  const [date, setDate] = useState(params?.get('all') ? '' : todayISO()); // '' 이면 전체 기간 (이력 조회)
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('ALL'); // 유형
   const [status, setStatus] = useState(TABS.some(([k]) => k === initialTab) ? initialTab : 'wait');
@@ -37,7 +39,7 @@ export default function ReviewList({ store, toast, go, initialTab }) {
   const [reviews, setReviews] = useState(null);
   const [error, setError] = useState(null);
   const [bulkOpen, setBulkOpen] = useState(false); // 답글 일괄 처리 패널
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(focusId);
   const detailRef = useRef(null);
   const lastIndex = useRef(0);
 
@@ -54,6 +56,15 @@ export default function ReviewList({ store, toast, go, initialTab }) {
     setReviews(null);
     load();
   }, [load]);
+
+  // 들어온 리뷰가 있는 탭과 페이지로 맞춘다 (한 번만)
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focusId || focused.current || !reviews) return;
+    focused.current = true;
+    const target = reviews.find((r) => r.id === focusId);
+    if (target) setStatus(statusOf(target));
+  }, [focusId, reviews]);
 
   // 거르는 조건이 바뀌면 첫 페이지로
   useEffect(() => setPage(1), [date, filter, platform, status, query]);
@@ -85,6 +96,12 @@ export default function ReviewList({ store, toast, go, initialTab }) {
   const allTime = !date;
   const isDone = status === 'done';
 
+  useEffect(() => {
+    if (!focusId) return;
+    const i = visible.findIndex((r) => r.id === focusId);
+    if (i >= 0) setPage(Math.floor(i / PAGE_SIZE) + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, status, reviews === null]);
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const current = Math.min(page, pageCount);
   const paged = visible.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
@@ -212,7 +229,7 @@ export default function ReviewList({ store, toast, go, initialTab }) {
             {/* 선택한 리뷰만 보이고, 나머지는 생성 중인 작업을 잃지 않도록 숨긴 채 유지한다 */}
             <div className="detail-panel" ref={detailRef} aria-label="선택한 리뷰의 답글 작업">
               {bulkOpen && status === 'wait' && visible.length > 0 ? (
-                <BulkReplyPanel reviews={visible} onUpdated={replace} onClose={() => setBulkOpen(false)} toast={toast} />
+                <BulkReplyPanel reviews={visible} onUpdated={replace} onClose={() => setBulkOpen(false)} toast={toast} defaultTone={store.replySettings?.defaultTone} />
               ) : !selected ? (
                 <div className="detail-empty">
                   <Mascot pose="smile" size={72} />
@@ -223,7 +240,7 @@ export default function ReviewList({ store, toast, go, initialTab }) {
                 const hidden = r !== selected || (bulkOpen && status === 'wait');
                 return isDone
                   ? <CompletedRow key={r.id} review={r} hidden={hidden} onUpdated={replace} onDeleted={remove} toast={toast} />
-                  : <Ticket key={r.id} review={r} hidden={hidden} onUpdated={replace} onDeleted={remove} toast={toast} />;
+                  : <Ticket key={r.id} review={r} hidden={hidden} onUpdated={replace} onDeleted={remove} toast={toast} defaultTone={store.replySettings?.defaultTone} />;
               })}
             </div>
           </section>
@@ -336,7 +353,7 @@ function CompletedRow({ review: r, hidden, onUpdated, onDeleted, toast }) {
 }
 
 /** 작성 대기·분류 실패 행: 분류 결과와 답글 초안 작업 */
-function Ticket({ review: r, hidden, onUpdated, onDeleted, toast }) {
+function Ticket({ review: r, hidden, onUpdated, onDeleted, toast, defaultTone }) {
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState(null);
   const [generation, setGeneration] = useState({ state: 'idle' });
@@ -424,7 +441,7 @@ function Ticket({ review: r, hidden, onUpdated, onDeleted, toast }) {
       )}
 
       {hasReplyArea && (
-        <ReplyDraftPanel review={r} generation={generation} onGenerate={generate} onComplete={complete} toast={toast} />
+        <ReplyDraftPanel review={r} generation={generation} onGenerate={generate} onComplete={complete} toast={toast} defaultTone={defaultTone} />
       )}
 
       {malicious && (

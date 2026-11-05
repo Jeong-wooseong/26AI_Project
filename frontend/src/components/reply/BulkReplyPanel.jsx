@@ -16,8 +16,8 @@ export function bulkTargets(reviews, { complaint, malicious }) {
     && (BASIC_TYPES.includes(r.type) || (complaint && r.type === 'COMPLAINT') || (malicious && r.type === 'MALICIOUS')));
 }
 
-export default function BulkReplyPanel({ reviews, onUpdated, onClose, toast }) {
-  const [tone, setTone] = useState('POLITE');
+export default function BulkReplyPanel({ reviews, onUpdated, onClose, toast, defaultTone }) {
+  const [tone, setTone] = useState(['POLITE', 'FRIENDLY', 'CONCISE'].includes(defaultTone) ? defaultTone : 'POLITE');
   const [complaint, setComplaint] = useState(false);
   const [malicious, setMalicious] = useState(false);
   const [progress, setProgress] = useState(null); // { done, total, mode }

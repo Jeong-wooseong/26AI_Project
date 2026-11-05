@@ -250,6 +250,7 @@ erDiagram
 | POST | `/api/stores` | 가게 등록 |
 | POST | `/api/stores/{id}/tone-profile/extract` | 예시 답글로 톤 프로필 추출 |
 | PUT | `/api/stores/{id}/tone-profile` | 톤 프로필 수정·저장 |
+| PUT | `/api/stores/{id}/reply-settings` | 답글 기본 설정 (처음 보여줄 말투, 중복 답글 방지 켜기·끄기) |
 | POST | `/api/stores/{id}/reviews` | 리뷰 일괄 입력 → 마스킹·분류 결과 |
 | GET | `/api/stores/{id}/reviews` | 리뷰·답글 이력 조회 |
 | POST | `/api/reviews/{id}/replies` | 답글 3톤 생성 |
@@ -444,6 +445,7 @@ node eval/classify_eval.mjs
 | GET / PUT | `/api/stores/{id}` | 가게 조회 / 수정 (매장 소개·운영 방식 `info` 포함) |
 | POST | `/api/stores/{id}/tone-profile/extract` | 예시 답글 3~5개로 톤 추출 (저장 안 함) |
 | PUT | `/api/stores/{id}/tone-profile` | 톤 프로필 저장 |
+| PUT | `/api/stores/{id}/reply-settings` | 답글 기본 설정: `defaultTone`(POLITE·FRIENDLY·CONCISE), `avoidDuplicates`(끄면 이전 답글과 비교·재생성 안 함) |
 | POST | `/api/stores/{id}/reviews` | 리뷰 일괄 입력 → 마스킹·분류 (평점만 리뷰는 템플릿 답글까지) |
 | GET | `/api/stores/{id}/reviews?date=&type=` | 날짜·유형별 리뷰 목록 (date 없으면 전체 기간 이력) |
 | POST | `/api/stores/{id}/reviews/duplicate-check` | 일괄 등록 전 중복 확인 (저장 안 함) |

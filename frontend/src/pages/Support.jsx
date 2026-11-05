@@ -3,9 +3,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { support } from '../api.js';
 import Icon from '../components/Icon.jsx';
 import {
-  Alert, EmptyState, FormInput, FormSelect, PageHeader, PrimaryButton, SecondaryButton, StatusIndicator,
+  Alert, EmptyState, FormInput, FormSelect, PrimaryButton, SecondaryButton,
 } from '../components/ui.jsx';
 import { formatDateTime } from '../components/reply/replyModel.js';
+import Mascot from '../components/Mascot.jsx';
 
 export const INQUIRY_TYPES = [
   ['GENERAL', '일반 문의', '기능이나 이용 방법에 대한 질문'],
@@ -15,14 +16,16 @@ export const INQUIRY_TYPES = [
 export const TYPE_LABEL = Object.fromEntries(INQUIRY_TYPES.map(([k, l]) => [k, l]));
 export const LOCATIONS = ['매장 설정', '리뷰 입력', '오늘의 리뷰', '답글 생성', '주간 리포트', '로그인·계정', '도우미', '기타'];
 export const STATUS = {
-  RECEIVED: ['접수', 'neutral'],
-  IN_PROGRESS: ['확인 중', 'inquiry'],
+  RECEIVED: ['답변 대기', 'neutral'],
+  IN_PROGRESS: ['처리 중', 'inquiry'],
   ANSWERED: ['답변 완료', 'success'],
 };
 /** 화면 주소 → 발생 위치 기본값 */
 const LOCATION_OF = { setup: '매장 설정', input: '리뷰 입력', reviews: '오늘의 리뷰', report: '주간 리포트' };
 const MAX_FILE = 5 * 1024 * 1024;
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+/** 접수 번호: 사장님과 담당자가 같은 번호로 이야기할 수 있게 */
+export const inquiryNo = (id) => `RB-${String(id).padStart(5, '0')}`;
 
 
 /** 다른 화면에서 문의 화면을 여는 주소 (오류 제보: 위치·오류 코드 자동 기록) */
@@ -66,12 +69,35 @@ export default function Support({ sub, params, from, toast }) {
     requestAnimationFrame(() => mineRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
   }
 
+  const [faqs, setFaqs] = useState(null);
+  const [faqError, setFaqError] = useState(null);
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState(null);
+  useEffect(() => {
+    support.faq().then(setFaqs).catch((e) => setFaqError(e.message));
+  }, []);
+  const categories = useMemo(() => {
+    const m = new Map();
+    (faqs ?? []).forEach((f) => m.set(f.category, (m.get(f.category) ?? 0) + 1));
+    return [...m];
+  }, [faqs]);
+
   return (
     <>
-      <PageHeader title="고객 지원" description="서비스 이용 중 궁금한 점이나 불편한 점을 알려주십시오. 담당자가 확인한 뒤 답변합니다." />
+      <section className="support-hero" aria-labelledby="support-title">
+        <div className="support-hero-text">
+          <h1 id="support-title">무엇을 도와드릴까요?</h1>
+          <p>사용 방법을 검색해 보시고, 해결되지 않으면 문의를 남겨 주십시오. 담당자가 확인한 뒤 메일로 답변합니다.</p>
+        </div>
+        <FormInput icon="search" label="자주 묻는 질문 검색" hideLabel type="search" fieldClassName="support-search"
+                   placeholder="궁금한 점을 검색하십시오. 예: 인증 메일, 말투, 작성 완료, 인터넷"
+                   value={query} onChange={(e) => setQuery(e.target.value)} />
+        <Mascot pose="smile" size={92} className="support-hero-mascot" />
+      </section>
+
       <div className="support-layout">
-        <FaqTab />
-        <aside className="support-side" aria-label="내 문의와 새 문의">
+        <FaqList items={faqs} error={faqError} query={query} category={category} categories={categories} onCategory={setCategory} />
+        <aside className="support-side" aria-label="문의 내역과 문의 접수">
           <div ref={mineRef} className="support-anchor"><MyInquiries key={refresh} /></div>
           <div ref={formRef} className="support-anchor">
             <InquiryForm key={`${params.toString()}-${refresh}`} params={params} from={from} toast={toast} onDone={onDone} />
@@ -82,18 +108,8 @@ export default function Support({ sub, params, from, toast }) {
   );
 }
 
-function FaqTab() {
-  const [items, setItems] = useState(null);
-  const [error, setError] = useState(null);
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState(null);
+function FaqList({ items, error, query, category, categories, onCategory }) {
   const [open, setOpen] = useState(null);
-
-  useEffect(() => {
-    support.faq().then(setItems).catch((e) => setError(e.message));
-  }, []);
-
-  const categories = useMemo(() => [...new Set((items ?? []).map((f) => f.category))], [items]);
   const shown = useMemo(() => {
     if (!items) return [];
     const q = query.trim().toLowerCase();
@@ -102,50 +118,44 @@ function FaqTab() {
   }, [items, query, category]);
 
   return (
-    <div className="support-main">
-      <section className="faq-search" aria-labelledby="faq-search-title">
-        <h2 id="faq-search-title">무엇을 도와드릴까요?</h2>
-        <p className="hint">증상이나 기능 이름으로 찾아보십시오. 답이 없으면 오른쪽 아래 도우미에게 물어보거나 문의를 남겨 주십시오.</p>
-        <FormInput icon="search" label="자주 묻는 질문 검색" hideLabel placeholder="예: 인증 메일, 말투, 작성 완료, 인터넷"
-                   value={query} onChange={(e) => setQuery(e.target.value)} />
-        {categories.length > 0 && (
-          <div className="faq-cats" role="group" aria-label="주제로 거르기">
-            <button type="button" className="type-chip" aria-pressed={!category} onClick={() => setCategory(null)}>전체</button>
-            {categories.map((c) => (
-              <button key={c} type="button" className="type-chip" aria-pressed={category === c}
-                      onClick={() => setCategory(category === c ? null : c)}>{c}</button>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="faq-panel" aria-labelledby="faq-title">
-        <div className="faq-panel-head">
-          <h2 id="faq-title">자주 묻는 질문</h2>
-          {items && <span className="hint">{shown.length}개</span>}
+    <section className="faq-panel support-main" aria-labelledby="faq-title">
+      <div className="faq-panel-head">
+        <h2 id="faq-title">자주 묻는 질문</h2>
+        {query.trim() && items && <span className="hint">검색 결과 {shown.length}개</span>}
+      </div>
+      {categories.length > 0 && (
+        <div className="faq-tabs" role="group" aria-label="주제">
+          <button type="button" className="type-tab" aria-pressed={!category} onClick={() => onCategory(null)}>전체</button>
+          {categories.map(([c]) => (
+            <button key={c} type="button" className="type-tab" aria-pressed={category === c}
+                    onClick={() => onCategory(category === c ? null : c)}>
+              {c}
+            </button>
+          ))}
         </div>
-        {error && <Alert>{error}</Alert>}
-        {!items && !error && <EmptyState loading description="불러오는 중…" />}
-        {items && (shown.length === 0 ? (
-          <p className="dt-empty">
-            찾는 내용이 없습니다. 도우미에게 물어보거나 <a href="#support/new?type=GENERAL">문의를 남겨 주십시오</a>.
-          </p>
-        ) : (
-          <ul className="faq">
-            {shown.map((f) => (
-              <li key={f.id} className={open === f.id ? 'is-open' : ''}>
-                <button type="button" className="faq-q" aria-expanded={open === f.id} onClick={() => setOpen(open === f.id ? null : f.id)}>
-                  <span className="faq-cat">{f.category}</span>
-                  {f.question}
-                  <Icon name="next" size={16} className="faq-chevron" />
-                </button>
-                {open === f.id && <p className="faq-a">{f.answer}</p>}
-              </li>
-            ))}
-          </ul>
-        ))}
-      </section>
-    </div>
+      )}
+      {error && <Alert>{error}</Alert>}
+      {!items && !error && <EmptyState loading description="불러오는 중…" />}
+      {items && (shown.length === 0 ? (
+        <div className="list-empty">
+          <Mascot pose="thinking" size={64} />
+          <p>찾는 내용이 없습니다. 오른쪽 아래 도우미에게 물어보거나 <a href="#support/new?type=GENERAL">문의를 남겨 주십시오</a>.</p>
+        </div>
+      ) : (
+        <ul className={`faq ${category ? 'no-cat' : ''}`}>
+          {shown.map((f) => (
+            <li key={f.id} className={open === f.id ? 'is-open' : ''}>
+              <button type="button" className="faq-q" aria-expanded={open === f.id} onClick={() => setOpen(open === f.id ? null : f.id)}>
+                {!category && <span className="faq-cat">{f.category}</span>}
+                <span className="faq-q-text">{f.question}</span>
+                <Icon name="next" size={16} className="faq-chevron" />
+              </button>
+              {open === f.id && <p className="faq-a">{f.answer}</p>}
+            </li>
+          ))}
+        </ul>
+      ))}
+    </section>
   );
 }
 
@@ -263,7 +273,7 @@ function InquiryForm({ params, from, toast, onDone }) {
         {error && <Alert>{error}</Alert>}
       </div>
       <div className="section-foot">
-        <p className="hint">접수 → 확인 중 → 답변 완료 순으로 처리됩니다.</p>
+        <p className="hint">답변 대기 → 처리 중 → 답변 완료 순으로 처리되며, 답변이 등록되면 메일로 알려 드립니다.</p>
         <div className="end">
           <PrimaryButton type="submit" icon="send" loading={busy} loadingText="접수 중">문의 접수</PrimaryButton>
         </div>
@@ -296,21 +306,26 @@ function MyInquiries() {
       </div>
       {error && <Alert>{error}</Alert>}
       {!items && !error && <EmptyState loading description="불러오는 중…" />}
-      {items?.length === 0 && <p className="hint my-inquiries-empty">아직 남긴 문의가 없습니다. 아래에서 문의를 남기면 처리 상태와 답변이 여기에 표시됩니다.</p>}
+      {items?.length === 0 && (
+        <div className="my-inquiries-empty">
+          <Mascot pose="smile" size={48} />
+          <p className="hint">아직 남긴 문의가 없습니다. 아래에서 문의를 남기면 처리 상태와 담당자 답변이 여기에 표시됩니다.</p>
+        </div>
+      )}
       {items?.length > 0 && (
         <ul className="inquiry-list">
           {items.map((q) => {
-            const [label, tone] = STATUS[q.status] ?? [q.status, 'neutral'];
+            const [label] = STATUS[q.status] ?? [q.status];
             const isOpen = open === q.id;
             return (
               <li key={q.id} className="inquiry">
                 <button type="button" className="inquiry-head" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : q.id)}>
                   <span className="inquiry-top">
-                    <span className="tag">{TYPE_LABEL[q.type] ?? q.type}</span>
-                    <StatusIndicator tone={tone}>{label}</StatusIndicator>
+                    <span className="inquiry-no">{inquiryNo(q.id)}</span>
+                    <span className={`inquiry-status is-${q.status.toLowerCase()}`}>{label}</span>
                     <span className="inquiry-date">{formatDateTime(q.createdAt)}</span>
                   </span>
-                  <span className="inquiry-title">{q.title}</span>
+                  <span className="inquiry-title"><span className="tag">{TYPE_LABEL[q.type] ?? q.type}</span>{q.title}</span>
                 </button>
                 {isOpen && (
                   <div className="inquiry-body">
@@ -323,7 +338,7 @@ function MyInquiries() {
                     )}
                     {q.answer ? (
                       <div className="inquiry-answer">
-                        <span className="final-label">답변 {q.answeredAt && <span className="final-tone">{formatDateTime(q.answeredAt)}</span>}</span>
+                        <span className="inquiry-answer-label"><Icon name="support" size={15} />담당자 답변 {q.answeredAt && <span>{formatDateTime(q.answeredAt)}</span>}</span>
                         <p>{q.answer}</p>
                       </div>
                     ) : (

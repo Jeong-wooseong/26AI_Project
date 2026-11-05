@@ -15,11 +15,13 @@ import ReplyFeedback from './ReplyFeedback.jsx';
  *
  * generation: { state: 'idle' | 'loading' | 'error', error?, freshIds? } — 생성 요청 상태는 리뷰(Ticket)가 가진다.
  */
-export default function ReplyDraftPanel({ review: r, generation, onGenerate, onComplete, toast }) {
+export default function ReplyDraftPanel({ review: r, generation, onGenerate, onComplete, toast, defaultTone = 'POLITE' }) {
   const drafts = draftsOf(r);
   const canGenerate = DRAFT_TYPES.includes(r.type) && r.status === 'CLASSIFIED';
   const loading = generation.state === 'loading';
-  const [selectedId, setSelectedId] = useState(() => drafts[0]?.id ?? null);
+  // 매장 설정의 기본 답글 말투를 먼저 연다
+  const first = () => (drafts.find((d) => d.tone === defaultTone) ?? drafts[0])?.id ?? null;
+  const [selectedId, setSelectedId] = useState(first);
   const [texts, setTexts] = useState({}); // 답글 id → 고친 문장
   const [saving, setSaving] = useState(false);
   const { copiedKey, copy } = useCopy();
@@ -33,11 +35,11 @@ export default function ReplyDraftPanel({ review: r, generation, onGenerate, onC
   useEffect(() => {
     setRevealed(new Set());
     setTexts({});
-    setSelectedId((id) => (drafts.some((d) => d.id === id) && !fresh.length ? id : drafts[0]?.id ?? null));
+    setSelectedId((id) => (drafts.some((d) => d.id === id) && !fresh.length ? id : first()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fresh, drafts.length]);
 
-  const selected = drafts.find((d) => d.id === selectedId) ?? drafts[0] ?? null;
+  const selected = drafts.find((d) => d.id === selectedId) ?? drafts.find((d) => d.id === first()) ?? null;
   const reveal = (id) => setRevealed((s) => (s.has(id) ? s : new Set(s).add(id)));
   const typing = selected && fresh.includes(selected.id) && !revealed.has(selected.id);
   const textFor = (d) => texts[d.id] ?? textOf(d);

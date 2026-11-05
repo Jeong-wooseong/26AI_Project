@@ -75,6 +75,7 @@ export const api = {
   listStores: () => request('GET', '/api/stores'),
   createStore: (body) => request('POST', '/api/stores', body),
   updateStore: (id, body) => request('PUT', `/api/stores/${id}`, body),
+  updateReplySettings: (id, settings) => request('PUT', `/api/stores/${id}/reply-settings`, settings),
   extractTone: (id, sampleReplies) => request('POST', `/api/stores/${id}/tone-profile/extract`, { sampleReplies }),
   saveTone: (id, toneProfile, sampleReplies) =>
     request('PUT', `/api/stores/${id}/tone-profile`, { toneProfile, sampleReplies }),

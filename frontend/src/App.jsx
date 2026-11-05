@@ -196,7 +196,7 @@ export default function App() {
   } else if (active === 'report') {
     page = <WeeklyReport store={store} go={go} />;
   } else {
-    page = <ReviewList key={sub ?? 'done'} store={store} toast={toast} go={go} initialTab={sub} />;
+    page = <ReviewList key={`${sub ?? ''}?${params}`} store={store} toast={toast} go={go} initialTab={sub} params={params} />;
   }
 
   return (
@@ -212,7 +212,7 @@ export default function App() {
           <span className="topbar-brand"><BrandLogo size={28} /></span>
           <time className="topbar-date" dateTime={todayISO()}>{todayLabel()}</time>
           <span className="topbar-spacer" />
-          {store && (
+          {store && active !== 'setup' && (
             <a className={`topbar-status ${needsSetup ? 'is-todo' : 'is-ready'}`} href="#setup">
               <i aria-hidden="true" />
               {needsSetup ? '답글 스타일 설정 필요' : '답글 스타일 학습 완료'}
