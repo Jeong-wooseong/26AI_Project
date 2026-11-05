@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
+import { progressColor } from '../progressColor.js';
 import { PLATFORM_LABEL, TYPE_LABEL, todayISO } from '../labels.js';
 import Icon from '../components/Icon.jsx';
 import Mascot from '../components/Mascot.jsx';
@@ -320,9 +321,9 @@ function Metrics({ s, compare }) {
               delta={compare && s.complaintRate != null && s.previousComplaintRate != null
                 && <Delta diff={s.complaintRate - s.previousComplaintRate} unit="%p" better="down" prev={`지난주 ${s.previousComplaintRate}%`} />} />
       <div className="summary-progress">
-        <span className="summary-label">답글 작성 완료율<strong>{cr ?? '-'}{cr != null && '%'}</strong></span>
+        <span className="summary-label">답글 작성 완료율<strong style={{ color: progressColor(cr).text }}>{cr ?? '-'}{cr != null && '%'}</strong></span>
         <div className="progress-track" role="img" aria-label={`답글 대상 ${s.replies.target}건 중 ${s.replies.completed}건 작성 완료`}>
-          <span style={{ width: `${cr ?? 0}%` }} />
+          <span style={{ width: `${cr ?? 0}%`, background: progressColor(cr).bar }} />
         </div>
         <p className="summary-sub">
           {compare && cr != null && pcr != null

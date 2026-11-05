@@ -1,3 +1,4 @@
+import { progressColor } from '../progressColor.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { PLATFORMS, PLATFORM_LABEL, SENTIMENT_LABEL, TYPES, TYPE_LABEL, todayISO } from '../labels.js';
@@ -169,7 +170,7 @@ export default function ReviewList({ store, toast, go, initialTab, params }) {
                   {TABS.map(([key, label]) => (
                     <button key={key} type="button" className={`seg-btn is-${key}`} aria-pressed={status === key}
                             onClick={() => changeTab(key)}>
-                      {label}
+                      <i className="seg-dot" aria-hidden="true" />{label}
                     </button>
                   ))}
                 </div>
@@ -287,9 +288,9 @@ function Summary({ reviews, date }) {
         </p>
       </div>
       <div className="summary-progress">
-        <span className="summary-label">답글 진행률<strong>{pct}%</strong></span>
+        <span className="summary-label">답글 진행률<strong style={{ color: progressColor(pct).text }}>{pct}%</strong></span>
         <div className="progress-track" role="img" aria-label={`답글 대상 ${target}건 중 ${counts.done}건 작성 완료`}>
-          <span style={{ width: `${pct}%` }} />
+          <span style={{ width: `${pct}%`, background: progressColor(pct).bar }} />
         </div>
         <p className="summary-sub">{target}건 중 {counts.done}건 작성 완료</p>
       </div>
@@ -515,7 +516,7 @@ function QueueItem({ review: r, selected, onSelect }) {
   if (failed) state = <span className="item-state is-fail"><Icon name="error" size={14} />분류 실패, 재분류 필요</span>;
   else if (statusOf(r) === 'done') state = <span className="item-state is-done"><Icon name="confirm" size={14} />작성 완료 {formatDateTime(r.completedAt)}</span>;
   else if (r.type === 'MALICIOUS') state = <span className="item-state is-guide"><Icon name="guide" size={14} />{drafts ? '대응 가이드 확인 전' : '대응 가이드 필요'}</span>;
-  else state = <span className="item-state"><Icon name="sparkles" size={14} />{drafts ? `AI 초안 ${drafts}개 준비됨` : '초안 만들기 전'}</span>;
+  else state = <span className={`item-state ${drafts ? 'is-ready' : 'is-todo'}`}><Icon name="sparkles" size={14} />{drafts ? `AI 초안 ${drafts}개 준비됨, 작성 전` : '초안 만들기 전'}</span>;
   return (
     <li>
       <button type="button" className="review-item" aria-current={selected ? 'true' : undefined} onClick={onSelect}>

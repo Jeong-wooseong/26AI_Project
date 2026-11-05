@@ -173,5 +173,12 @@ export const admin = {
   },
   user: (id) => request('GET', `/api/admin/users/${id}`),
   setUserActive: (id, active) => request('PATCH', `/api/admin/users/${id}/status`, { active }),
+  feedback: ({ value, reason, limit = 100 } = {}) => {
+    const q = new URLSearchParams();
+    if (value) q.set('value', value);
+    if (reason) q.set('reason', reason);
+    q.set('limit', limit);
+    return request('GET', `/api/admin/feedback?${q}`);
+  },
   aiLogs: ({ failedOnly = false, limit = 50 } = {}) => request('GET', `/api/admin/ai-logs?failedOnly=${failedOnly}&limit=${limit}`),
 };

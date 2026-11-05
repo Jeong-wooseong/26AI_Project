@@ -307,8 +307,8 @@ function MyInquiries() {
         {items?.length > 0 && (
           <div className="inq-filter" role="group" aria-label="답변 상태로 거르기">
             {groups.map(([k, label, f]) => (
-              <button key={k} type="button" aria-pressed={view === k} onClick={() => { setView(k); setOpen(null); }}>
-                {label}<span>{items.filter(f).length}</span>
+              <button key={k} type="button" className={`is-${k}`} aria-pressed={view === k} onClick={() => { setView(k); setOpen(null); }}>
+                {k !== 'all' && <i aria-hidden="true" />}{label}<span>{items.filter(f).length}</span>
               </button>
             ))}
           </div>

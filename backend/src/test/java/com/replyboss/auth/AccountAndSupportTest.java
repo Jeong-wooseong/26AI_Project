@@ -319,6 +319,17 @@ class AccountAndSupportTest {
                         .content(json(Map.of("value", "UP")))).andExpect(status().isNotFound());
         mvc.perform(get("/api/admin/stats").session(a)).andExpect(jsonPath("$.feedbackDown").value(1))
                 .andExpect(jsonPath("$.downReasons.AWKWARD_TONE").value(1));
+        // 관리자는 개선 요청 내용(이유·의견·답글·가린 리뷰)을 목록으로 본다. 일반 회원은 볼 수 없다
+        mvc.perform(get("/api/admin/feedback").session(b)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/feedback?value=DOWN&reason=LENGTH").session(a)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].replyId").value(replyId))
+                .andExpect(jsonPath("$[0].comment").value("너무 딱딱해요"))
+                .andExpect(jsonPath("$[0].reasons[0]").value("AWKWARD_TONE"))
+                .andExpect(jsonPath("$[0].ownerEmail").value("b@test.com"))
+                .andExpect(jsonPath("$[0].rating").value(5));
+        mvc.perform(get("/api/admin/feedback?value=UP").session(a)).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(get("/api/admin/feedback?reason=WRONG_FACT").session(a)).andExpect(jsonPath("$.length()").value(0));
 
         // 리뷰 삭제: 남의 리뷰는 404, 내 리뷰는 답글과 함께 지워진다
         long reviewId = body(r).path(0).path("id").asLong();

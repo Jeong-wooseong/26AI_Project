@@ -103,6 +103,13 @@ public class AdminController {
                 .body(a.resource());
     }
 
+    @GetMapping("/feedback")
+    public List<AdminService.FeedbackRow> feedback(@RequestParam(required = false) String value,
+                                                   @RequestParam(required = false) String reason,
+                                                   @RequestParam(defaultValue = "100") int limit) {
+        return admin.feedback(value, reason, limit);
+    }
+
     @GetMapping("/stats")
     public AdminService.Stats stats() {
         return admin.stats();

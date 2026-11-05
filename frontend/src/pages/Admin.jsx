@@ -7,6 +7,7 @@ import {
   Alert, EmptyState, FormInput, FormSelect, PageHeader, PrimaryButton, SecondaryButton,
 } from '../components/ui.jsx';
 import { TONE_LABEL, formatDateTime } from '../components/reply/replyModel.js';
+import { TYPE_LABEL as REVIEW_TYPE_LABEL } from '../labels.js';
 import { INQUIRY_TYPES, InquiryMeta, STATUS, TYPE_LABEL, inquiryNo } from './Support.jsx';
 
 export const REASON_LABEL = {
@@ -33,6 +34,7 @@ const TABS = [
   ['', '대시보드', 'report'],
   ['users', '회원 관리', 'user'],
   ['inquiries', '문의 관리', 'support'],
+  ['feedback', '답글 피드백', 'dislike'],
   ['monitoring', '서비스 모니터링', 'shield'],
   ['stats', '운영 통계', 'reviews'],
 ];
@@ -77,6 +79,7 @@ export default function Admin({ toast, me, sub }) {
       {tab === '' && (overview ? <Dashboard o={overview} stamp={stamp} /> : !error && <EmptyState loading description="불러오는 중…" />)}
       {tab === 'users' && <Members me={me} toast={toast} stamp={stamp} onChanged={load} />}
       {tab === 'inquiries' && <Inquiries toast={toast} stamp={stamp} onChanged={load} />}
+      {tab === 'feedback' && <Feedback stamp={stamp} />}
       {tab === 'monitoring' && (overview ? <Monitoring o={overview} stamp={stamp} /> : !error && <EmptyState loading description="불러오는 중…" />)}
       {tab === 'stats' && (overview ? <Stats o={overview} stamp={stamp} /> : !error && <EmptyState loading description="불러오는 중…" />)}
     </>
@@ -503,6 +506,112 @@ function InquiryDetail({ q, onSaved, onClose }) {
       </div>
     </aside>
   );
+}
+
+/* ── 답글 피드백 (사장님이 남긴 개선 요청·좋아요) ─────────────────── */
+
+function Feedback({ stamp }) {
+  const [value, setValue] = useState('DOWN');
+  const [reason, setReason] = useState('');
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState(null);
+  const [selected, setSelected] = useState(null);
+
+  useEffect(() => {
+    setRows(null);
+    setError(null);
+    admin.feedback({ value, reason: value === 'DOWN' ? reason : '' }).then(setRows).catch((e) => setError(e.message));
+  }, [value, reason, stamp]);
+
+  return (
+    <div className={`admin-split ${selected ? 'has-detail' : ''}`}>
+      <section className="ap-panel ap-table-panel">
+        <div className="ap-toolbar">
+          <div className="seg ap-seg ap-seg-3" role="group" aria-label="평가">
+            {[['DOWN', '개선 요청'], ['UP', '마음에 들어요'], ['', '전체']].map(([k, l]) => (
+              <button key={k} type="button" className="seg-btn" aria-pressed={value === k}
+                      onClick={() => { setValue(k); setSelected(null); }}>{l}</button>
+            ))}
+          </div>
+          {value === 'DOWN' && (
+            <FormSelect label="개선 이유" hideLabel value={reason} onChange={(e) => { setReason(e.target.value); setSelected(null); }}
+                        options={[['', '모든 이유'], ...Object.entries(REASON_LABEL)]} />
+          )}
+          <span className="ap-count">{rows ? `${rows.length}건${rows.length >= 100 ? ' (최근 100건)' : ''}` : ''}</span>
+        </div>
+        {error && <Alert>{error}</Alert>}
+        {!rows && !error ? <p className="hint ap-pad">불러오는 중…</p> : rows?.length === 0 ? (
+          <p className="ap-empty ap-pad">조건에 맞는 피드백이 없습니다.</p>
+        ) : rows && (
+          <div className="ap-table-wrap">
+            <table className="ap-table">
+              <thead>
+                <tr><th scope="col">받은 시각</th><th scope="col">평가</th><th scope="col">말투</th><th scope="col">이유·의견</th><th scope="col">매장</th></tr>
+              </thead>
+              <tbody>
+                {rows.map((f) => (
+                  <tr key={f.replyId} className={selected?.replyId === f.replyId ? 'is-selected' : undefined} onClick={() => setSelected(f)}>
+                    <td className="tabnum">{formatDateTime(f.feedbackAt)}</td>
+                    <td><FeedbackChip value={f.value} /></td>
+                    <td>{TONE_LABEL[f.tone] ?? f.tone}</td>
+                    <td>
+                      <button type="button" className="row-btn fb-cell" onClick={() => setSelected(f)}>
+                        {f.reasons.length > 0 && <span className="fb-reasons">{f.reasons.map((x) => REASON_LABEL[x] ?? x).join(', ')}</span>}
+                        <small>{f.comment || (f.value === 'DOWN' ? '남긴 의견 없음' : '')}</small>
+                      </button>
+                    </td>
+                    <td className="ellipsis">{f.storeName}<small className="muted"> {f.ownerEmail}</small></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+      {selected && (
+        <aside className="ap-panel ap-detail" aria-label="피드백 상세">
+          <div className="ap-head">
+            <h2>피드백 상세</h2>
+            <button type="button" className="icon-btn" aria-label="상세 닫기" onClick={() => setSelected(null)}><Icon name="remove" /></button>
+          </div>
+          <div className="ap-detail-body">
+            <p className="meta-row hint"><FeedbackChip value={selected.value} /><span>{formatDateTime(selected.feedbackAt)}</span><span>{selected.storeName}, {selected.ownerEmail}</span></p>
+            {selected.value === 'DOWN' && (
+              <div className="fb-box">
+                <h3>개선 이유</h3>
+                {selected.reasons.length ? (
+                  <div className="tags">{selected.reasons.map((x) => <span key={x} className="tag">{REASON_LABEL[x] ?? x}</span>)}</div>
+                ) : <p className="hint">고른 이유 없음</p>}
+                <h3>사장님 의견</h3>
+                <p className="fb-comment">{selected.comment || '남긴 의견이 없습니다.'}</p>
+              </div>
+            )}
+            <h3>손님 리뷰</h3>
+            <div className="fb-quote">
+              <p className="hint meta-row">
+                <span className="fb-stars" aria-label={`별점 ${selected.rating}점`}>{'★'.repeat(selected.rating)}<span>{'★'.repeat(5 - selected.rating)}</span></span>
+                {selected.reviewType && <span>{REVIEW_TYPE_LABEL[selected.reviewType] ?? selected.reviewType}</span>}
+              </p>
+              <p>{selected.reviewText || '본문 없이 별점만 남긴 리뷰'}</p>
+            </div>
+            <h3>
+              평가한 답글 ({TONE_LABEL[selected.tone] ?? selected.tone})
+              {selected.isFinal && <span className="status-chip is-ok">최종 답글</span>}
+              {selected.edited && <span className="status-chip is-wait">사장님이 고침</span>}
+            </h3>
+            <p className="fb-quote is-reply">{selected.replyText}</p>
+            <p className="hint">리뷰는 개인정보를 가린 본문입니다.</p>
+          </div>
+        </aside>
+      )}
+    </div>
+  );
+}
+
+function FeedbackChip({ value }) {
+  return value === 'DOWN'
+    ? <span className="status-chip is-warn">개선 요청</span>
+    : <span className="status-chip is-ok">마음에 들어요</span>;
 }
 
 /* ── 서비스 모니터링 ─────────────────────────────────────── */

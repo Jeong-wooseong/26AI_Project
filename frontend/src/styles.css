@@ -2451,3 +2451,48 @@ body:has(.page-admin) .helpchat { display: none; }
   .week-cal { right: auto; left: 50%; transform: translateX(-50%); width: min(312px, calc(100vw - 32px)); }
 }
 .editor-foot .length-target { color: var(--placeholder); }
+
+/* ── 상태 색: 완료 초록 / 대기 노랑 / 진행 중·작성 전 주황 / 실패 빨강 ── */
+:root {
+  --st-done: var(--success);     --st-done-tint: var(--success-tint);
+  --st-wait: #8a6400;            --st-wait-tint: #fdf6e3;  /* 노랑: 아직 손대지 않음 (대기) */
+  --st-doing: #b45309;           --st-doing-tint: #fdf0e3; /* 주황: 진행 중이지만 끝나지 않음 */
+  --st-fail: var(--danger);      --st-fail-tint: var(--danger-tint);
+}
+.item-state.is-todo { color: var(--st-wait); }
+.item-state.is-ready, .item-state.is-guide { color: var(--st-doing); }
+.inquiry-status.is-received { background: var(--st-wait-tint); color: var(--st-wait); }
+.inquiry-status.is-in_progress { background: var(--st-doing-tint); color: var(--st-doing); }
+.status-chip.is-wait { background: var(--st-wait-tint); color: var(--st-wait); }
+.status-chip.is-warn { background: var(--st-doing-tint); color: var(--st-doing); }
+.summary-value strong.is-attention { color: var(--st-doing); }
+.save-state.is-dirty, .learn-state.is-pending { color: var(--st-doing); }
+.seg-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; vertical-align: 1px; background: var(--placeholder); }
+.seg-btn.is-wait .seg-dot { background: #e0a91b; }
+.seg-btn.is-done .seg-dot { background: var(--st-done); }
+.seg-btn.is-fail .seg-dot { background: var(--st-fail); }
+.seg-btn.is-wait[aria-pressed="true"] { color: var(--st-wait); }
+.seg-btn.is-done[aria-pressed="true"] { color: var(--st-done); }
+.seg-btn.is-fail[aria-pressed="true"] { color: var(--st-fail); }
+.inq-filter i { width: 7px; height: 7px; border-radius: 50%; }
+.inq-filter .is-wait i { background: #e0a91b; }
+.inq-filter .is-done i { background: var(--st-done); }
+.inq-filter button.is-wait[aria-pressed="true"] { border-color: #e0a91b; background: var(--st-wait-tint); color: var(--st-wait); }
+.inq-filter button.is-done[aria-pressed="true"] { border-color: var(--st-done); background: var(--st-done-tint); color: var(--st-done); }
+.topbar-status.is-todo { color: var(--st-doing); }
+.topbar-status.is-todo i { background: var(--st-doing); }
+
+/* 관리자: 답글 피드백 */
+.ap-seg-3 { grid-template-columns: repeat(3, auto); }
+.fb-cell { gap: 2px; max-width: 360px; }
+.fb-reasons { font-size: var(--fs-small); font-weight: 600; color: var(--text); }
+.fb-cell small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px; }
+.fb-box { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3) var(--s4); border: 1px solid var(--st-doing-tint); background: #fffaf4; border-radius: var(--radius-sm); }
+.fb-box h3 { margin: 0; }
+.fb-comment { font-size: var(--fs-label); line-height: var(--lh-label); color: var(--text); white-space: pre-wrap; }
+.fb-quote { margin: 0; padding: var(--s3) var(--s4); border-left: 3px solid var(--border); background: var(--surface-sub); font-size: var(--fs-label); line-height: 22px; color: var(--text); white-space: pre-wrap; }
+.fb-quote.is-reply { border-left-color: var(--primary); }
+.fb-quote .hint { margin-bottom: 4px; }
+.fb-stars { color: var(--star); letter-spacing: 1px; }
+.fb-stars span { color: var(--border-hover); }
+.ap-detail h3 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
