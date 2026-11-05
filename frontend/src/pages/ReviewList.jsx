@@ -4,7 +4,7 @@ import { PLATFORMS, PLATFORM_LABEL, SENTIMENT_LABEL, TYPES, TYPE_LABEL, todayISO
 import Icon from '../components/Icon.jsx';
 import {
   Alert, EmptyState, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton,
-  SecondaryButton, StatusIndicator, Toolbar,
+  SecondaryButton,
 } from '../components/ui.jsx';
 import ReplyDraftPanel from '../components/reply/ReplyDraftPanel.jsx';
 import FinalReply from '../components/reply/FinalReply.jsx';
@@ -17,45 +17,29 @@ import BulkReplyPanel from '../components/reply/BulkReplyPanel.jsx';
 const PAGE_SIZE = 10;
 // 작성 완료: 리뷰 원문과 최종 답글 중심 / 작성 대기·분류 실패: 분류 결과와 초안 작업
 const TABS = [
-  ['done', '작성 완료'],
   ['wait', '작성 대기'],
+  ['done', '작성 완료'],
   ['fail', '분류 실패'],
 ];
 const TYPE_TONE = { PRAISE: 'praise', COMPLAINT: 'complaint', MALICIOUS: 'malicious', INQUIRY: 'inquiry', RATING_ONLY: 'rating' };
-// 이 폭 이상이면 왼쪽 목록 + 오른쪽 작업 공간, 좁으면 한 줄로 쌓인 대화 목록
-const WIDE_QUERY = '(min-width: 1180px)';
-
-function useMediaQuery(query) {
-  const get = () => typeof window !== 'undefined' && window.matchMedia?.(query).matches;
-  const [match, setMatch] = useState(get);
-  useEffect(() => {
-    const m = window.matchMedia?.(query);
-    if (!m) return undefined;
-    const on = () => setMatch(m.matches);
-    on();
-    m.addEventListener('change', on);
-    return () => m.removeEventListener('change', on);
-  }, [query]);
-  return !!match;
-}
-
 /**
  * 화면 ③ 오늘의 리뷰.
- * 기본 목록(작성 완료)은 사장님이 확정한 최종 답글만 보여준다. 초안 작업은 '작성 대기'에서 한다.
+ *  요약 띠(등록·평균 별점·답글 필요·진행률) → 한 판 안에 왼쪽 리뷰 목록 + 오른쪽 선택한 리뷰의 답글 작업.
+ *  같은 숫자는 한 번만: 상태별 개수는 요약 띠에만, 유형별 개수는 목록 탭에만 보여준다.
  */
 export default function ReviewList({ store, toast, go, initialTab }) {
   const [date, setDate] = useState(todayISO()); // '' 이면 전체 기간 (이력 조회)
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('ALL'); // 유형
-  const [status, setStatus] = useState(TABS.some(([k]) => k === initialTab) ? initialTab : 'done');
+  const [status, setStatus] = useState(TABS.some(([k]) => k === initialTab) ? initialTab : 'wait');
   const [platform, setPlatform] = useState('ALL');
   const [page, setPage] = useState(1);
   const [reviews, setReviews] = useState(null);
   const [error, setError] = useState(null);
   const [bulkOpen, setBulkOpen] = useState(false); // 답글 일괄 처리 패널
-  const [selectedId, setSelectedId] = useState(null); // 넓은 화면: 오른쪽에서 작업 중인 리뷰
-  const wide = useMediaQuery(WIDE_QUERY);
+  const [selectedId, setSelectedId] = useState(null);
   const detailRef = useRef(null);
+  const lastIndex = useRef(0);
 
   const load = useCallback(async () => {
     setError(null);
@@ -76,11 +60,14 @@ export default function ReviewList({ store, toast, go, initialTab }) {
 
   function changeTab(key) {
     setStatus(key);
+    setFilter('ALL');
+    setBulkOpen(false);
     // 새로고침해도 같은 탭이 열리도록 주소에 남긴다
-    window.history.replaceState(null, '', key === 'done' ? '#reviews' : `#reviews/${key}`);
+    window.history.replaceState(null, '', key === 'wait' ? '#reviews' : `#reviews/${key}`);
   }
 
   const replace = (updated) => setReviews((rs) => rs.map((r) => (r.id === updated.id ? updated : r)));
+  const remove = (id) => setReviews((rs) => rs.filter((x) => x.id !== id));
 
   const all = reviews ?? [];
   const q = query.trim().toLowerCase();
@@ -88,18 +75,12 @@ export default function ReviewList({ store, toast, go, initialTab }) {
   const matches = (r) => !q || [r.maskedContent, ...(r.keywords ?? []), finalReplyOf(r) && textOf(finalReplyOf(r))]
     .some((t) => t && t.toLowerCase().includes(q));
   const list = all.filter((r) => (platform === 'ALL' || r.platform === platform) && matches(r));
-  // 유형·상태는 서로의 선택을 반영해 개수를 센다. 작성 완료 수에는 확정한 답글만 들어간다 (초안 수와 섞지 않음)
-  const byType = list.filter((r) => filter === 'ALL' || r.type === filter);
   const byStatus = list.filter((r) => statusOf(r) === status);
   const typeCounts = byStatus.reduce((m, r) => {
     if (r.type) m[r.type] = (m[r.type] ?? 0) + 1;
     return m;
   }, {});
-  const statusCounts = byType.reduce((m, r) => {
-    m[statusOf(r)] += 1;
-    return m;
-  }, { done: 0, wait: 0, fail: 0 });
-  const visible = byType.filter((r) => statusOf(r) === status);
+  const visible = byStatus.filter((r) => filter === 'ALL' || r.type === filter);
   const isToday = date === todayISO();
   const allTime = !date;
   const isDone = status === 'done';
@@ -109,36 +90,28 @@ export default function ReviewList({ store, toast, go, initialTab }) {
   const paged = visible.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
   const usedPlatforms = PLATFORMS.filter(([v]) => all.some((r) => r.platform === v) || v === platform);
 
-  const remove = (id) => setReviews((rs) => rs.filter((x) => x.id !== id));
-
   // 작성 완료하거나 삭제해서 목록에서 빠지면 같은 자리의 다음 리뷰로 넘어간다
   const selectedIndex = paged.findIndex((r) => r.id === selectedId);
-  const lastIndex = useRef(0);
   if (selectedIndex >= 0) lastIndex.current = selectedIndex;
   const selected = selectedIndex >= 0 ? paged[selectedIndex] : paged[Math.min(lastIndex.current, paged.length - 1)];
 
   function select(id) {
     setSelectedId(id);
     detailRef.current?.scrollTo({ top: 0 });
+    // 한 줄로 쌓이는 좁은 화면에서는 작업 영역으로 내려간다
+    if (window.matchMedia?.('(max-width: 860px)').matches) {
+      requestAnimationFrame(() => detailRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+    }
   }
-  const step = (d) => {
-    const i = paged.indexOf(selected) + d;
-    if (paged[i]) select(paged[i].id);
-  };
+
+  const title = allTime ? '전체 리뷰' : isToday ? '오늘의 리뷰' : '지난 리뷰';
 
   return (
     <>
       <PageHeader
-        title={allTime ? '전체 리뷰' : isToday ? '오늘의 리뷰' : '지난 리뷰'}
-        description="작성 완료한 답글을 확인하고, 작성 대기 중인 리뷰의 답글을 확정합니다."
-        actions={<PrimaryButton icon="add" onClick={() => go('input')}>리뷰 입력</PrimaryButton>}
-      />
-
-      <Toolbar
-        className="filters"
-        role="group"
-        aria-label="리뷰 거르기"
-        start={(
+        title={title}
+        description="새로 들어온 리뷰를 확인하고 AI 답글 초안을 골라 완성합니다."
+        actions={(
           <>
             <FormInput id="reviewDate" label="등록일" hideLabel type="date" icon="calendar" fieldClassName="filter-date"
                        value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)}
@@ -147,36 +120,16 @@ export default function ReviewList({ store, toast, go, initialTab }) {
                              onClick={() => setDate(allTime ? todayISO() : '')}>
               전체 기간
             </SecondaryButton>
-            <FormSelect id="platformFilter" label="리뷰 출처" hideLabel value={platform}
-                        options={[['ALL', '전체 출처'], ...usedPlatforms]} onChange={(e) => setPlatform(e.target.value)} />
+            <PrimaryButton icon="add" onClick={() => go('input')}>리뷰 입력</PrimaryButton>
           </>
         )}
-        end={(
-          <FormInput id="reviewSearch" label="리뷰·답글 검색" hideLabel type="search" icon="search" fieldClassName="filter-search"
-                     placeholder="리뷰·답글 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
-        )}
       />
-
-      {all.length > 0 && (
-        <div className="type-chips" role="group" aria-label="유형으로 거르기">
-          <button type="button" className="type-chip" aria-pressed={filter === 'ALL'} onClick={() => setFilter('ALL')}>
-            전체<span className="type-chip-n">{byStatus.length}</span>
-          </button>
-          {TYPES.map(([key, label]) => (
-            <button key={key} type="button" className={`type-chip is-${TYPE_TONE[key]}`} aria-pressed={filter === key}
-                    onClick={() => setFilter(filter === key ? 'ALL' : key)}>
-              <i aria-hidden="true" />{label}<span className="type-chip-n">{typeCounts[key] ?? 0}</span>
-            </button>
-          ))}
-        </div>
-      )}
 
       {error && (
         <Alert action={<SecondaryButton tone="neutral" size="sm" icon="retry" onClick={load}>다시 불러오기</SecondaryButton>}>
           {error}
         </Alert>
       )}
-
 
       {reviews === null && !error && <EmptyState loading description="불러오는 중" />}
       {reviews && reviews.length === 0 && (
@@ -190,112 +143,162 @@ export default function ReviewList({ store, toast, go, initialTab }) {
 
       {all.length > 0 && (
         <>
-          <StatusMeter counts={statusCounts} />
-          <div className="list-bar">
-            <div className="status-tabs" role="group" aria-label="답글 상태로 거르기">
-              {TABS.map(([key, label]) => (
-                <button key={key} type="button" aria-pressed={status === key} className={`status-tab is-${key}`}
-                        onClick={() => changeTab(key)}>
-                  {label}
-                  <span className="status-count">{statusCounts[key]}</span>
+          <Summary reviews={list} date={date} />
+
+          <section className="workspace" aria-label="리뷰 목록과 답글 작업">
+            <div className="review-panel">
+              <div className="review-panel-head">
+                <div className="seg" role="group" aria-label="답글 상태">
+                  {TABS.map(([key, label]) => (
+                    <button key={key} type="button" className={`seg-btn is-${key}`} aria-pressed={status === key}
+                            onClick={() => changeTab(key)}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="review-panel-tools">
+                  <FormInput id="reviewSearch" label="리뷰·답글 검색" hideLabel type="search" icon="search" fieldClassName="filter-search"
+                             placeholder="리뷰·답글 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
+                  <FormSelect id="platformFilter" label="리뷰 출처" hideLabel value={platform} fieldClassName="filter-platform"
+                              options={[['ALL', '전체 출처'], ...usedPlatforms]} onChange={(e) => setPlatform(e.target.value)} />
+                </div>
+              </div>
+              <div className="type-tabs" role="group" aria-label="유형으로 거르기">
+                <button type="button" className="type-tab" aria-pressed={filter === 'ALL'} onClick={() => setFilter('ALL')}>
+                  전체 <span>{byStatus.length}</span>
                 </button>
-              ))}
-            </div>
-            <div className="list-bar-end">
-              {visible.length > 0 && (
-                <span className="page-range">
-                  {visible.length}건 중 {(current - 1) * PAGE_SIZE + 1}–{Math.min(current * PAGE_SIZE, visible.length)}
-                </span>
-              )}
+                {TYPES.filter(([key]) => typeCounts[key] || filter === key).map(([key, label]) => (
+                  <button key={key} type="button" className="type-tab" aria-pressed={filter === key}
+                          onClick={() => setFilter(filter === key ? 'ALL' : key)}>
+                    {label} <span>{typeCounts[key] ?? 0}</span>
+                  </button>
+                ))}
+              </div>
+
               {status === 'wait' && visible.length > 0 && (
-                <SecondaryButton size="sm" icon="classify" aria-expanded={bulkOpen} onClick={() => setBulkOpen((v) => !v)}>
-                  답글 일괄 처리
-                </SecondaryButton>
+                <div className="review-panel-bulk">
+                  <SecondaryButton size="sm" icon="classify" aria-expanded={bulkOpen} onClick={() => setBulkOpen((v) => !v)}>
+                    답글 일괄 처리
+                  </SecondaryButton>
+                  <span className="hint">여러 리뷰의 초안을 한 번에 만들고 확정합니다.</span>
+                </div>
+              )}
+
+              {visible.length === 0 ? (
+                <EmptyTab status={status} searching={!!q || platform !== 'ALL'} />
+              ) : (
+                <ul className="review-list" aria-label="리뷰 목록">
+                  {paged.map((r) => (
+                    <QueueItem key={r.id} review={r} selected={!(bulkOpen && status === 'wait') && r === selected} onSelect={() => { setBulkOpen(false); select(r.id); }} />
+                  ))}
+                </ul>
+              )}
+
+              {pageCount > 1 && (
+                <nav className="pagination" aria-label="페이지 이동">
+                  <button aria-label="이전 페이지" disabled={current === 1} onClick={() => setPage(current - 1)}>
+                    <Icon name="prev" />
+                  </button>
+                  {Array.from({ length: pageCount }, (_, n) => n + 1).map((n) => (
+                    <button key={n} aria-current={n === current ? 'page' : undefined} onClick={() => setPage(n)}>{n}</button>
+                  ))}
+                  <button aria-label="다음 페이지" disabled={current === pageCount} onClick={() => setPage(current + 1)}>
+                    <Icon name="next" />
+                  </button>
+                </nav>
               )}
             </div>
-          </div>
 
-          {bulkOpen && status === 'wait' && visible.length > 0 && (
-            <BulkReplyPanel reviews={visible} onUpdated={replace} onClose={() => setBulkOpen(false)} toast={toast} />
-          )}
-
-          {visible.length === 0 ? (
-            <section className="feed" aria-label="리뷰 목록">
-              <EmptyTab status={status} searching={!!q} waitCount={statusCounts.wait} onShowWait={() => changeTab('wait')} />
-            </section>
-          ) : (
-            <div className={wide ? 'workspace' : undefined}>
-              {wide && (
-                <section className="queue" aria-label="리뷰 목록">
-                  <ul>
-                    {paged.map((r) => (
-                      <QueueItem key={r.id} review={r} selected={r === selected} onSelect={() => select(r.id)} />
-                    ))}
-                  </ul>
-                </section>
-              )}
-              {/* 좁은 화면: 모든 리뷰를 쌓아서 / 넓은 화면: 선택한 리뷰만 보이고 나머지는 작업 상태를 유지한 채 숨김 */}
-              <section className={wide ? 'detail' : 'feed'} ref={detailRef}
-                       aria-label={wide ? '선택한 리뷰의 답글 작업' : '리뷰 목록'}>
-                {wide && selected && (
-                  <div className="detail-bar">
-                    <span>{paged.indexOf(selected) + 1} / {paged.length}건</span>
-                    <span className="detail-nav">
-                      <IconButton icon="prev" size="sm" label="이전 리뷰" disabled={paged.indexOf(selected) === 0} onClick={() => step(-1)} />
-                      <IconButton icon="next" size="sm" label="다음 리뷰" disabled={paged.indexOf(selected) === paged.length - 1}
-                                  onClick={() => step(1)} />
-                    </span>
-                  </div>
-                )}
-                {paged.map((r) => {
-                  const hidden = wide && r !== selected;
-                  return isDone
-                    ? <CompletedRow key={r.id} review={r} hidden={hidden} onUpdated={replace} onDeleted={remove} toast={toast} />
-                    : <Ticket key={r.id} review={r} hidden={hidden} onUpdated={replace} onDeleted={remove} toast={toast} />;
-                })}
-              </section>
+            {/* 선택한 리뷰만 보이고, 나머지는 생성 중인 작업을 잃지 않도록 숨긴 채 유지한다 */}
+            <div className="detail-panel" ref={detailRef} aria-label="선택한 리뷰의 답글 작업">
+              {bulkOpen && status === 'wait' && visible.length > 0 ? (
+                <BulkReplyPanel reviews={visible} onUpdated={replace} onClose={() => setBulkOpen(false)} toast={toast} />
+              ) : !selected ? (
+                <div className="detail-empty">
+                  <Mascot pose="smile" size={72} />
+                  <p>왼쪽 목록에서 리뷰를 고르면 여기에서 답글을 작성합니다.</p>
+                </div>
+              ) : null}
+              {paged.map((r) => {
+                const hidden = r !== selected || (bulkOpen && status === 'wait');
+                return isDone
+                  ? <CompletedRow key={r.id} review={r} hidden={hidden} onUpdated={replace} onDeleted={remove} toast={toast} />
+                  : <Ticket key={r.id} review={r} hidden={hidden} onUpdated={replace} onDeleted={remove} toast={toast} />;
+              })}
             </div>
-          )}
+          </section>
         </>
-      )}
-
-      {pageCount > 1 && (
-        <nav className="pagination" aria-label="페이지 이동">
-          <button aria-label="이전 페이지" disabled={current === 1} onClick={() => setPage(current - 1)}>
-            <Icon name="prev" />
-          </button>
-          {Array.from({ length: pageCount }, (_, n) => n + 1).map((n) => (
-            <button key={n} aria-current={n === current ? 'page' : undefined} onClick={() => setPage(n)}>{n}</button>
-          ))}
-          <button aria-label="다음 페이지" disabled={current === pageCount} onClick={() => setPage(current + 1)}>
-            <Icon name="next" />
-          </button>
-        </nav>
       )}
     </>
   );
 }
 
-function EmptyTab({ status, searching, waitCount, onShowWait }) {
-  if (searching) return <p className="dt-empty">검색어와 일치하는 리뷰가 없습니다.</p>;
-  if (status === 'done') {
-    return (
-      <div className="dt-empty">
-        <Mascot pose="thinking" size={88} className="empty-mascot" />
-        <p>작성 완료한 답글이 없습니다.</p>
-        {waitCount > 0 && (
-          <p className="dt-empty-sub">
-            작성 대기 {waitCount}건에서 초안을 고르고 작성 완료를 누르면 여기에 표시됩니다.
-            {' '}<button type="button" className="text-btn" onClick={onShowWait}>작성 대기 보기</button>
-          </p>
-        )}
-      </div>
-    );
-  }
+/** 요약 띠: 지금 날짜·출처·검색 조건의 리뷰로 센다 (유형 필터와는 무관) */
+function Summary({ reviews, date }) {
+  const total = reviews.length;
+  const rated = reviews.filter((r) => r.rating);
+  const avg = rated.length ? rated.reduce((n, r) => n + r.rating, 0) / rated.length : null;
+  const low = reviews.filter((r) => r.rating <= 2).length;
+  const counts = reviews.reduce((m, r) => ({ ...m, [statusOf(r)]: m[statusOf(r)] + 1 }), { done: 0, wait: 0, fail: 0 });
+  const malicious = reviews.filter((r) => statusOf(r) === 'wait' && r.type === 'MALICIOUS').length;
+  const target = counts.done + counts.wait;
+  const pct = target ? Math.round((counts.done / target) * 100) : 0;
+  const sources = reviews.reduce((m, r) => ({ ...m, [r.platform]: (m[r.platform] ?? 0) + 1 }), {});
+  const bySource = Object.entries(sources).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${PLATFORM_LABEL[k]} ${n}건`).join(', ');
+  const scope = !date ? '전체 기간' : date === todayISO() ? '오늘' : `${Number(date.slice(5, 7))}월 ${Number(date.slice(8))}일`;
   return (
-    <div className="dt-empty">
-      <Mascot pose="done" size={88} className="empty-mascot" />
-      <p>{status === 'wait' ? '작성 대기 중인 리뷰가 없습니다. 모든 답글을 작성했어요.' : '분류에 실패한 리뷰가 없습니다.'}</p>
+    <section className="summary" aria-label="리뷰 요약">
+      <div>
+        <span className="summary-label">{scope} 등록된 리뷰</span>
+        <p className="summary-value"><strong>{total}</strong>건</p>
+        <p className="summary-sub">{bySource || '등록된 리뷰 없음'}</p>
+      </div>
+      <div>
+        <span className="summary-label">평균 별점</span>
+        <p className="summary-value">
+          <strong>{avg != null ? avg.toFixed(1) : '-'}</strong>
+          {avg != null && <Stars rating={Math.round(avg)} size={14} />}
+        </p>
+        <p className="summary-sub">{low ? `낮은 별점(1~2점) ${low}건` : '낮은 별점(1~2점) 없음'}</p>
+      </div>
+      <div>
+        <span className="summary-label">답글이 필요한 리뷰</span>
+        <p className="summary-value"><strong className={counts.wait ? 'is-attention' : ''}>{counts.wait}</strong>건</p>
+        <p className="summary-sub">
+          {counts.fail ? <span className="is-danger">분류 실패 {counts.fail}건 따로 확인</span>
+            : malicious ? `악성 ${malicious}건은 대응 가이드 필요` : '악성·분류 실패 없음'}
+        </p>
+      </div>
+      <div className="summary-progress">
+        <span className="summary-label">답글 진행률<strong>{pct}%</strong></span>
+        <div className="progress-track" role="img" aria-label={`답글 대상 ${target}건 중 ${counts.done}건 작성 완료`}>
+          <span style={{ width: `${pct}%` }} />
+        </div>
+        <p className="summary-sub">{target}건 중 {counts.done}건 작성 완료</p>
+      </div>
+    </section>
+  );
+}
+
+function Stars({ rating, size = 14 }) {
+  return (
+    <span className="star-row" role="img" aria-label={`별점 ${rating}점`}>
+      {[1, 2, 3, 4, 5].map((n) => <Icon key={n} name="star" size={size} className={n <= rating ? 'is-on' : ''} />)}
+    </span>
+  );
+}
+
+function EmptyTab({ status, searching }) {
+  if (searching) return <p className="list-empty">조건에 맞는 리뷰가 없습니다. 검색어나 출처를 바꿔 보십시오.</p>;
+  const text = {
+    wait: '답글이 필요한 리뷰가 없습니다. 모든 답글을 작성했어요.',
+    done: '작성 완료한 답글이 없습니다. 작성 대기에서 초안을 고르고 작성 완료를 누르면 여기에 모입니다.',
+    fail: '분류에 실패한 리뷰가 없습니다.',
+  }[status];
+  return (
+    <div className="list-empty">
+      <Mascot pose={status === 'done' ? 'thinking' : 'done'} size={72} />
+      <p>{text}</p>
     </div>
   );
 }
@@ -320,16 +323,16 @@ function CompletedRow({ review: r, hidden, onUpdated, onDeleted, toast }) {
 
   return (
     <article className="thread is-done" hidden={hidden}>
-      <ThreadHead review={r}>
-        <StatusIndicator tone={TYPE_TONE[r.type]}>{TYPE_LABEL[r.type]}</StatusIndicator>
-        <span className="done-mark" title={edited ? `마지막 수정 ${formatDateTime(r.finalUpdatedAt)}` : undefined}>
-          <Icon name="confirm" size={16} />작성 완료 <time dateTime={r.completedAt}>{formatDateTime(r.completedAt)}</time>
-        </span>
+      <DetailHead review={r}>
         <DeleteReview review={r} onDeleted={onDeleted} toast={toast} />
-      </ThreadHead>
-      <ReviewQuote review={r} />
-      {reply && <FinalReply reply={reply} onSave={save} toast={toast} />}
-      {edited && <p className="done-sub">수정 {formatDateTime(r.finalUpdatedAt)}</p>}
+      </DetailHead>
+      <Original review={r} />
+      {reply && (
+        <div className="reply-zone">
+          <FinalReply reply={reply} onSave={save} toast={toast}
+                      meta={`${formatDateTime(r.completedAt)} 작성 완료${edited ? `, ${formatDateTime(r.finalUpdatedAt)} 수정` : ''}`} />
+        </div>
+      )}
     </article>
   );
 }
@@ -403,26 +406,23 @@ function Ticket({ review: r, hidden, onUpdated, onDeleted, toast }) {
 
   return (
     <article className={`thread ${failed ? 'is-failed' : ''} ${malicious ? 'is-malicious' : ''}`} hidden={hidden}>
-      <ThreadHead review={r}>
-        {failed
-          ? <StatusIndicator tone="danger">미분류</StatusIndicator>
-          : <StatusIndicator tone={TYPE_TONE[r.type]}>{TYPE_LABEL[r.type]}</StatusIndicator>}
-        <ReplyStatus review={r} generation={generation} />
-        <span className="thread-actions">
-          {failed && (
-            <IconButton icon={retrying ? 'loading' : 'retry'} className={retrying ? 'is-loading' : undefined}
-                        label="재분류" onClick={retry} disabled={retrying} size="sm" />
-          )}
-          <DeleteReview review={r} onDeleted={onDeleted} toast={toast} disabled={generation.state === 'loading'} />
-        </span>
-      </ThreadHead>
-      <ReviewQuote review={r} showAnalysis={!failed} />
+      <DetailHead review={r}>
+        {failed && (
+          <SecondaryButton tone="neutral" size="sm" icon={retrying ? 'loading' : 'retry'} onClick={retry} disabled={retrying}>
+            재분류
+          </SecondaryButton>
+        )}
+        <DeleteReview review={r} onDeleted={onDeleted} toast={toast} disabled={generation.state === 'loading'} />
+      </DetailHead>
+      <Original review={r} showAnalysis={!failed} />
 
       {failed && (
-        <p className="thread-error">
-          {retryError ? retryError.message : failureText(r.failureCode)}
-          <span className="error-code">오류 코드 {retryError?.code ?? r.failureCode ?? 'LLM_FAILED'}</span>
-        </p>
+        <div className="reply-zone">
+          <p className="thread-error">
+            {retryError ? retryError.message : failureText(r.failureCode)}
+            <span className="error-code">오류 코드 {retryError?.code ?? r.failureCode ?? 'LLM_FAILED'}</span>
+          </p>
+        </div>
       )}
 
       {hasReplyArea && (
@@ -430,36 +430,45 @@ function Ticket({ review: r, hidden, onUpdated, onDeleted, toast }) {
       )}
 
       {malicious && (
-        <MaliciousGuidePanel review={r} generation={generation} onGenerate={generateGuide} onComplete={complete} toast={toast} />
+        <div className="reply-zone">
+          <MaliciousGuidePanel review={r} generation={generation} onGenerate={generateGuide} onComplete={complete} toast={toast} />
+        </div>
       )}
     </article>
   );
 }
 
-/** 리뷰 한 건의 머리줄: 별점(별 5개), 출처, 시각 + 오른쪽에 분류·상태·관리 */
-function ThreadHead({ review: r, children }) {
+/** 상세 머리: 유형·출처·시각, 별점 + 오른쪽 관리 버튼 */
+function DetailHead({ review: r, children }) {
+  const failed = r.status === 'FAILED';
   return (
-    <header className="thread-head">
-      <span className="thread-stars" role="img" aria-label={`별점 ${r.rating}점`}>
-        {[1, 2, 3, 4, 5].map((n) => <Icon key={n} name="star" size={14} className={n <= r.rating ? 'is-on' : ''} />)}
-        <strong>{r.rating}</strong>
-      </span>
-      <span className="platform">{PLATFORM_LABEL[r.platform]}</span>
-      <span className="thread-time">
-        {r.writtenAt ? `작성일 ${r.writtenAt}` : <time dateTime={r.createdAt} title="등록 시각">{formatDateTime(r.createdAt)}</time>}
-      </span>
-      <span className="thread-head-end">{children}</span>
+    <header className="detail-head">
+      <div>
+        <p className="detail-meta">
+          {failed ? <TypeBadge type="FAILED" /> : <TypeBadge type={r.type} />}
+          <span>{PLATFORM_LABEL[r.platform]}</span>
+          {r.writtenAt ? <span>작성일 {r.writtenAt}</span> : <time dateTime={r.createdAt}>{formatDateTime(r.createdAt)} 등록</time>}
+        </p>
+        <p className="detail-title"><Stars rating={r.rating} size={16} /><strong>{r.rating}점 리뷰</strong></p>
+      </div>
+      <div className="detail-head-actions">{children}</div>
     </header>
   );
 }
 
-/** 손님이 쓴 리뷰: 회색 선 + 한 단계 큰 글자. 아래 줄에 분석 결과와 표시 */
-function ReviewQuote({ review: r, showAnalysis = true }) {
+function TypeBadge({ type }) {
+  if (type === 'FAILED') return <span className="type-badge is-failed">분류 실패</span>;
+  return <span className={`type-badge is-${TYPE_TONE[type]}`}>{TYPE_LABEL[type]}</span>;
+}
+
+/** 손님이 쓴 리뷰 원문 + 분석 결과 */
+function Original({ review: r, showAnalysis = true }) {
   return (
-    <div className="thread-review">
-      <p className={`review-text ${r.maskedContent ? '' : 'is-empty'}`}>
+    <section className="original" aria-label="손님 리뷰">
+      <span className="section-label">손님 리뷰</span>
+      <blockquote className={r.maskedContent ? '' : 'is-empty'}>
         {r.maskedContent ? <Masked text={r.maskedContent} /> : '본문 없이 별점만 남긴 리뷰'}
-      </p>
+      </blockquote>
       <p className="meta">
         {showAnalysis && r.keywords?.length > 0 && <span className="kw">{r.keywords.map((k) => `#${k}`).join(' ')}</span>}
         {showAnalysis && r.type !== 'RATING_ONLY' && r.sentiment && <span>{SENTIMENT_LABEL[r.sentiment]}</span>}
@@ -479,54 +488,32 @@ function ReviewQuote({ review: r, showAnalysis = true }) {
           </span>
         )}
       </p>
-    </div>
+    </section>
   );
 }
 
-/** 넓은 화면 왼쪽 목록의 한 줄: 별점·출처·유형·시각, 리뷰 앞부분, 답글 상태 */
+/** 왼쪽 목록의 한 건: 유형·출처·시각, 별점, 리뷰 앞 두 줄, 답글 상태 */
 function QueueItem({ review: r, selected, onSelect }) {
   const failed = r.status === 'FAILED';
   const drafts = r.replies.filter((p) => p.id !== r.finalReplyId).length;
   let state;
-  if (failed) state = <span className="queue-state is-fail">분류 실패</span>;
-  else if (statusOf(r) === 'done') state = <span className="queue-state is-done"><Icon name="confirm" size={14} />작성 완료 {formatDateTime(r.completedAt)}</span>;
-  else if (r.type === 'MALICIOUS') state = <span className="queue-state is-guide">{drafts ? '대응 가이드 확인 전' : '대응 가이드 필요'}</span>;
-  else state = <span className="queue-state">{drafts ? `초안 ${drafts}개` : '초안 없음'}</span>;
+  if (failed) state = <span className="item-state is-fail"><Icon name="error" size={14} />분류 실패, 재분류 필요</span>;
+  else if (statusOf(r) === 'done') state = <span className="item-state is-done"><Icon name="confirm" size={14} />작성 완료 {formatDateTime(r.completedAt)}</span>;
+  else if (r.type === 'MALICIOUS') state = <span className="item-state is-guide"><Icon name="guide" size={14} />{drafts ? '대응 가이드 확인 전' : '대응 가이드 필요'}</span>;
+  else state = <span className="item-state"><Icon name="sparkles" size={14} />{drafts ? `AI 초안 ${drafts}개 준비됨` : '초안 만들기 전'}</span>;
   return (
     <li>
-      <button type="button" className="queue-item" aria-current={selected ? 'true' : undefined} onClick={onSelect}>
-        <span className="queue-top">
-          <span className="thread-stars" role="img" aria-label={`별점 ${r.rating}점`}>
-            {[1, 2, 3, 4, 5].map((n) => <Icon key={n} name="star" size={12} className={n <= r.rating ? 'is-on' : ''} />)}
-          </span>
-          <span className="platform">{PLATFORM_LABEL[r.platform]}</span>
-          {failed
-            ? <StatusIndicator tone="danger">미분류</StatusIndicator>
-            : <StatusIndicator tone={TYPE_TONE[r.type]}>{TYPE_LABEL[r.type]}</StatusIndicator>}
-          <span className="queue-time">{r.writtenAt ? r.writtenAt.slice(5).replace('-', '.') : formatDateTime(r.createdAt)}</span>
+      <button type="button" className="review-item" aria-current={selected ? 'true' : undefined} onClick={onSelect}>
+        <span className="item-top">
+          <TypeBadge type={failed ? 'FAILED' : r.type} />
+          <span className="item-source">{PLATFORM_LABEL[r.platform]}</span>
+          <span className="item-time">{r.writtenAt ? r.writtenAt.slice(5).replace('-', '.') : formatDateTime(r.createdAt).slice(6)}</span>
         </span>
-        <span className={`queue-text ${r.maskedContent ? '' : 'is-empty'}`}>{r.maskedContent || '본문 없이 별점만 남긴 리뷰'}</span>
-        {state}
+        <Stars rating={r.rating} size={13} />
+        <span className={`item-text ${r.maskedContent ? '' : 'is-empty'}`}>{r.maskedContent || '본문 없이 별점만 남긴 리뷰'}</span>
+        <span className="item-foot">{state}<Icon name="next" size={16} /></span>
       </button>
     </li>
-  );
-}
-
-/** 지금 조건의 답글 상태 비율 (실제 목록에서 셈) */
-function StatusMeter({ counts }) {
-  const total = counts.done + counts.wait + counts.fail;
-  if (!total) return null;
-  const pct = (n) => `${(n / total) * 100}%`;
-  return (
-    <div className="status-meter">
-      <p><strong>{counts.done}</strong> / {total}건 답글 작성 완료</p>
-      <div className="status-meter-bar" role="img"
-           aria-label={`작성 완료 ${counts.done}건, 작성 대기 ${counts.wait}건, 분류 실패 ${counts.fail}건`}>
-        <span className="is-done" style={{ width: pct(counts.done) }} />
-        <span className="is-wait" style={{ width: pct(counts.wait) }} />
-        <span className="is-fail" style={{ width: pct(counts.fail) }} />
-      </div>
-    </div>
   );
 }
 
@@ -599,16 +586,6 @@ function InjectionNote() {
       지시문 포함 리뷰
     </span>
   );
-}
-
-/** 작성 대기 행의 답글 상태: 생성 중 / 생성 실패 / 초안 n개 / 초안 없음 */
-function ReplyStatus({ review: r, generation }) {
-  if (r.status === 'FAILED') return <StatusIndicator tone="danger" icon="error">분류 실패</StatusIndicator>;
-  if (generation.state === 'loading') return <StatusIndicator tone="inquiry" icon="loading">생성 중</StatusIndicator>;
-  if (generation.state === 'error') return <StatusIndicator tone="danger" icon="error">생성 실패</StatusIndicator>;
-  const drafts = r.replies.filter((p) => p.id !== r.finalReplyId).length;
-  if (r.type === 'MALICIOUS') return <StatusIndicator tone="neutral">{drafts ? '가이드 확인 전' : '가이드 없음'}</StatusIndicator>;
-  return <StatusIndicator tone="neutral">{drafts ? `초안 ${drafts}개` : '초안 없음'}</StatusIndicator>;
 }
 
 const FAILURE_TEXT = {

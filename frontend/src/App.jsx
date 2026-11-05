@@ -8,10 +8,10 @@ import Support, { ReportErrorLink } from './pages/Support.jsx';
 import Admin from './pages/Admin.jsx';
 import { ForgotPage, LegalPage, LoginPage, ResetPage, SignupPage, VerifyPage } from './pages/Auth.jsx';
 import HelpChat from './components/HelpChat.jsx';
-import { BrandLogo } from './components/Mascot.jsx';
+import Mascot, { BrandLogo } from './components/Mascot.jsx';
 import { Toast, useToast } from './components/Toast.jsx';
 import Icon from './components/Icon.jsx';
-import { CATEGORY_ICON } from './labels.js';
+import { CATEGORY_ICON, todayISO } from './labels.js';
 import { EmptyState, PrimaryButton, SecondaryButton } from './components/ui.jsx';
 
 const VIEWS = [
@@ -45,6 +45,7 @@ export default function App() {
   const [loadError, setLoadError] = useState(null);
   const [route, setRoute] = useState(parseHash());
   const [loginNotice, setLoginNotice] = useState(null);
+  const [navOpen, setNavOpen] = useState(false); // 좁은 화면의 메뉴 서랍
   const lastPage = useRef(null); // 고객 지원으로 오기 직전 화면 (오류 위치 자동 기록)
   const toast = useToast();
   const { view, sub, params } = route;
@@ -199,116 +200,90 @@ export default function App() {
   }
 
   return (
-    <div className="app">
-      <Sidebar me={me} store={store} active={active} onLogout={logout} />
-      {/* 좁은 화면에서는 사이드바 대신 위쪽 머리글 */}
-      <header className="header">
-        <div className="header-inner">
-          <div className="brand">
-            <BrandLogo size={32} />
-            <span className="brand-divider" aria-hidden="true" />
-            <span className="brand-store">{store?.name ?? '매장 미등록'}</span>
-          </div>
-          <nav className="nav" aria-label="화면">
-            {VIEWS.map(([key, label]) => (
-              <a key={key} href={`#${key}`} aria-current={active === key ? 'page' : undefined}>
-                <Icon name={VIEW_ICON[key]} />
-                {label}
-              </a>
-            ))}
-          </nav>
-          <UserMenu me={me} active={active} onLogout={logout} />
-        </div>
-      </header>
-      <main className={`page page-${active}`}>{page}</main>
+    <div className={`app ${navOpen ? 'nav-open' : ''}`}>
+      <Sidebar me={me} store={store} active={active} needsSetup={needsSetup} onLogout={logout} onClose={() => setNavOpen(false)} />
+      {navOpen && <button type="button" className="sidebar-backdrop" aria-label="메뉴 닫기" onClick={() => setNavOpen(false)} />}
+      <div className="main">
+        <header className="topbar">
+          <button type="button" className="icon-btn topbar-menu" aria-label="메뉴 열기" aria-expanded={navOpen}
+                  onClick={() => setNavOpen(true)}>
+            <Icon name="menu" />
+          </button>
+          <span className="topbar-brand"><BrandLogo size={28} /></span>
+          <time className="topbar-date" dateTime={todayISO()}>{todayLabel()}</time>
+          <span className="topbar-spacer" />
+          {store && (
+            <a className={`topbar-status ${needsSetup ? 'is-todo' : 'is-ready'}`} href="#setup">
+              <i aria-hidden="true" />
+              {needsSetup ? '답글 스타일 설정 필요' : '답글 스타일 학습 완료'}
+            </a>
+          )}
+        </header>
+        <main className={`page page-${active}`}>{page}</main>
+      </div>
       <HelpChat />
       <Toast state={toast} />
     </div>
   );
 }
 
-/** 헤더 오른쪽: 고객 지원 · 관리자(관리자만) · 계정 메뉴(이메일, 로그아웃) */
-function UserMenu({ me, active, onLogout }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const close = (e) => {
-      if (e.type === 'keydown' ? e.key === 'Escape' : !ref.current?.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', close);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', close);
-    };
-  }, [open]);
-
-  return (
-    <div className="usermenu" ref={ref}>
-      <a className="usermenu-link" href="#support" aria-current={active === 'support' ? 'page' : undefined}>
-        <Icon name="support" />
-        <span>고객 지원</span>
-      </a>
-      {me.role === 'ADMIN' && (
-        <a className="usermenu-link" href="#admin" aria-current={active === 'admin' ? 'page' : undefined}>
-          <Icon name="admin" />
-          <span>관리자</span>
-        </a>
-      )}
-      <button type="button" className="icon-btn usermenu-btn" aria-label="계정 메뉴" aria-expanded={open} aria-haspopup="menu"
-              title={me.email} onClick={() => setOpen((v) => !v)}>
-        <Icon name="user" />
-      </button>
-      {open && (
-        <div className="usermenu-pop" role="menu">
-          <p className="usermenu-email">{me.email}</p>
-          <a role="menuitem" href="#setup" onClick={() => setOpen(false)}><Icon name="store" size={16} />매장·계정 설정</a>
-          <button type="button" role="menuitem" onClick={() => { setOpen(false); onLogout(); }}>
-            <Icon name="logout" size={16} />로그아웃
-          </button>
-        </div>
-      )}
-    </div>
-  );
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+function todayLabel() {
+  const d = new Date();
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAYS[d.getDay()]})`;
 }
 
-/** 넓은 화면의 왼쪽 메뉴: 매장 · 화면 메뉴 · 고객 지원/관리자 · 계정 */
-function Sidebar({ me, store, active, onLogout }) {
-  const ready = !!store?.toneProfile;
+/** 왼쪽 메뉴: 매장 · 업무 메뉴 · 지원/관리 · 안내 · 계정. 좁은 화면에서는 메뉴 버튼으로 여는 서랍 */
+function Sidebar({ me, store, active, needsSetup, onLogout, onClose }) {
+  const link = (key, label, icon) => (
+    <a key={key} className="side-link" href={`#${key}`} aria-current={active === key ? 'page' : undefined} onClick={onClose}>
+      <Icon name={icon} />
+      <span>{label}</span>
+    </a>
+  );
+  // 안내 칸: 지금 해야 할 일 하나만. 그 화면에 있을 때는 숨긴다 (같은 내용을 두 번 보여주지 않음)
+  const tip = needsSetup
+    ? { to: 'setup', title: '답글 스타일부터 등록하세요', text: '기존 답글 3~5개를 넣으면 매장 말투로 초안을 만들어요.', action: '매장 설정 열기', pose: 'thinking' }
+    : { to: 'report', title: '이번 주 불만 주제 확인', text: '주간 리포트에서 자주 나온 불만과 개선 제안을 볼 수 있어요.', action: '리포트 보기', pose: 'smile' };
   return (
-    <aside className="sidebar">
-      <a className="sidebar-brand" href="#reviews" aria-label="ReplyBoss 오늘의 리뷰로 이동"><BrandLogo size={34} /></a>
-      <a className="sidebar-store" href="#setup" title="매장 설정 열기">
+    <aside className="sidebar" aria-label="메뉴">
+      <div className="sidebar-top">
+        <a className="sidebar-brand" href="#reviews" onClick={onClose} aria-label="ReplyBoss 오늘의 리뷰로 이동"><BrandLogo size={32} /></a>
+        <button type="button" className="icon-btn sidebar-close" aria-label="메뉴 닫기" onClick={onClose}><Icon name="remove" /></button>
+      </div>
+      <a className="sidebar-store" href="#setup" onClick={onClose} title="매장 설정 열기">
         <span className="sidebar-store-icon"><Icon name={CATEGORY_ICON[store?.category] ?? 'store'} size={18} /></span>
         <span className="sidebar-store-text">
+          <small>{store ? `${store.category} 매장` : '매장 정보 필요'}</small>
           <strong>{store?.name ?? '매장 미등록'}</strong>
-          <small className={ready ? 'is-ready' : 'is-todo'}>
-            {store ? `${store.category} 매장` : '매장 정보 필요'}
-            <span>{ready ? '답글 스타일 저장됨' : '답글 스타일 설정 필요'}</span>
-          </small>
         </span>
+        <Icon name="next" size={16} className="sidebar-store-go" />
       </a>
       <nav className="side-nav" aria-label="화면">
-        {VIEWS.map(([key, label]) => (
-          <a key={key} href={`#${key}`} aria-current={active === key ? 'page' : undefined}>
-            <Icon name={VIEW_ICON[key]} />
-            {label}
-          </a>
-        ))}
-      </nav>
-      <nav className="side-nav is-sub" aria-label="지원">
-        <a href="#support" aria-current={active === 'support' ? 'page' : undefined}><Icon name="support" />고객 지원</a>
+        <p className="side-group">업무</p>
+        {VIEWS.map(([key, label]) => link(key, label, VIEW_ICON[key]))}
+        <p className="side-group">지원</p>
+        {link('support', '고객 지원', 'support')}
         {me.role === 'ADMIN' && (
-          <a href="#admin" aria-current={active === 'admin' ? 'page' : undefined}><Icon name="admin" />관리자</a>
+          <>
+            <p className="side-group">관리</p>
+            {link('admin', '관리자', 'admin')}
+          </>
         )}
       </nav>
+      {active !== tip.to && (
+        <div className="sidebar-tip">
+          <Mascot pose={tip.pose} size={52} className="sidebar-tip-mascot" />
+          <strong>{tip.title}</strong>
+          <p>{tip.text}</p>
+          <a href={`#${tip.to}`} onClick={onClose}>{tip.action}<Icon name="next" size={14} /></a>
+        </div>
+      )}
       <div className="sidebar-account">
-        <span className="sidebar-avatar" aria-hidden="true"><Icon name="user" size={18} /></span>
+        <span className="sidebar-avatar" aria-hidden="true">{me.email.slice(0, 1).toUpperCase()}</span>
         <span className="sidebar-who">
           <strong title={me.email}>{me.email}</strong>
-          <small>{me.role === 'ADMIN' ? '관리자 계정' : '사장님 계정'}</small>
+          <small>{me.role === 'ADMIN' ? '관리자 계정' : '매장 운영자'}</small>
         </span>
         <button type="button" className="icon-btn" aria-label="로그아웃" title="로그아웃" onClick={onLogout}>
           <Icon name="logout" size={18} />

@@ -1,6 +1,8 @@
 // Lucide 아이콘을 같은 규칙으로 쓰기 위한 래퍼: Outline, 선 굵기 1.75, 기본 18px.
 // 같은 기능에는 항상 같은 아이콘을 쓰도록 이 파일에서만 가져온다.
 import {
+  Menu,
+  Clock3,
   Calendar,
   ChartColumn,
   Check,
@@ -96,6 +98,9 @@ const ICONS = {
   mail: Mail,
   go: ArrowRight,
   sparkles: Sparkles, // 답글 스타일 분석
+  menu: Menu,
+  shield: ShieldCheck,
+  clock: Clock3,
   'cat-cafe': Coffee,
   'cat-korean': Soup,
   'cat-snack': Sandwich,

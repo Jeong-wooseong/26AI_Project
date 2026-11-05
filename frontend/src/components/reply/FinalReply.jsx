@@ -7,7 +7,7 @@ import ReplyFeedback from './ReplyFeedback.jsx';
 import { STRATEGY_LABEL, TONE_LABEL, hasFillIn, textOf } from './replyModel.js';
 
 /** 작성 완료한 최종 답글 하나: 리뷰 원문과 구분해 보여주고, 복사와 수정을 제공한다. */
-export default function FinalReply({ reply, onSave, toast }) {
+export default function FinalReply({ reply, onSave, toast, meta }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
@@ -50,29 +50,29 @@ export default function FinalReply({ reply, onSave, toast }) {
   return (
     <div className="final">
       <div className="final-head">
-        <span className="final-label">최종 답글</span>
-        <span className="final-tone">
-          {TONE_LABEL[reply.tone] ?? reply.tone}
-          {reply.strategy ? ` (${STRATEGY_LABEL[reply.strategy] ?? reply.strategy})` : ''}
-          {reply.editedContent ? ', 직접 수정' : ''}
+        <span className="final-icon" aria-hidden="true"><Icon name="confirm" size={20} /></span>
+        <span className="final-title">
+          <strong>작성 완료한 답글</strong>
+          <small>
+            {TONE_LABEL[reply.tone] ?? reply.tone}
+            {reply.strategy ? ` (${STRATEGY_LABEL[reply.strategy] ?? reply.strategy})` : ''}
+            {reply.editedContent ? ', 직접 수정' : ''}
+            {meta ? `, ${meta}` : ''}
+          </small>
         </span>
         {!editing && (
           <div className="final-actions">
-            <button type="button" className={`act-btn ${copied ? 'is-copied' : ''}`} onClick={copyFinal}
-                    aria-label={copied ? '최종 답글 복사됨' : '최종 답글 복사'}>
-              <Icon name={copied ? 'confirm' : 'copy'} size={16} />
+            <SecondaryButton size="sm" icon={copied ? 'confirm' : 'copy'} className={copied ? 'is-copied' : undefined} onClick={copyFinal}
+                             aria-label={copied ? '최종 답글 복사됨' : '최종 답글 복사'}>
               {copied ? '복사됨' : '복사'}
-            </button>
-            <button type="button" className="act-btn" onClick={startEdit} aria-label="최종 답글 수정">
-              <Icon name="edit" size={16} />
-              수정
-            </button>
+            </SecondaryButton>
+            <SecondaryButton tone="neutral" size="sm" icon="edit" onClick={startEdit} aria-label="최종 답글 수정">수정</SecondaryButton>
           </div>
         )}
       </div>
       {editing ? (
         <div className="rt-edit">
-          <FormInput multiline aria-label="최종 답글 수정" value={draft} rows={4} autoFocus maxLength={2000}
+          <FormInput multiline aria-label="최종 답글 수정" value={draft} rows={5} autoFocus maxLength={2000}
                      onChange={(e) => setDraft(e.target.value)} />
           <div className="end">
             <SecondaryButton tone="neutral" size="sm" onClick={() => setEditing(false)} disabled={saving}>취소</SecondaryButton>
@@ -85,6 +85,10 @@ export default function FinalReply({ reply, onSave, toast }) {
           <ReplyFeedback reply={reply} toast={toast} />
         </>
       )}
+      <p className="copy-guidance">
+        <Icon name="info" size={16} />
+        배달앱·지도에는 자동으로 게시되지 않습니다. 복사한 답글을 직접 붙여 넣으십시오.
+      </p>
     </div>
   );
 }
