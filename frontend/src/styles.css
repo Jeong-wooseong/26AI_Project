@@ -543,12 +543,8 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .gen-note { font-size: var(--fs-small); line-height: var(--lh-small); color: var(--text-sub); }
 
 /* 작성 완료: 리뷰 원문은 한 단계 낮추고, 최종 답글을 주인공으로 */
-.final { margin-top: var(--s2); padding-left: var(--s3); border-left: 2px solid var(--primary); display: flex; flex-direction: column; gap: var(--s1); }
-.final-head { display: flex; align-items: center; gap: var(--s2); min-height: 28px; }
 .final-label { font-size: var(--fs-small); line-height: var(--lh-small); font-weight: 600; color: var(--primary); }
 .final-tone { font-size: var(--fs-micro); line-height: var(--lh-micro); color: var(--text-sub); }
-.final-actions { display: flex; gap: 2px; margin-left: auto; margin-right: -8px; }
-.final-text { font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
 
 
 
@@ -845,7 +841,6 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 /* 답글 피드백 */
 
 
-.final .feedback { margin-left: -8px; }
 
 
 
@@ -1660,16 +1655,37 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .copy-guidance .icon { margin-top: 2px; flex: none; }
 .reply-zone .reply-empty { padding: var(--s4); border: 1px dashed var(--border-hover); border-radius: 8px; background: var(--surface-sub); }
 
-/* 작성 완료: 초록 면 */
-.final { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s5); background: var(--success-tint); border: 1px solid #cceadd; border-radius: 9px; }
-.final-head { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
-.final-icon { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: var(--success); color: #fff; }
-.final-title { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.final-title strong { font-size: var(--fs-body); font-weight: 700; color: #126e51; }
-.final-title small { font-size: var(--fs-micro); line-height: var(--lh-micro); color: #4f7a6c; font-variant-numeric: tabular-nums; }
+/* 작성 완료 (Figma 시안): 초록 면 한 줄 + 필요할 때만 답글 다시 보기 */
+.final {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: var(--s3) 14px;
+  padding: 22px; background: var(--success-tint); border: 1px solid #cceadd; border-radius: 9px;
+}
+.final-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: var(--success); color: #fff; }
+.final-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.final-title strong { font-size: var(--fs-body); line-height: 22px; font-weight: 700; color: #126e51; }
+.final-title small { font-size: var(--fs-small); line-height: var(--lh-small); color: #4f7a6c; }
+.final .btn { background: var(--surface); }
+.final-reply { display: flex; flex-direction: column; gap: 10px; padding: var(--s4); border: 1px solid var(--border); border-radius: 8px; background: var(--surface-sub); }
+.final-reply-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; }
+.final-reply-head .final-tone { margin-left: 6px; font-weight: 500; }
 .final-actions { display: flex; gap: 6px; }
-.final-text { padding: 14px 16px; background: var(--surface); border: 1px solid #d7ece3; border-radius: 8px; font-size: var(--fs-body); line-height: 1.75; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
-.final .copy-guidance { background: rgb(255 255 255 / 0.6); }
+.final-text { padding: 14px 16px; background: var(--surface); border: 1px solid var(--border-subtle); border-radius: 8px; font-size: var(--fs-body); line-height: 1.75; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.final-feedback { display: flex; flex-direction: column; gap: 6px; padding: var(--s3) var(--s4); border: 1px solid var(--border-subtle); border-radius: 8px; }
+
+/* 상세 아래 줄: 작성 시각 · 답글 품질 의견 */
+.thread { flex: 1; }
+.detail-foot {
+  margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  min-height: 46px; padding: 0 26px; border-top: 1px solid var(--border); font-size: var(--fs-micro); color: var(--text-sub);
+}
+.detail-foot span, .detail-foot button { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.detail-foot button { padding: 6px 0; border: 0; background: none; cursor: pointer; font: inherit; font-weight: 600; color: var(--text-sub); }
+.detail-foot button:hover, .detail-foot button[aria-expanded="true"] { color: var(--primary); }
+@media (max-width: 620px) {
+  .final { grid-template-columns: 44px minmax(0, 1fr); }
+  .final > .btn { grid-column: 1 / -1; }
+  .detail-foot { padding: 0 var(--s4); }
+}
 .thread-error { padding: 12px 14px; border: 1px solid var(--danger-soft); border-radius: var(--radius-sm); background: var(--danger-tint); font-size: var(--fs-small); line-height: var(--lh-small); color: var(--danger); }
 .detail-panel .bulk { margin: var(--s5); }
 
@@ -1802,3 +1818,7 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 @media (max-width: 720px) {
   .input-panel .entry-table .dt-row { padding: var(--s3) var(--s4); }
 }
+.final .btn { color: var(--primary); border-color: #b8c7ef; }
+.final .btn:hover:not(:disabled) { background: var(--primary-tint); border-color: #8fa6e5; }
+.detail-foot { flex-wrap: wrap; padding-block: 8px; }
+.detail-foot button { white-space: nowrap; }

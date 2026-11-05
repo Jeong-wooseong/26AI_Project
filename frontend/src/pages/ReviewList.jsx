@@ -328,10 +328,8 @@ function CompletedRow({ review: r, hidden, onUpdated, onDeleted, toast }) {
       </DetailHead>
       <Original review={r} />
       {reply && (
-        <div className="reply-zone">
-          <FinalReply reply={reply} onSave={save} toast={toast}
-                      meta={`${formatDateTime(r.completedAt)} 작성 완료${edited ? `, ${formatDateTime(r.finalUpdatedAt)} 수정` : ''}`} />
-        </div>
+        <FinalReply reply={reply} onSave={save} toast={toast}
+                    meta={`${formatDateTime(r.completedAt)} 작성 완료${edited ? `, ${formatDateTime(r.finalUpdatedAt)} 수정` : ''}`} />
       )}
     </article>
   );
