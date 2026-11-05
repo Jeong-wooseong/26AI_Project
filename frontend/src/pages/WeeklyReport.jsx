@@ -94,14 +94,14 @@ export default function WeeklyReport({ store, go }) {
           <>
             <div className="week-nav" role="group" aria-label="분석 기간">
               <button type="button" className="icon-btn" aria-label="지난주" onClick={() => setWeek(shift(week, -7))}><Icon name="prev" /></button>
-              <p className="week-label">
-                <strong>{md(week)} ~ {md(shift(week, 6))}</strong>
-                {isThisWeek ? <span>이번 주</span> : <button type="button" className="text-btn" onClick={() => setWeek(thisWeek)}>이번 주로</button>}
-              </p>
+              <WeekPicker week={week} thisWeek={thisWeek} onPick={setWeek} />
               <button type="button" className="icon-btn" aria-label="다음 주" disabled={isThisWeek} onClick={() => setWeek(shift(week, 7))}>
                 <Icon name="next" />
               </button>
             </div>
+            <SecondaryButton tone="neutral" className="week-today" onClick={() => setWeek(thisWeek)} disabled={isThisWeek}>
+              이번 주
+            </SecondaryButton>
             <label className="switch">
               <input type="checkbox" checked={compare} onChange={(e) => setCompare(e.target.checked)} />
               <span className="switch-track" aria-hidden="true" />
@@ -206,6 +206,98 @@ export default function WeeklyReport({ store, go }) {
         </article>
       )}
     </>
+  );
+}
+
+/* ── 주 고르기: 기간을 누르면 달력이 열리고, 날짜 하나를 누르면 그 주(월~일)로 이동 ── */
+
+const WEEK_HEAD = ['월', '화', '수', '목', '금', '토', '일'];
+
+function WeekPicker({ week, thisWeek, onPick }) {
+  const [open, setOpen] = useState(false);
+  const [month, setMonth] = useState(week.slice(0, 7)); // 'YYYY-MM' 보이는 달
+  const [hover, setHover] = useState(null); // 마우스를 올린 주의 월요일
+  const boxRef = useRef(null);
+  const btnRef = useRef(null);
+  const today = todayISO();
+  const year = Number(week.slice(0, 4));
+  const showYear = year !== Number(today.slice(0, 4));
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => { if (!boxRef.current?.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') { setOpen(false); btnRef.current?.focus(); } };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  function toggle() {
+    if (!open) setMonth(week.slice(0, 7));
+    setOpen((v) => !v);
+  }
+  function pick(day) {
+    onPick(mondayOf(day));
+    setOpen(false);
+    btnRef.current?.focus();
+  }
+
+  // 보이는 달을 덮는 주들 (월요일 시작)
+  const first = `${month}-01`;
+  const [y, m] = month.split('-').map(Number);
+  const weeks = [];
+  for (let mon = mondayOf(first); mon.slice(0, 7) <= month || weeks.length === 0; mon = shift(mon, 7)) {
+    weeks.push(Array.from({ length: 7 }, (_, i) => shift(mon, i)));
+    if (weeks.length > 6) break;
+  }
+  const moveMonth = (n) => {
+    const d = new Date(y, m - 1 + n, 1);
+    setMonth(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`);
+  };
+  const canNext = `${month}-01` < `${thisWeek.slice(0, 7)}-01` || shift(thisWeek, 6).slice(0, 7) > month;
+
+  return (
+    <div className="week-pick" ref={boxRef}>
+      <button type="button" ref={btnRef} className="week-label" aria-haspopup="dialog" aria-expanded={open} onClick={toggle}>
+        <strong>{showYear ? `${year}년 ` : ''}{md(week)} ~ {md(shift(week, 6))}</strong>
+        {week === thisWeek && <span>이번 주</span>}
+        <Icon name="calendar" size={16} />
+      </button>
+      {open && (
+        <div className="week-cal" role="dialog" aria-label="주 고르기">
+          <div className="week-cal-head">
+            <button type="button" className="icon-btn" aria-label="이전 달" onClick={() => moveMonth(-1)}><Icon name="prev" size={18} /></button>
+            <strong>{y}년 {m}월</strong>
+            <button type="button" className="icon-btn" aria-label="다음 달" disabled={!canNext} onClick={() => moveMonth(1)}><Icon name="next" size={18} /></button>
+          </div>
+          <table className="week-cal-grid" onMouseLeave={() => setHover(null)}>
+            <thead><tr>{WEEK_HEAD.map((d) => <th key={d} scope="col">{d}</th>)}</tr></thead>
+            <tbody>
+              {weeks.map((days) => {
+                const mon = days[0];
+                const future = mon > thisWeek;
+                const cls = [mon === week && 'is-selected', mon === hover && !future && 'is-hover', mon === thisWeek && 'is-this'].filter(Boolean).join(' ');
+                return (
+                  <tr key={mon} className={cls || undefined} onMouseEnter={() => setHover(mon)}>
+                    {days.map((d) => (
+                      <td key={d}>
+                        <button type="button" disabled={future} onClick={() => pick(d)} onFocus={() => setHover(mon)}
+                                className={[d.slice(0, 7) !== month && 'is-out', d === today && 'is-today'].filter(Boolean).join(' ') || undefined}
+                                aria-label={`${md(d)}이 있는 주 (${md(mon)} ~ ${md(days[6])})${future ? ', 아직 오지 않은 주' : ''}`}
+                                aria-current={mon === week ? 'true' : undefined}>
+                          {Number(d.slice(8))}
+                        </button>
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="week-cal-foot">날짜를 누르면 그 날짜가 있는 주(월~일)를 봅니다.</p>
+        </div>
+      )}
+    </div>
   );
 }
 
