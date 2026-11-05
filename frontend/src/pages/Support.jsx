@@ -291,17 +291,27 @@ function MyInquiries() {
     support.myInquiries().then(setItems).catch((e) => setError(e.message));
   }, []);
 
-  const counts = (items ?? []).reduce((m, q) => ({ ...m, [q.status]: (m[q.status] ?? 0) + 1 }), {});
+  const [view, setView] = useState('all');
+  // 처리 중도 아직 답변을 못 받은 상태라 '답변 대기'에 묶는다 (각 문의의 상태 표시는 그대로)
+  const groups = [
+    ['all', '전체', () => true],
+    ['wait', '답변 대기', (q) => q.status !== 'ANSWERED'],
+    ['done', '답변 완료', (q) => q.status === 'ANSWERED'],
+  ];
+  const match = groups.find(([k]) => k === view)[2];
+  const shown = (items ?? []).filter(match);
   return (
     <section className="my-inquiries" aria-labelledby="my-inquiries-title">
       <div className="my-inquiries-head">
         <h2 id="my-inquiries-title" className="side-title">내 문의</h2>
         {items?.length > 0 && (
-          <p className="my-inquiries-counts">
-            <span>전체 {items.length}</span>
-            {Object.entries(STATUS).map(([k, [label, tone]]) => (counts[k]
-              ? <span key={k} className={`is-${tone}`}>{label} {counts[k]}</span> : null))}
-          </p>
+          <div className="inq-filter" role="group" aria-label="답변 상태로 거르기">
+            {groups.map(([k, label, f]) => (
+              <button key={k} type="button" aria-pressed={view === k} onClick={() => { setView(k); setOpen(null); }}>
+                {label}<span>{items.filter(f).length}</span>
+              </button>
+            ))}
+          </div>
         )}
       </div>
       {error && <Alert>{error}</Alert>}
@@ -312,9 +322,12 @@ function MyInquiries() {
           <p className="hint">아직 남긴 문의가 없습니다. 아래에서 문의를 남기면 처리 상태와 담당자 답변이 여기에 표시됩니다.</p>
         </div>
       )}
-      {items?.length > 0 && (
+      {items?.length > 0 && shown.length === 0 && (
+        <p className="hint my-inquiries-none">{view === 'wait' ? '답변을 기다리는 문의가 없습니다.' : '아직 답변이 온 문의가 없습니다.'}</p>
+      )}
+      {shown.length > 0 && (
         <ul className="inquiry-list">
-          {items.map((q) => {
+          {shown.map((q) => {
             const [label] = STATUS[q.status] ?? [q.status];
             const isOpen = open === q.id;
             return (

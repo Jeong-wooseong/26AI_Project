@@ -2394,3 +2394,14 @@ body:has(.page-admin) .helpchat { display: none; }
 .topic-rest { list-style: none; margin: var(--s2) 0 0; padding: 0; }
 .topic-rest li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--s3); padding: 8px 14px; border-top: 1px solid var(--border-subtle); font-size: var(--fs-label); }
 .topic-rest strong { font-variant-numeric: tabular-nums; color: var(--navy); }
+/* 내 문의: 답변 상태로 거르기 */
+.inq-filter { display: flex; flex-wrap: wrap; gap: 6px; }
+.inq-filter button {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 16px;
+  background: var(--surface); font: inherit; font-size: var(--fs-small); font-weight: 600; color: var(--text-sub); cursor: pointer;
+}
+.inq-filter button:hover { border-color: var(--border-hover); color: var(--text); }
+.inq-filter button[aria-pressed="true"] { border-color: var(--primary); background: var(--primary-tint); color: var(--primary); }
+.inq-filter span { font-variant-numeric: tabular-nums; font-weight: 700; }
+.inq-filter button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.my-inquiries-none { padding: var(--s4) 0; }
