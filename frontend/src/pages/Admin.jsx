@@ -420,7 +420,7 @@ function Inquiries({ toast, stamp, onChanged }) {
             <table className="ap-table">
               <thead>
                 <tr><th scope="col">접수 번호</th><th scope="col">유형</th><th scope="col">제목</th><th scope="col">회원</th>
-                  <th scope="col">접수일</th><th scope="col">상태</th></tr>
+                  <th scope="col">발생 위치</th><th scope="col">접수일</th><th scope="col">상태</th></tr>
               </thead>
               <tbody>
                 {shown.map((q) => (
@@ -433,6 +433,7 @@ function Inquiries({ toast, stamp, onChanged }) {
                       </button>
                     </td>
                     <td className="ellipsis">{q.userEmail}</td>
+                    <td>{q.location ?? <span className="muted">-</span>}</td>
                     <td className="tabnum">{formatDateTime(q.createdAt)}</td>
                     <td><span className={`inquiry-status is-${q.status.toLowerCase()}`}>{STATUS[q.status]?.[0] ?? q.status}</span></td>
                   </tr>
@@ -617,10 +618,12 @@ function SysRow({ label, value, tone }) {
 
 function Stats({ o, stamp }) {
   const [period, setPeriod] = useState('day');
-  const [feedback, setFeedback] = useState(null);
+  const [st, setSt] = useState(null);
   useEffect(() => {
-    admin.stats().then(setFeedback).catch(() => setFeedback(null));
+    admin.stats().then(setSt).catch(() => setSt(null));
   }, [stamp]);
+  const feedback = st;
+  const statusLabels = Object.fromEntries(Object.entries(STATUS).map(([k, [l]]) => [k, l]));
   const days = o.daily;
   const sum = (list, k) => list.reduce((n, d) => n + d[k], 0);
   const lastWeek = days.slice(0, 7);
@@ -694,6 +697,20 @@ function Stats({ o, stamp }) {
           )}
         </section>
       </div>
+
+      <section className="ap-panel">
+        <div className="ap-head">
+          <h2>문의 현황</h2>
+          <span className="hint">{st ? `전체 ${st.inquiries}건, 최근 7일 ${st.lastSevenDays}건 접수` : ''}</span>
+        </div>
+        {!st ? <p className="hint">불러오는 중…</p> : st.inquiries === 0 ? <p className="ap-empty">아직 접수된 문의가 없습니다.</p> : (
+          <div className="inq-stats">
+            <div><h3>처리 상태</h3><Bars data={st.byStatus} labels={statusLabels} /></div>
+            <div><h3>유형</h3><Bars data={st.byType} labels={TYPE_LABEL} /></div>
+            <div><h3>발생 위치</h3><Bars data={st.byLocation} /></div>
+          </div>
+        )}
+      </section>
     </>
   );
 }

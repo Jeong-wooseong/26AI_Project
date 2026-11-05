@@ -2382,3 +2382,15 @@ body:has(.save-bar) .helpchat { bottom: 104px; }
 body:has(.page-admin) .helpchat { display: none; }
 .page-admin .ap-panel { margin-top: 0; }
 .page-admin .summary-admin { margin-bottom: 0; }
+.inq-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s6); }
+.inq-stats h3 { margin: 0 0 var(--s2); }
+@media (max-width: 860px) { .inq-stats { grid-template-columns: minmax(0, 1fr); gap: var(--s4); } }
+.reply-work { list-style: none; margin: 0; padding: 0; }
+.reply-work li { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3); padding: 12px 0; border-bottom: 1px solid var(--border-subtle); font-size: var(--fs-label); color: var(--text); }
+.reply-work li:last-child { border-bottom: 0; }
+.reply-work strong { font-size: var(--fs-body); font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.reply-work small { margin-left: 4px; font-size: var(--fs-micro); font-weight: 500; color: var(--text-sub); }
+.topic-more { align-self: flex-start; margin-top: var(--s2); }
+.topic-rest { list-style: none; margin: var(--s2) 0 0; padding: 0; }
+.topic-rest li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--s3); padding: 8px 14px; border-top: 1px solid var(--border-subtle); font-size: var(--fs-label); }
+.topic-rest strong { font-variant-numeric: tabular-nums; color: var(--navy); }

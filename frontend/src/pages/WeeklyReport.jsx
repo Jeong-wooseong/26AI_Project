@@ -156,6 +156,23 @@ export default function WeeklyReport({ store, go }) {
             </section>
           </div>
 
+          <div className="rp-grid">
+            <section className="rp-panel" aria-labelledby="rating-title">
+              <div className="rp-head">
+                <h2 id="rating-title">별점 분포</h2>
+                <p>별점별 리뷰 수입니다.{canCompare ? ' 아래 회색 막대는 지난주입니다.' : ''}</p>
+              </div>
+              <RatingDistribution now={s.ratingCounts} prev={canCompare ? s.previousRatingCounts : null} />
+            </section>
+            <section className="rp-panel" aria-labelledby="replies-title">
+              <div className="rp-head">
+                <h2 id="replies-title">답글 처리</h2>
+                <p>이번 주 리뷰에 작성 완료한 답글 기준입니다.</p>
+              </div>
+              <ReplyWork r={s.replies} />
+            </section>
+          </div>
+
           <Insight report={report} state={insightState} onMake={makeInsight} />
 
           {s.representatives.length > 0 && (
@@ -482,10 +499,56 @@ function TypeAnalysis({ counts, total }) {
   );
 }
 
+/* ── 별점 분포 (이번 주 / 지난주) ─────────────────────────── */
+
+function RatingDistribution({ now, prev }) {
+  if (!now) return null;
+  const max = Math.max(1, ...now, ...(prev ?? []));
+  return (
+    <table className="rating-dist">
+      <caption className="sr-only">별점별 리뷰 수</caption>
+      <tbody>
+        {[5, 4, 3, 2, 1].map((star) => (
+          <tr key={star}>
+            <th scope="row"><Icon name="star" size={14} className="star-inline" />{star}점</th>
+            <td>
+              <span className="dist-bar is-now" style={{ width: `${(now[star - 1] / max) * 100}%` }} aria-hidden="true" />
+              {prev && <span className="dist-bar is-prev" style={{ width: `${(prev[star - 1] / max) * 100}%` }} aria-hidden="true" />}
+            </td>
+            <td className="num">
+              {now[star - 1]}건{prev && <span className="dist-prev">지난주 {prev[star - 1]}건</span>}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/* ── 답글 처리: 작성 완료율은 지표 띠에 있으므로 여기서는 수정·재생성만 ── */
+
+function ReplyWork({ r }) {
+  if (!r.completed) return <p className="hint">이번 주 리뷰에 작성 완료한 답글이 아직 없습니다.</p>;
+  return (
+    <ul className="reply-work">
+      <li>
+        <span>사장님이 직접 고친 답글</span>
+        <strong>{r.edited}건 <small>작성 완료의 {r.editRate}%</small></strong>
+      </li>
+      <li>
+        <span>중복·규칙 때문에 다시 만든 답글</span>
+        <strong>{r.regenerated}건</strong>
+      </li>
+    </ul>
+  );
+}
+
 /* ── 주요 불만 키워드 TOP 3 ────────────────────────────────── */
 
 function ComplaintTopics({ topics, resolved, compare }) {
+  const [showAll, setShowAll] = useState(false);
   const top = topics.slice(0, 3);
+  const rest = topics.slice(3);
   if (top.length === 0) {
     return (
       <div className="rp-empty">
@@ -510,6 +573,20 @@ function ComplaintTopics({ topics, resolved, compare }) {
           </li>
         ))}
       </ol>
+      {rest.length > 0 && (
+        <>
+          <button type="button" className="text-link topic-more" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+            {showAll ? '나머지 주제 접기' : <>나머지 주제 {rest.length}개 보기<Icon name="next" size={14} /></>}
+          </button>
+          {showAll && (
+            <ul className="topic-rest">
+              {rest.map((t) => (
+                <li key={t.topic}><span>{t.topic}</span><strong>{t.count}건</strong>{compare && <Change topic={t} />}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
       {compare && resolved.length > 0 && (
         <p className="topic-resolved">
           <Icon name="confirm" size={15} />
