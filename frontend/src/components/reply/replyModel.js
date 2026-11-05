@@ -53,3 +53,16 @@ export function formatDateTime(iso) {
   const year = d.getFullYear() === new Date().getFullYear() ? '' : `${d.getFullYear()}.`;
   return `${year}${md} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+/** 매장 '답글 길이' 설정의 목표 문장 수. 간결형은 항상 1~2문장 (백엔드 ReplyGenerationService.sentenceRange 와 같음) */
+const LENGTH_RANGE = { '1~2문장': [1, 2], '2~3문장': [2, 3], '3~4문장': [3, 4] };
+export function sentenceRange(lengthSetting, tone) {
+  if (!['POLITE', 'FRIENDLY', 'CONCISE'].includes(tone)) return null; // 별점 템플릿·대응 답글은 길이 규칙 없음
+  if (tone === 'CONCISE') return [1, 2];
+  return LENGTH_RANGE[lengthSetting] ?? [2, 3];
+}
+
+/** 문장 수: 마침표·물음표·느낌표·물결·말줄임표·이모지 뒤 공백이나 줄바꿈에서 나눔 (백엔드 countSentences 와 같음) */
+export function countSentences(text) {
+  return (text ?? '').trim().split(/(?<=[.!?~…\p{So}️])\s+|\n+/u).filter((p) => /[\p{L}\p{N}]/u.test(p)).length;
+}

@@ -5,7 +5,7 @@ import { PrimaryButton, SecondaryButton } from '../ui.jsx';
 import ReplyGenerationLoader from './ReplyGenerationLoader.jsx';
 import ReplyTypingText from './ReplyTypingText.jsx';
 import { useCopy } from './useCopy.js';
-import { DRAFT_TYPES, SIMILAR_THRESHOLD, TONE_LABEL, draftsOf, hasFillIn, textOf } from './replyModel.js';
+import { DRAFT_TYPES, SIMILAR_THRESHOLD, TONE_LABEL, countSentences, draftsOf, hasFillIn, sentenceRange, textOf } from './replyModel.js';
 import ReplyFeedback from './ReplyFeedback.jsx';
 
 /**
@@ -15,7 +15,7 @@ import ReplyFeedback from './ReplyFeedback.jsx';
  *
  * generation: { state: 'idle' | 'loading' | 'error', error?, freshIds? } — 생성 요청 상태는 리뷰(Ticket)가 가진다.
  */
-export default function ReplyDraftPanel({ review: r, generation, onGenerate, onComplete, toast, defaultTone = 'POLITE' }) {
+export default function ReplyDraftPanel({ review: r, generation, onGenerate, onComplete, toast, defaultTone = 'POLITE', lengthSetting }) {
   const drafts = draftsOf(r);
   const canGenerate = DRAFT_TYPES.includes(r.type) && r.status === 'CLASSIFIED';
   const loading = generation.state === 'loading';
@@ -138,7 +138,7 @@ export default function ReplyDraftPanel({ review: r, generation, onGenerate, onC
                         onChange={(e) => setTexts((t) => ({ ...t, [selected.id]: e.target.value }))} />
             )}
             <div className="editor-foot">
-              <span>{text.length}자{edited(selected) ? ', 직접 고침' : ''}</span>
+              <LengthInfo text={text} range={sentenceRange(lengthSetting, selected.tone)} tone={selected.tone} edited={edited(selected)} />
               {hasFillIn(text) && <span className="is-warn">[ ] 안을 채운 뒤 복사하십시오</span>}
             </div>
           </div>
@@ -176,5 +176,23 @@ export default function ReplyDraftPanel({ review: r, generation, onGenerate, onC
         </>
       )}
     </div>
+  );
+}
+
+/** 글자 수와 문장 수. 목표 문장 수(매장 '답글 길이')를 벗어나면 알려 준다 */
+function LengthInfo({ text, range, tone, edited }) {
+  const n = countSentences(text);
+  const off = range && n > 0 && (n < range[0] || n > range[1] + 1);
+  return (
+    <span>
+      {text.length}자
+      {range && (
+        <>
+          , <span className={off ? 'is-warn' : undefined}>{n}문장</span>
+          <span className="length-target"> (목표 {range[0]}~{range[1]}문장{tone === 'CONCISE' ? ', 간결형은 항상 짧게' : ''})</span>
+        </>
+      )}
+      {edited ? ', 직접 고침' : ''}
+    </span>
   );
 }

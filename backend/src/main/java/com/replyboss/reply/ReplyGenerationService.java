@@ -39,7 +39,7 @@ public class ReplyGenerationService {
 
     private static final Logger log = LoggerFactory.getLogger(ReplyGenerationService.class);
 
-    static final String PROMPT = "reply_generate_v9";
+    static final String PROMPT = "reply_generate_v10";
     static final List<ReviewType> TARGET_TYPES = List.of(ReviewType.PRAISE, ReviewType.COMPLAINT, ReviewType.INQUIRY);
 
     private static final Map<String, Object> SCHEMA = object(props(
@@ -244,7 +244,10 @@ public class ReplyGenerationService {
         int[] range = sentenceRange(ctx.tone(), tone);
         int count = countSentences(text);
         if (count < range[0] || count > range[1] + LENGTH_TOLERANCE) {
-            problems.add(name + ": " + count + "문장으로 작성됨 (" + range[0] + "~" + range[1] + "문장으로 맞출 것)");
+            String fix = count < range[0]
+                    ? "쉼표로 잇지 말고 내용을 " + (range[0] - count) + "문장 이상 더할 것"
+                    : "내용을 줄여 문장 수를 맞출 것";
+            problems.add(name + ": " + count + "문장으로 작성됨 (" + range[0] + "~" + range[1] + "문장으로 맞출 것, " + fix + ")");
         }
         return problems;
     }
@@ -360,7 +363,9 @@ public class ReplyGenerationService {
         sb.append("[작성 분량]\n");
         for (ReplyTone tone : List.of(ReplyTone.POLITE, ReplyTone.FRIENDLY, ReplyTone.CONCISE)) {
             int[] range = sentenceRange(t, tone);
-            sb.append("- ").append(FIELD.get(tone)).append(": ").append(range[0]).append('~').append(range[1]).append("문장\n");
+            // 모델은 범위 아래쪽으로 짧게 쓰는 경향이 있어 위쪽 끝을 목표로 알려 준다
+            sb.append("- ").append(FIELD.get(tone)).append(": ").append(range[0]).append('~').append(range[1]).append("문장 (")
+                    .append(range[1]).append("문장을 목표로, ").append(range[0]).append("문장보다 짧으면 안 됨)\n");
         }
         sb.append("[리뷰]\n");
         sb.append("- 별점: ").append(ctx.rating()).append('\n');

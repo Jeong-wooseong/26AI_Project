@@ -240,7 +240,7 @@ export default function ReviewList({ store, toast, go, initialTab, params }) {
                 const hidden = r !== selected || (bulkOpen && status === 'wait');
                 return isDone
                   ? <CompletedRow key={r.id} review={r} hidden={hidden} onUpdated={replace} onDeleted={remove} toast={toast} />
-                  : <Ticket key={r.id} review={r} hidden={hidden} onUpdated={replace} onDeleted={remove} toast={toast} defaultTone={store.replySettings?.defaultTone} />;
+                  : <Ticket key={r.id} review={r} hidden={hidden} onUpdated={replace} onDeleted={remove} toast={toast} defaultTone={store.replySettings?.defaultTone} lengthSetting={store.toneProfile?.length} />;
               })}
             </div>
           </section>
@@ -353,7 +353,7 @@ function CompletedRow({ review: r, hidden, onUpdated, onDeleted, toast }) {
 }
 
 /** 작성 대기·분류 실패 행: 분류 결과와 답글 초안 작업 */
-function Ticket({ review: r, hidden, onUpdated, onDeleted, toast, defaultTone }) {
+function Ticket({ review: r, hidden, onUpdated, onDeleted, toast, defaultTone, lengthSetting }) {
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState(null);
   const [generation, setGeneration] = useState({ state: 'idle' });
@@ -441,7 +441,7 @@ function Ticket({ review: r, hidden, onUpdated, onDeleted, toast, defaultTone })
       )}
 
       {hasReplyArea && (
-        <ReplyDraftPanel review={r} generation={generation} onGenerate={generate} onComplete={complete} toast={toast} defaultTone={defaultTone} />
+        <ReplyDraftPanel review={r} generation={generation} onGenerate={generate} onComplete={complete} toast={toast} defaultTone={defaultTone} lengthSetting={lengthSetting} />
       )}
 
       {malicious && (

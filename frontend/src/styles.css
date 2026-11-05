@@ -2450,3 +2450,4 @@ body:has(.page-admin) .helpchat { display: none; }
 @media (max-width: 720px) {
   .week-cal { right: auto; left: 50%; transform: translateX(-50%); width: min(312px, calc(100vw - 32px)); }
 }
+.editor-foot .length-target { color: var(--placeholder); }

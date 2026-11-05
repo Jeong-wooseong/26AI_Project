@@ -43,7 +43,7 @@ class ReplyGenerationServiceTest {
         assertThat(msg).contains("<review>\n배달이 너무 늦었어요 [전화번호]\n</review>").doesNotContain("[주의]");
         assertThat(msg).contains("[확인된 매장 정보] 없음").contains("감정(본문 기준): NEGATIVE").doesNotContain("[최근 답글").doesNotContain("별점과 본문:");
         assertThat(msg).contains("[작성 분량]").contains("polite: 3~4문장").contains("friendly: 3~4문장")
-                .contains("concise: 1~2문장");
+                .contains("concise: 1~2문장").contains("polite: 3~4문장 (4문장을 목표로, 3문장보다 짧으면 안 됨)");
     }
 
     @Test
@@ -61,7 +61,8 @@ class ReplyGenerationServiceTest {
                 ReplyTone.FRIENDLY, "배달이 늦어 죄송해요. 기다리게 해 드렸네요. 더 신경 쓸게요. 오늘도 좋은 하루 되세요!",
                 ReplyTone.CONCISE, "배달 늦어 죄송해요. 더 빨리 보내드릴게요. 신경 쓸게요. 오늘도 좋은 하루 되세요!"), ctx);
 
-        assertThat(problems).anyMatch(p -> p.startsWith("polite") && p.contains("1문장") && p.contains("3~4문장"));
+        assertThat(problems).anyMatch(p -> p.startsWith("polite") && p.contains("1문장") && p.contains("3~4문장")
+                && p.contains("2문장 이상 더할 것"));
         assertThat(problems).noneMatch(p -> p.startsWith("friendly"));
         assertThat(problems).anyMatch(p -> p.startsWith("concise") && p.contains("4문장"));
     }
