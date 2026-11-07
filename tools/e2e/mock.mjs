@@ -139,9 +139,13 @@ http.createServer(async (req, res) => {
       await sleep(GEN_DELAY);
       const top = topics[0];
       globalThis.__insights[m[1] + ws] = { key, summary: `이번 주 리뷰 ${stats.total}건 중 불만이 ${stats.complaints}건(${stats.complaintRate}%)이며, ${top ? top.topic + '이 ' + top.count + '건으로 가장 많았습니다.' : '뚜렷한 불만 주제는 없었습니다.'}`,
-        positives: stats.previousTotal && stats.avgRating > stats.previousAvgRating ? [`평균 별점이 지난주 ${stats.previousAvgRating}점에서 ${stats.avgRating}점으로 올랐습니다.`] : ['칭찬 리뷰에서 음료 맛에 대한 언급이 이어졌습니다.'],
-        improvements: top ? [`${top.topic} 불만이 ${top.count}건으로 가장 많았습니다.`] : [],
-        suggestions: top ? [`${top.topic} 의견이 나온 주문의 시간대와 메뉴를 확인해 볼 만합니다.`, '불만 리뷰에는 지적한 내용을 구체적으로 인정하는 답글을 먼저 달아 보십시오.'] : [], generatedAt: new Date().toISOString().slice(0, 19) };
+        // 항목은 {text 내용, basis 근거} (백엔드 weekly_report_v4)
+        positives: stats.previousTotal && stats.avgRating > stats.previousAvgRating
+          ? [{ text: `평균 별점이 지난주 ${stats.previousAvgRating}점에서 ${stats.avgRating}점으로 올랐습니다.`, basis: `별점 분포에서 5점 리뷰가 ${stats.ratingCounts[4]}건입니다.` }]
+          : [{ text: '칭찬 리뷰에서 음료 맛에 대한 언급이 이어졌습니다.', basis: "대표 칭찬 리뷰에 '라떼 거품이 부드러워요'라는 내용이 있습니다." }],
+        improvements: top ? [{ text: `${top.topic} 불만이 이번 주 가장 많았습니다.`, basis: `불만 주제 순위에서 ${top.topic}이 지난주 ${top.previousCount}건에서 ${top.count}건이 되었습니다.` }] : [],
+        suggestions: top ? [{ text: `${top.topic} 의견이 나온 주문의 시간대와 메뉴를 확인해 볼 만합니다.`, basis: `${top.topic}이 불만 주제 중 가장 많아, 어느 때 생기는지 알면 바로 손볼 수 있습니다.` },
+          { text: '불만 리뷰에는 지적한 내용을 구체적으로 인정하는 답글을 먼저 달아 보십시오.', basis: '대표 불만 리뷰가 별점이 낮은 리뷰라, 답글로 먼저 응대하면 다른 고객에게도 매장의 태도가 보입니다.' }] : [], generatedAt: new Date().toISOString().slice(0, 19) };
     }
     const ins = globalThis.__insights[m[1] + ws];
     return json(res, 200, { stats, insight: ins ? { summary: ins.summary, positives: ins.positives ?? [], improvements: ins.improvements ?? [], suggestions: ins.suggestions, generatedAt: ins.generatedAt, stale: ins.key !== key } : null });

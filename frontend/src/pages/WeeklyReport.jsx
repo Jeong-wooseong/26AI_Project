@@ -140,6 +140,8 @@ export default function WeeklyReport({ store, go }) {
             <TrendSection s={s} compare={canCompare} />
           </section>
 
+          <Insight report={report} state={insightState} onMake={makeInsight} />
+
           <div className="rp-grid">
             <section className="rp-panel" aria-labelledby="types-title">
               <div className="rp-head">
@@ -173,8 +175,6 @@ export default function WeeklyReport({ store, go }) {
               <ReplyWork r={s.replies} />
             </section>
           </div>
-
-          <Insight report={report} state={insightState} onMake={makeInsight} />
 
           {s.representatives.length > 0 && (
             <section className="rp-panel" aria-labelledby="reps-title">
@@ -717,7 +717,7 @@ function Insight({ report, state, onMake }) {
         <span className="ai-title-mascot"><Mascot pose={loading ? 'analyzing' : 'smile'} size={34} /></span>
         <div>
           <h2 id="insight-title">AI 분석 인사이트</h2>
-          <p>위 집계 수치와 대표 리뷰만 근거로 씁니다. 집계에 없는 숫자를 쓰면 다시 만듭니다.</p>
+          <p>이 주의 집계 수치와 칭찬·불만 리뷰, 매장 정보만 근거로 씁니다. 집계에 없는 숫자를 쓰면 다시 만듭니다.</p>
         </div>
         {insight && !loading && (
           <SecondaryButton tone="neutral" size="sm" icon="retry" className="rp-head-end" onClick={onMake}>다시 분석</SecondaryButton>
@@ -733,7 +733,7 @@ function Insight({ report, state, onMake }) {
       {!insight && !loading && state.state !== 'error' && (
         <div className="reply-empty">
           <PrimaryButton icon="analyze" onClick={onMake}>AI 분석 만들기</PrimaryButton>
-          <span className="hint">좋아진 점, 개선할 점, 다음 주에 바로 해볼 제안 2~3개를 씁니다.</span>
+          <span className="hint">좋아진 점, 개선할 점, 다음 주에 바로 해볼 제안을 각각 근거와 함께 씁니다.</span>
         </div>
       )}
       {insight && !loading && (
@@ -750,7 +750,22 @@ function Insight({ report, state, onMake }) {
               <div key={key} className={`insight-col ${tone}`}>
                 <h3>{title}</h3>
                 {items?.length ? (
-                  <ul>{items.map((t) => <li key={t}>{t}</li>)}</ul>
+                  <ul>
+                    {items.map((item) => {
+                      // 예전에 저장한 분석은 항목이 문장 하나뿐(문자열)이다
+                      const { text, basis } = typeof item === 'string' ? { text: item, basis: null } : item;
+                      return (
+                        <li key={text}>
+                          <span className="insight-text">{text}</span>
+                          {basis && (
+                            <span className="insight-basis">
+                              <span className="insight-basis-label">{key === 'suggestions' ? '이유' : '근거'}</span>{basis}
+                            </span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 ) : <p className="hint">{key === 'positives' ? '집계에서 뚜렷한 개선을 찾지 못했습니다.' : key === 'improvements' ? '눈에 띄는 개선 필요 사항이 없습니다.' : '제안이 없습니다.'}</p>}
               </div>
             ))}

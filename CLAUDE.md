@@ -10,7 +10,7 @@
 - `backend/`: Spring Boot 3.5, Java 17, JPA(`ddl-auto: update`), Spring Security 세션 + 로그인 유지 토큰 + CSRF 쿠키, OpenAI 구조화 JSON. 로컬은 H2(`local` 프로필).
   - 설정은 `backend/.env`(커밋 금지, 사용자가 직접 편집). 예시는 `backend/.env.example`.
   - 테스트: `cd backend && ./mvnw test` (CI: GitHub Actions 가 push 마다 실행)
-  - 프롬프트는 `src/main/resources/prompts/*_vN.txt`. 프롬프트를 바꾸면 새 버전 파일을 만들고 서비스의 `PROMPT` 상수와 README 를 함께 올린다 (현재 답글 생성 `reply_generate_v12`, 주간 리포트 `weekly_report_v3`).
+  - 프롬프트는 `src/main/resources/prompts/*_vN.txt`. 프롬프트를 바꾸면 새 버전 파일을 만들고 서비스의 `PROMPT` 상수와 README 를 함께 올린다 (현재 답글 생성 `reply_generate_v12`, 주간 리포트 `weekly_report_v4`).
 - `frontend/`: React 18 + Vite, 해시 라우트(`#reviews`, `#report`, `#setup`, `#support/mine`, `#admin/users` …). `npm run dev` (5173, `/api` → 8080). `npx vite build` 로 빌드 확인.
 - `tools/e2e/`: 실제 백엔드 없이 화면을 확인하는 가짜 API(`mock.mjs`, 8080)와 Playwright 확인 스크립트. 새 API 를 만들면 mock 에도 추가. 자세한 건 `tools/e2e/README.md`.
 - `eval/`: 프롬프트 평가 스크립트와 결과.

@@ -1,5 +1,7 @@
 package com.replyboss.report;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.replyboss.review.Platform;
 
 import java.time.LocalDate;
@@ -76,17 +78,34 @@ public final class ReportDtos {
     }
 
     /**
+     * 분석 항목 하나: text 내용(한 문장), basis 근거(어떤 집계 수치·리뷰에서 나왔는지. 제안이면 왜 하는지).
+     * 예전(v3)에 저장한 분석은 항목이 문장 하나뿐이라, 문자열도 근거 없는 항목으로 읽는다.
+     */
+    public record InsightItem(String text, String basis) {
+        @JsonCreator(mode = JsonCreator.Mode.PROPERTIES)
+        public InsightItem(@JsonProperty("text") String text, @JsonProperty("basis") String basis) {
+            this.text = text;
+            this.basis = basis == null || basis.isBlank() ? null : basis;
+        }
+
+        @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
+        public static InsightItem of(String text) {
+            return new InsightItem(text, null);
+        }
+    }
+
+    /**
      * AI 가 쓴 분석. summary 요약, positives 좋아진 점, improvements 개선이 필요한 점, suggestions 바로 해볼 제안.
      * stale 이면 만든 뒤 리뷰가 바뀐 것
      */
-    public record Insight(String summary, List<String> positives, List<String> improvements, List<String> suggestions,
+    public record Insight(String summary, List<InsightItem> positives, List<InsightItem> improvements, List<InsightItem> suggestions,
                           LocalDateTime generatedAt, boolean stale) {
         static Insight of(InsightText t, LocalDateTime at, boolean stale) {
             return new Insight(t.summary(), orEmpty(t.positives()), orEmpty(t.improvements()), orEmpty(t.suggestions()), at, stale);
         }
     }
 
-    static List<String> orEmpty(List<String> list) {
+    static <T> List<T> orEmpty(List<T> list) {
         return list == null ? List.of() : list;
     }
 
@@ -94,6 +113,7 @@ public final class ReportDtos {
     }
 
     /** 저장 형식. 예전에 저장한 요약에는 positives·improvements 가 없다 (null) */
-    public record InsightText(String summary, List<String> positives, List<String> improvements, List<String> suggestions) {
+    public record InsightText(String summary, List<InsightItem> positives, List<InsightItem> improvements,
+                              List<InsightItem> suggestions) {
     }
 }

@@ -1939,6 +1939,13 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .insight-col.is-bad h3::before { background: var(--danger); }
 .insight-col.is-action h3::before { background: var(--primary); }
 .insight-col ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-label); line-height: 22px; color: var(--text-muted); }
+.insight-col ul { gap: var(--s3); }
+.insight-text { display: block; color: var(--text); }
+.insight-basis { display: block; margin-top: 4px; font-size: var(--fs-small); line-height: var(--lh-small); color: var(--text-sub); }
+.insight-basis-label {
+  display: inline-block; margin-right: 6px; padding: 0 5px; border: 1px solid var(--border); border-radius: 4px;
+  background: var(--surface); font-size: var(--fs-micro); line-height: 16px; font-weight: 600; color: var(--text-sub); vertical-align: 1px;
+}
 .insight-foot { display: flex; align-items: center; gap: 6px; font-size: var(--fs-micro); color: var(--text-sub); font-variant-numeric: tabular-nums; }
 
 /* 대표 리뷰 */

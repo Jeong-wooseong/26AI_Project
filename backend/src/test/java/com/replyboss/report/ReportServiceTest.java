@@ -141,20 +141,29 @@ class ReportServiceTest {
                         {"summary":"이번 주 리뷰는 4건이고 불만은 80%입니다.","suggestions":["배달 시간을 확인해 볼 만합니다."]}
                         """),
                 mapper.readTree("""
-                        {"summary":"이번 주 리뷰 4건 중 불만이 3건(75%)이며, 배달 지연이 2건으로 가장 많았습니다.","positives":["양 부족 의견은 지난주 2건에서 줄었습니다."],"improvements":["배달 지연 불만이 새로 2건 나왔습니다."],"suggestions":["배달 지연이 생긴 시간대를 확인해 볼 만합니다.","포장 상태를 한 번 더 확인해 볼 만합니다."]}
+                        {"summary":"이번 주 리뷰 4건 중 불만이 3건(75%)이며, 배달 지연이 2건으로 가장 많았습니다.","positives":[{"text":"양 부족 의견은 지난주 2건에서 줄었습니다.","basis":"불만 주제 순위에서 양 부족이 2건에서 1건이 되었습니다."},{"text":"라떼 칭찬이 있었습니다.","basis":"대표 칭찬 리뷰에 '라떼 맛있어요'가 있습니다."}],"improvements":[{"text":"배달 지연 불만이 새로 2건 나왔습니다.","basis":"수요일에 불만 1건이 몰렸습니다."}],"suggestions":[{"text":"배달 지연이 생긴 시간대를 확인해 볼 만합니다.","basis":"배달 지연이 불만 주제 중 가장 많습니다."},{"text":"포장 상태를 한 번 더 확인해 볼 만합니다.","basis":""}]}
                         """));
 
         ReportResponse r = reportService.generateInsight(storeId, MONDAY);
 
         ArgumentCaptor<LlmRequest> captor = ArgumentCaptor.forClass(LlmRequest.class);
         verify(llmClient, times(2)).generateJson(captor.capture());
-        assertThat(captor.getAllValues().get(0).user()).contains("이번 주 리뷰: 4건").contains("배달 지연: 2건 / 0건")
-                .contains("[대표 불만 리뷰]");
+        String first = captor.getAllValues().get(0).user();
+        assertThat(first).contains("이번 주 리뷰: 4건").contains("배달 지연: 2건 / 0건").contains("[대표 불만 리뷰]");
+        // 자세한 분석을 위한 입력: 매장 정보, 별점 분포, 요일별 리뷰·불만, 칭찬 주제, 대표 칭찬 리뷰
+        assertThat(first).contains("[매장 정보] 없음")
+                .contains("- 별점 분포 (1점~5점 순서, 이번 주 / 지난주): 1점 1건, 2점 1건, 3점 1건, 4점 0건, 5점 1건 / 1점 0건, 2점 1건, 3점 1건, 4점 0건, 5점 0건")
+                .contains("- 요일별 리뷰 (전체 건수, 그중 불만 건수): 월 1/1 화 0/0 수 1/1 목 1/1 금 0/0 토 0/0 일 1/0")
+                .contains("- 칭찬 주제 순위 (이번 주 / 지난주):\n  · 라떼: 1건 / 0건")
+                .contains("[대표 칭찬 리뷰]\n- (별점 5, 주제 라떼)\n<review>\n라떼 맛있어요\n</review>");
         assertThat(captor.getAllValues().get(1).user()).contains("집계에 없는 숫자를 씀: 80");
         assertThat(r.insight().summary()).contains("75%");
         assertThat(r.insight().stale()).isFalse();
-        assertThat(r.insight().positives()).containsExactly("양 부족 의견은 지난주 2건에서 줄었습니다.");
+        assertThat(r.insight().positives()).extracting(ReportDtos.InsightItem::text)
+                .containsExactly("양 부족 의견은 지난주 2건에서 줄었습니다.", "라떼 칭찬이 있었습니다.");
+        assertThat(r.insight().positives().get(0).basis()).contains("양 부족이 2건에서 1건");
         assertThat(r.insight().improvements()).hasSize(1);
+        assertThat(r.insight().suggestions().get(1).basis()).isNull(); // 빈 근거는 없음으로
         assertThat(captor.getAllValues().get(0).user()).contains("긍정 리뷰 비율: 25%");
 
         // 다시 조회하면 저장된 요약이 나오고, 리뷰가 늘면 stale
@@ -172,6 +181,37 @@ class ReportServiceTest {
                 {"summary":"불만이 99건입니다.","suggestions":[]}
                 """));
         assertThatThrownBy(() -> reportService.generateInsight(storeId, MONDAY)).isInstanceOf(LlmException.class);
+    }
+
+    @Test
+    void 근거_문장에도_집계에_없는_숫자를_쓰면_다시_만든다() throws Exception {
+        seed();
+        reset(llmClient);
+        when(llmClient.generateJson(any())).thenReturn(mapper.readTree("""
+                {"summary":"배달 지연 불만이 늘었습니다.","positives":[],"improvements":[{"text":"배달 지연이 늘었습니다.","basis":"배달 지연이 7건입니다."}],"suggestions":[]}
+                """), mapper.readTree("""
+                {"summary":"배달 지연 불만이 늘었습니다.","positives":[],"improvements":[{"text":"배달 지연이 늘었습니다.","basis":"배달 지연이 지난주 0건에서 2건이 되었습니다."}],"suggestions":[]}
+                """));
+
+        ReportResponse r = reportService.generateInsight(storeId, MONDAY);
+
+        ArgumentCaptor<LlmRequest> captor = ArgumentCaptor.forClass(LlmRequest.class);
+        verify(llmClient, times(2)).generateJson(captor.capture());
+        assertThat(captor.getAllValues().get(1).user()).contains("집계에 없는 숫자를 씀: 7");
+        assertThat(r.insight().improvements().get(0).basis()).contains("0건에서 2건");
+    }
+
+    @Test
+    void 예전에_문장만_저장한_분석도_읽는다() throws Exception {
+        ReportDtos.InsightText old = mapper.readValue("""
+                {"summary":"요약","positives":["좋아진 점"],"improvements":null,"suggestions":["제안 하나"]}
+                """, ReportDtos.InsightText.class);
+        assertThat(old.positives()).containsExactly(new ReportDtos.InsightItem("좋아진 점", null));
+        assertThat(old.suggestions().get(0).text()).isEqualTo("제안 하나");
+        ReportDtos.InsightText now = mapper.readValue("""
+                {"summary":"요약","positives":[{"text":"좋아진 점","basis":"근거"}],"improvements":[],"suggestions":[]}
+                """, ReportDtos.InsightText.class);
+        assertThat(now.positives().get(0).basis()).isEqualTo("근거");
     }
 
     @Test

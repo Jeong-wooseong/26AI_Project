@@ -12,6 +12,7 @@ import com.replyboss.common.JsonText;
 import com.replyboss.reply.Reply;
 import com.replyboss.reply.ReplyRepository;
 import com.replyboss.report.ReportDtos.Insight;
+import com.replyboss.report.ReportDtos.InsightItem;
 import com.replyboss.report.ReportDtos.InsightText;
 import com.replyboss.report.ReportDtos.ReplyStats;
 import com.replyboss.report.ReportDtos.ReportResponse;
@@ -65,16 +66,28 @@ import static com.replyboss.ai.Schemas.string;
 public class ReportService {
 
     private static final Logger log = LoggerFactory.getLogger(ReportService.class);
-    static final String PROMPT = "weekly_report_v3";
+    static final String PROMPT = "weekly_report_v4";
     static final int TOP_TOPICS = 5;
     static final int REPRESENTATIVES = 3;
+    /** AI 분석에만 넘기는 대표 칭찬 리뷰 수 (화면에는 보이지 않음) */
+    static final int PRAISE_REPRESENTATIVES = 2;
+    /** 항목별 최대 개수 */
+    static final int MAX_ITEMS = 3;
+    private static final String[] WEEKDAYS = {"월", "화", "수", "목", "금", "토", "일"};
 
+    /** 항목: text 내용 한 문장, basis 근거(집계 수치·리뷰). 제안의 basis 는 왜 해 볼 만한지 */
+    private static final Map<String, Object> ITEM = object(props("text", string(), "basis", string()));
     private static final Map<String, Object> SCHEMA = object(props(
             "summary", string(),
-            "positives", arrayOf(string()),
-            "improvements", arrayOf(string()),
-            "suggestions", arrayOf(string())
+            "positives", arrayOf(ITEM),
+            "improvements", arrayOf(ITEM),
+            "suggestions", arrayOf(ITEM)
     ));
+
+    /** AI 분석에만 쓰는 칭찬 쪽 집계: 칭찬 리뷰 주제 순위(이번 주/지난주)와 대표 칭찬 리뷰 */
+    record PraiseStats(List<TopicStat> topics, List<RepresentativeReview> representatives) {
+        static final PraiseStats EMPTY = new PraiseStats(List.of(), List.of());
+    }
     private static final Pattern NUMBER = Pattern.compile("\\d+(?:\\.\\d+)?");
 
     private final ReviewRepository reviewRepository;
@@ -124,8 +137,9 @@ public class ReportService {
         if (stats.total() == 0) {
             throw ApiException.badRequest("NO_REVIEWS", "이 주에 등록된 리뷰가 없어 요약을 만들 수 없습니다.");
         }
-        String user = userMessage(store, stats);
-        Set<String> allowed = allowedNumbers(stats);
+        PraiseStats praise = praise(storeId, stats.weekStart());
+        String user = userMessage(store, stats, praise);
+        Set<String> allowed = allowedNumbers(stats, praise, store.replyInfo());
         InsightText text = call(user);
         List<String> unknown = unknownNumbers(text, allowed);
         if (!unknown.isEmpty() || hasMeta(text)) {
@@ -188,6 +202,33 @@ public class ReportService {
                 topics, resolved, representatives(complaints, topics), replyStats(current), replyStats(previous),
                 rate(positivesOf(current), current.size()), rate(positivesOf(previous), previous.size()),
                 daily(current, weekStart), daily(previous, weekStart.minusWeeks(1)));
+    }
+
+    /** 칭찬 리뷰 주제 순위와 대표 칭찬 리뷰 (별점 높은 순, 본문 긴 순). AI 분석의 '좋아진 점' 근거로만 쓴다 */
+    PraiseStats praise(Long storeId, LocalDate weekStart) {
+        List<Review> now = praisesOf(inWeek(storeId, weekStart));
+        Map<String, Integer> counts = topicCounts(now);
+        Map<String, Integer> before = topicCounts(praisesOf(inWeek(storeId, weekStart.minusWeeks(1))));
+        List<TopicStat> topics = counts.entrySet().stream()
+                .map(e -> TopicStat.of(e.getKey(), e.getValue(), before.getOrDefault(e.getKey(), 0)))
+                .sorted(Comparator.comparingInt(TopicStat::count).reversed().thenComparing(TopicStat::topic))
+                .limit(TOP_TOPICS)
+                .toList();
+        List<RepresentativeReview> reps = now.stream()
+                .filter(r -> r.getMaskedContent() != null && !r.getMaskedContent().isBlank())
+                .sorted(Comparator.comparingInt(Review::getRating).reversed()
+                        .thenComparing(r -> -r.getMaskedContent().length())
+                        .thenComparing(Review::getId))
+                .limit(PRAISE_REPRESENTATIVES)
+                .map(r -> representative(r, r.getKeywords().isEmpty() ? null : normalize(r.getKeywords().get(0))))
+                .toList();
+        return new PraiseStats(topics, reps);
+    }
+
+    private static List<Review> praisesOf(List<Review> reviews) {
+        return reviews.stream()
+                .filter(r -> r.getStatus() == ReviewStatus.CLASSIFIED && r.getType() == ReviewType.PRAISE)
+                .toList();
     }
 
     private static int positivesOf(List<Review> reviews) {
@@ -313,29 +354,41 @@ public class ReportService {
 
     private InsightText call(String user) {
         JsonNode json = llmClient.generateJson(new LlmRequest(
-                props.generateModel(), prompts.render(PROMPT, Map.of()), user, "weekly_insight", SCHEMA, 2000));
+                props.generateModel(), prompts.render(PROMPT, Map.of()), user, "weekly_insight", SCHEMA, 3000));
         String summary = json.path("summary").asText("").strip();
         if (summary.isEmpty()) {
             throw new LlmException("요약이 비어 있습니다", null, "LLM_INVALID");
         }
-        return new InsightText(summary, items(json.path("positives"), 2), items(json.path("improvements"), 2),
-                items(json.path("suggestions"), 3));
+        return new InsightText(summary, items(json.path("positives")), items(json.path("improvements")),
+                items(json.path("suggestions")));
     }
 
-    private static List<String> items(JsonNode array, int max) {
-        List<String> out = new ArrayList<>();
+    /** {text, basis} 항목 목록 (문자열만 와도 근거 없는 항목으로 받는다). 내용이 빈 항목은 버리고 최대 MAX_ITEMS 개 */
+    static List<InsightItem> items(JsonNode array) {
+        List<InsightItem> out = new ArrayList<>();
         array.forEach(n -> {
-            String item = n.asText("").strip();
-            if (!item.isEmpty() && out.size() < max) {
-                out.add(item);
+            String text = (n.isTextual() ? n.asText("") : n.path("text").asText("")).strip();
+            String basis = n.isTextual() ? "" : n.path("basis").asText("").strip();
+            if (!text.isEmpty() && out.size() < MAX_ITEMS) {
+                out.add(new InsightItem(text, basis));
             }
         });
         return out;
     }
 
-    static String userMessage(Store store, WeeklyStats s) {
+    static String userMessage(Store store, WeeklyStats s, PraiseStats praise) {
         StringBuilder sb = new StringBuilder();
         sb.append("[매장] ").append(store.getName()).append(" (").append(store.getCategory()).append(")\n");
+        String info = store.replyInfo();
+        sb.append("[매장 정보]");
+        if (info == null) {
+            sb.append(" 없음");
+        } else {
+            for (String line : info.split("\n")) {
+                sb.append("\n- ").append(line.strip());
+            }
+        }
+        sb.append('\n');
         sb.append("[집계] (").append(s.weekStart()).append(" ~ ").append(s.weekEnd()).append(")\n");
         sb.append("- 이번 주 리뷰: ").append(s.total()).append("건, 지난주: ").append(s.previousTotal()).append("건\n");
         sb.append("- 평균 별점: ").append(s.avgRating() == null ? "없음" : fmt(s.avgRating()))
@@ -348,14 +401,16 @@ public class ReportService {
         sb.append("- 유형별: ");
         s.typeCounts().forEach((k, v) -> sb.append(k).append(' ').append(v).append("건 "));
         sb.append('\n');
-        sb.append("- 불만 주제 순위 (이번 주 / 지난주):");
-        if (s.topics().isEmpty()) {
-            sb.append(" 없음");
-        }
-        for (TopicStat t : s.topics()) {
-            sb.append("\n  · ").append(t.topic()).append(": ").append(t.count()).append("건 / ").append(t.previousCount()).append("건");
+        sb.append("- 별점 분포 (1점~5점 순서, 이번 주 / 지난주): ").append(ratingLine(s.ratingCounts()))
+                .append(" / ").append(s.previousTotal() == 0 ? "없음" : ratingLine(s.previousRatingCounts())).append('\n');
+        sb.append("- 요일별 리뷰 (전체 건수, 그중 불만 건수):");
+        for (int i = 0; i < s.daily().size() && i < WEEKDAYS.length; i++) {
+            ReportDtos.DailyStat d = s.daily().get(i);
+            sb.append(' ').append(WEEKDAYS[i]).append(' ').append(d.total()).append('/').append(d.complaints());
         }
         sb.append('\n');
+        topicLines(sb, "- 불만 주제 순위 (이번 주 / 지난주):", s.topics());
+        topicLines(sb, "- 칭찬 주제 순위 (이번 주 / 지난주):", praise.topics());
         ReplyStats r = s.replies();
         sb.append("- 답글 작성 완료: ").append(r.completed()).append("건 / 대상 ").append(r.target()).append("건");
         if (r.completionRate() != null) {
@@ -367,14 +422,77 @@ public class ReportService {
             sb.append(" 없음");
         }
         for (RepresentativeReview rep : s.representatives()) {
-            sb.append("\n- (별점 ").append(rep.rating()).append(", 주제 ").append(rep.topic() == null ? "없음" : rep.topic())
-                    .append(")\n").append(UntrustedText.wrap(rep.maskedContent()));
+            reviewLine(sb, rep);
+        }
+        sb.append("\n[대표 칭찬 리뷰]");
+        if (praise.representatives().isEmpty()) {
+            sb.append(" 없음");
+        }
+        for (RepresentativeReview rep : praise.representatives()) {
+            reviewLine(sb, rep);
         }
         return sb.toString();
     }
 
+    private static void reviewLine(StringBuilder sb, RepresentativeReview rep) {
+        sb.append("\n- (별점 ").append(rep.rating()).append(", 주제 ").append(rep.topic() == null ? "없음" : rep.topic())
+                .append(")\n").append(UntrustedText.wrap(rep.maskedContent()));
+    }
+
+    private static void topicLines(StringBuilder sb, String title, List<TopicStat> topics) {
+        sb.append(title);
+        if (topics.isEmpty()) {
+            sb.append(" 없음");
+        }
+        for (TopicStat t : topics) {
+            sb.append("\n  · ").append(t.topic()).append(": ").append(t.count()).append("건 / ").append(t.previousCount()).append("건");
+        }
+        sb.append('\n');
+    }
+
+    /** [1점 수, …, 5점 수] → "1점 0건, 2점 1건, …" */
+    private static String ratingLine(List<Integer> counts) {
+        List<String> parts = new ArrayList<>();
+        for (int i = 0; i < counts.size(); i++) {
+            parts.add((i + 1) + "점 " + counts.get(i) + "건");
+        }
+        return String.join(", ", parts);
+    }
+
     private static String fmt(double v) {
         return String.format(Locale.ROOT, "%.1f", v);
+    }
+
+    /**
+     * AI 문장에 써도 되는 숫자: 집계에 나온 값, 날짜(월·일), 별점 단계(1~5점),
+     * 칭찬 주제·대표 칭찬 리뷰, 요일별 건수, 사장님이 적은 매장 정보 속 숫자(영업시간 등)
+     */
+    static Set<String> allowedNumbers(WeeklyStats s, PraiseStats praise, String storeInfo) {
+        Set<String> allowed = allowedNumbers(s);
+        for (int star = 1; star <= 5; star++) {
+            allowed.add(String.valueOf(star));
+        }
+        List<Integer> extra = new ArrayList<>();
+        extra.addAll(s.ratingCounts());
+        extra.addAll(s.previousRatingCounts());
+        s.daily().forEach(d -> {
+            extra.add(d.total());
+            extra.add(d.complaints());
+        });
+        for (TopicStat t : praise.topics()) {
+            extra.add(t.count());
+            extra.add(t.previousCount());
+            extra.add(Math.abs(t.change()));
+        }
+        praise.representatives().forEach(r -> extra.add(r.rating()));
+        extra.forEach(v -> allowed.add(String.valueOf(v)));
+        if (storeInfo != null) {
+            Matcher m = NUMBER.matcher(storeInfo);
+            while (m.find()) {
+                allowed.add(m.group());
+            }
+        }
+        return allowed;
     }
 
     /** AI 문장에 써도 되는 숫자: 집계에 나온 값과 날짜(월·일) */
@@ -420,13 +538,19 @@ public class ReportService {
         return allowed;
     }
 
-    /** 요약과 모든 항목 문장 */
+    /** 요약과 모든 항목의 내용·근거 문장 */
     private static List<String> parts(InsightText text) {
         List<String> parts = new ArrayList<>();
         parts.add(text.summary());
-        parts.addAll(ReportDtos.orEmpty(text.positives()));
-        parts.addAll(ReportDtos.orEmpty(text.improvements()));
-        parts.addAll(ReportDtos.orEmpty(text.suggestions()));
+        for (List<InsightItem> items : List.of(ReportDtos.orEmpty(text.positives()), ReportDtos.orEmpty(text.improvements()),
+                ReportDtos.orEmpty(text.suggestions()))) {
+            for (InsightItem item : items) {
+                parts.add(item.text());
+                if (item.basis() != null) {
+                    parts.add(item.basis());
+                }
+            }
+        }
         return parts;
     }
 
