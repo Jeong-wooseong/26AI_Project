@@ -461,7 +461,7 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
                       </blockquote>
                     </div>
                     <p className="hint">
-                      <mark>밑줄</mark>은 자주 쓰는 표현과 마무리 인사입니다. 실제 답글은 리뷰 내용에 맞춰 새로 씁니다.
+                      밑줄 친 부분은 자주 쓰는 표현과 마무리 인사입니다. 실제 답글은 리뷰 내용에 맞춰 새로 씁니다.
                     </p>
                   </figure>
                 </div>
