@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { progressColor } from '../progressColor.js';
 import { PLATFORM_LABEL, TYPE_LABEL, todayISO } from '../labels.js';
@@ -703,6 +703,26 @@ function Change({ topic: t }) {
 
 /* ── AI 분석 인사이트 ─────────────────────────────────────── */
 
+/** 분석 항목: 내용은 늘 보이고, 근거(제안은 이유)는 눌러서 펼친다. 인쇄할 때는 모두 펼친다 */
+function InsightItem({ text, basis, label }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <li>
+      <span className="insight-text">{text}</span>
+      {basis && (
+        <>
+          <button type="button" className="insight-toggle" aria-expanded={open} aria-controls={id} onClick={() => setOpen((v) => !v)}>
+            {open ? `${label} 접기` : `${label} 보기`}
+            <Icon name="next" size={13} className={open ? 'is-open' : ''} />
+          </button>
+          <p id={id} className="insight-basis" hidden={!open}>{basis}</p>
+        </>
+      )}
+    </li>
+  );
+}
+
 function Insight({ report, state, onMake }) {
   const insight = report.insight;
   const loading = state.state === 'loading';
@@ -753,17 +773,8 @@ function Insight({ report, state, onMake }) {
                   <ul>
                     {items.map((item) => {
                       // 예전에 저장한 분석은 항목이 문장 하나뿐(문자열)이다
-                      const { text, basis } = typeof item === 'string' ? { text: item, basis: null } : item;
-                      return (
-                        <li key={text}>
-                          <span className="insight-text">{text}</span>
-                          {basis && (
-                            <span className="insight-basis">
-                              <span className="insight-basis-label">{key === 'suggestions' ? '이유' : '근거'}</span>{basis}
-                            </span>
-                          )}
-                        </li>
-                      );
+                      const it = typeof item === 'string' ? { text: item, basis: null } : item;
+                      return <InsightItem key={it.text} text={it.text} basis={it.basis} label={key === 'suggestions' ? '이유' : '근거'} />;
                     })}
                   </ul>
                 ) : <p className="hint">{key === 'positives' ? '집계에서 뚜렷한 개선을 찾지 못했습니다.' : key === 'improvements' ? '눈에 띄는 개선 필요 사항이 없습니다.' : '제안이 없습니다.'}</p>}

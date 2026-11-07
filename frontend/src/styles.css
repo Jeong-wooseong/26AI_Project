@@ -1930,22 +1930,30 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 
 /* AI 분석 */
 .rp-insight { border-color: #d8e0fb; }
-.insight-lead { font-size: var(--fs-body); line-height: 26px; font-weight: 600; color: var(--text); }
+.insight-lead { max-width: 72ch; font-size: var(--fs-body); line-height: 26px; font-weight: 400; color: var(--text); }
 .insight-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); }
-.insight-col { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s4); border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--surface-sub); }
-.insight-col h3 { display: flex; align-items: center; gap: 6px; font-size: var(--fs-label); font-weight: 700; color: var(--text); }
-.insight-col h3::before { content: ""; width: 8px; height: 8px; border-radius: 2px; }
+.insight-col { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4); border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--surface-sub); }
+/* 카테고리 제목: 항목(일반 굵기 14px)보다 크고 굵게, 아래 구분선으로 목록과 나눈다 */
+.insight-col h3 { display: flex; align-items: center; gap: 8px; padding-bottom: var(--s3); border-bottom: 1px solid var(--border); font-size: var(--fs-body); line-height: 22px; font-weight: 750; color: var(--navy); }
+.insight-col h3::before { content: ""; width: 10px; height: 10px; border-radius: 3px; flex: none; }
 .insight-col.is-good h3::before { background: var(--success); }
 .insight-col.is-bad h3::before { background: var(--danger); }
 .insight-col.is-action h3::before { background: var(--primary); }
 .insight-col ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-label); line-height: 22px; color: var(--text-muted); }
-.insight-col ul { gap: var(--s3); }
-.insight-text { display: block; color: var(--text); }
-.insight-basis { display: block; margin-top: 4px; font-size: var(--fs-small); line-height: var(--lh-small); color: var(--text-sub); }
-.insight-basis-label {
-  display: inline-block; margin-right: 6px; padding: 0 5px; border: 1px solid var(--border); border-radius: 4px;
-  background: var(--surface); font-size: var(--fs-micro); line-height: 16px; font-weight: 600; color: var(--text-sub); vertical-align: 1px;
+/* 항목: 내용은 굵게 늘 보이고, 근거·이유는 눌러서 펼친다 */
+.insight-col ul { gap: var(--s4); }
+.insight-text { display: block; font-weight: 400; color: var(--text); }
+.insight-toggle {
+  display: inline-flex; align-items: center; gap: 2px; margin-top: 4px; padding: 0; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: var(--fs-small); line-height: var(--lh-small); font-weight: 600; color: var(--primary);
 }
+.insight-toggle:hover { text-decoration: underline; }
+.insight-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 3px; }
+.insight-toggle .icon { transform: rotate(90deg); transition: transform .15s; }
+.insight-toggle .icon.is-open { transform: rotate(-90deg); }
+.insight-basis { margin: 6px 0 0; padding-left: 10px; border-left: 2px solid var(--border-hover); font-size: var(--fs-small); line-height: var(--lh-small); color: var(--text-sub); }
+.insight-basis[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .insight-toggle .icon { transition: none; } }
 .insight-foot { display: flex; align-items: center; gap: 6px; font-size: var(--fs-micro); color: var(--text-sub); font-variant-numeric: tabular-nums; }
 
 /* 대표 리뷰 */
@@ -2224,6 +2232,9 @@ body:has(.save-bar) .helpchat { bottom: 104px; }
 @media (max-width: 720px) { .faq-panel .faq-a { padding-left: 4px; } }
 @media print {
   .report-v3 { gap: 10px; }
+  /* 인쇄(PDF)에는 접어 둔 근거를 모두 펼치고 펼치기 버튼은 뺀다 */
+  .insight-basis[hidden] { display: block !important; }
+  .insight-toggle { display: none !important; }
   .summary-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .summary-5 > div { padding: 12px 14px; }
   .summary-5 > div::before { display: block !important; }
