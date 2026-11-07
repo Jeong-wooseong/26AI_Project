@@ -27,6 +27,9 @@ public class StoreService {
     public StoreResponse create(StoreRequest request, Long ownerId) {
         Store store = new Store(request.name().trim(), trimOrNull(request.category()), trimOrNull(request.info()));
         store.assignOwner(userRepository.getReferenceById(ownerId));
+        if (request.profile() != null) {
+            store.updateProfile(request.profile());
+        }
         return StoreResponse.from(storeRepository.save(store));
     }
 
@@ -58,6 +61,9 @@ public class StoreService {
         store.rename(request.name().trim(), trimOrNull(request.category()));
         if (request.info() != null) {
             store.describe(trimOrNull(request.info()));
+        }
+        if (request.profile() != null) {
+            store.updateProfile(request.profile());
         }
         return StoreResponse.from(store);
     }

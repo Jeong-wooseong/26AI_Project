@@ -22,10 +22,16 @@ public final class StoreDtos {
             String category,
             /** 매장 소개·운영 방식 (선택). 보내지 않으면(null) 기존 값을 유지한다. */
             @Size(max = 500, message = "매장 소개·운영 방식은 500자 이내여야 합니다.")
-            String info
+            String info,
+            /** 메뉴·이용 방법·영업시간·연결한 장소 (선택). 보내지 않으면(null) 기존 값을 유지한다. */
+            @Valid StoreProfile profile
     ) {
         public StoreRequest(String name, String category) {
-            this(name, category, null);
+            this(name, category, null, null);
+        }
+
+        public StoreRequest(String name, String category, String info) {
+            this(name, category, info, null);
         }
     }
 
@@ -56,6 +62,7 @@ public final class StoreDtos {
             String name,
             String category,
             String info,
+            StoreProfile profile,
             ToneProfile toneProfile,
             List<String> sampleReplies,
             ReplySettings replySettings,
@@ -67,6 +74,7 @@ public final class StoreDtos {
                     store.getName(),
                     store.getCategory(),
                     store.getInfo(),
+                    store.profile(),
                     JsonText.read(store.getToneProfile(), ToneProfile.class),
                     JsonText.readStringList(store.getSampleReplies()),
                     new ReplySettings(store.getDefaultTone(), store.isAvoidDuplicates()),

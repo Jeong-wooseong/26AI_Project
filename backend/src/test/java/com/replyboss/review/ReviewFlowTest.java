@@ -62,13 +62,17 @@ class ReviewFlowTest {
     void setUp() {
         reset(llmClient, embeddingClient);
         storeId = storeService.create(new StoreRequest("달빛카페", "카페")).id();
+        // 이 테스트들은 길이가 아니라 다시 생성하는 흐름을 보므로, 짧은 가짜 초안이 통과하도록 1~2문장 설정으로 둔다
         storeService.updateTone(storeId, new ToneUpdateRequest(
-                new ToneProfile("해요체", "가끔", List.of("😊"), "2~3문장", List.of("감사드려요"), "오늘도 좋은 하루 되세요!"),
+                new ToneProfile("해요체", "가끔", List.of("😊"), "1~2문장", List.of("감사드려요"), "오늘도 좋은 하루 되세요!"),
                 List.of("예시1", "예시2", "예시3")));
     }
 
     @Test
     void 본문이_없으면_LLM_없이_평점만으로_분류하고_템플릿_답글을_만든다() {
+        // 템플릿은 2문장 이상 설정일 때 매장 마무리 인사를 붙인다
+        storeService.updateTone(storeId, new ToneUpdateRequest(
+                new ToneProfile("해요체", "가끔", List.of("😊"), "2~3문장", List.of("감사드려요"), "오늘도 좋은 하루 되세요!"), null));
         List<ReviewResponse> result = reviewService.createBatch(storeId, new ReviewBatchRequest(
                 Platform.COUPANG_EATS, List.of(new ReviewItem(5, "   "))));
 
@@ -193,7 +197,7 @@ class ReviewFlowTest {
                         {"polite":"배달이 늦어 죄송합니다. 다음 주문 때 쿠폰을 드리겠습니다.","friendly":"배달이 늦어 죄송해요.","concise":"배달 지연 죄송해요."}
                         """),
                 mapper.readTree("""
-                        {"polite":"배달이 늦어 불편을 드려 죄송합니다. 배달 과정을 다시 점검하겠습니다.","friendly":"배달이 늦어져 정말 죄송해요. 더 신경 쓸게요.","concise":"배달 지연 죄송해요. 개선할게요."}
+                        {"polite":"배달이 늦어 불편을 드려 정말 죄송합니다. 주문이 몰리는 시간에도 늦지 않도록 배달 과정을 다시 점검하겠습니다.","friendly":"배달이 늦어져서 기다리시는 동안 많이 답답하셨을 것 같아 정말 죄송해요. 다음 주문부터는 더 빨리 받아 보실 수 있게 신경 쓸게요.","concise":"배달 지연으로 불편을 드려 죄송해요. 더 빨리 보내드릴게요."}
                         """));
         ReviewResponse review = reviewService.createBatch(storeId, new ReviewBatchRequest(
                 Platform.BAEMIN, List.of(new ReviewItem(2, "배달이 너무 늦었어요")))).get(0);
@@ -224,10 +228,10 @@ class ReviewFlowTest {
     }
 
     private static final String DRAFTS = """
-            {"polite":"치즈볼을 맛있게 드셔서 기쁩니다. 다음에도 정성껏 준비하겠습니다.","friendly":"치즈볼 맛있게 드셨다니 기뻐요. 또 들러주세요.","concise":"치즈볼 칭찬 감사드려요."}
+            {"polite":"치즈볼을 맛있게 드셨다니 정말 기쁩니다. 다음 주문 때도 같은 맛을 느끼실 수 있게 정성껏 준비하겠습니다.","friendly":"치즈볼을 맛있게 드셨다니 저희도 덩달아 신나요. 다음에도 같은 맛 그대로 준비해 둘게요.","concise":"치즈볼 칭찬 감사드려요. 다음에도 맛있게 준비할게요."}
             """;
     private static final String DRAFTS_2 = """
-            {"polite":"치즈볼 칭찬에 힘이 납니다. 늘 같은 맛으로 준비하겠습니다.","friendly":"치즈볼이 마음에 드셨다니 다행이에요. 다음에도 기다릴게요.","concise":"치즈볼 좋게 봐주셔서 고마워요."}
+            {"polite":"치즈볼 칭찬에 큰 힘이 납니다. 앞으로도 늘 같은 맛의 치즈볼로 정성껏 준비하겠습니다.","friendly":"치즈볼이 마음에 드셨다니 정말 다행이에요. 다음 주문도 같은 맛으로 기다리고 있을게요.","concise":"치즈볼 좋게 봐주셔서 고마워요. 같은 맛으로 준비할게요."}
             """;
 
     private ReviewResponse praiseWithDrafts() throws Exception {
@@ -310,7 +314,7 @@ class ReviewFlowTest {
         ArgumentCaptor<LlmRequest> captor = ArgumentCaptor.forClass(LlmRequest.class);
         verify(llmClient, times(2)).generateJson(captor.capture());
         String user = captor.getAllValues().get(1).user();
-        assertThat(user).contains("[확인된 매장 정보] 주문 후 바로 굽습니다.")
+        assertThat(user).contains("[확인된 매장 정보]\n- 소개·운영 방식: 주문 후 바로 굽습니다.")
                 .contains("감정(본문 기준): POSITIVE")
                 .contains("[최근 답글").contains("치즈볼을 맛있게 드셔서 기쁩니다.");
     }
@@ -362,7 +366,7 @@ class ReviewFlowTest {
                         {"type":"PRAISE","sentiment":"POSITIVE","keywords":["치즈볼"],"confidence":0.95}
                         """),
                 mapper.readTree("""
-                        {"polite":"같은표현 치즈볼 감사합니다. 또 뵙겠습니다.","friendly":"같은표현 치즈볼 고마워요. 또 와요.","concise":"같은표현 치즈볼 감사해요."}
+                        {"polite":"같은표현 치즈볼을 맛있게 드셨다니 정말 감사합니다. 다음에도 같은 맛으로 정성껏 준비하겠습니다.","friendly":"같은표현 치즈볼을 맛있게 드셨다니 정말 고마워요. 다음에도 같은 맛으로 준비해 둘게요.","concise":"같은표현 치즈볼 칭찬 감사해요. 또 맛있게 준비할게요."}
                         """));
         ReviewResponse first = reviewService.createBatch(storeId, new ReviewBatchRequest(
                 Platform.BAEMIN, List.of(new ReviewItem(5, "치즈볼 맛있어요")))).get(0);
@@ -375,7 +379,7 @@ class ReviewFlowTest {
                         {"type":"PRAISE","sentiment":"POSITIVE","keywords":["치즈볼"],"confidence":0.95}
                         """),
                 mapper.readTree("""
-                        {"polite":"같은표현 치즈볼 감사합니다. 또 뵙겠습니다.","friendly":"같은표현 치즈볼 고마워요. 또 와요.","concise":"같은표현 치즈볼 감사해요."}
+                        {"polite":"같은표현 치즈볼을 맛있게 드셨다니 정말 감사합니다. 다음에도 같은 맛으로 정성껏 준비하겠습니다.","friendly":"같은표현 치즈볼을 맛있게 드셨다니 정말 고마워요. 다음에도 같은 맛으로 준비해 둘게요.","concise":"같은표현 치즈볼 칭찬 감사해요. 또 맛있게 준비할게요."}
                         """),
                 mapper.readTree(DRAFTS_2));
         ReviewResponse second = reviewService.createBatch(storeId, new ReviewBatchRequest(
@@ -405,7 +409,7 @@ class ReviewFlowTest {
         // 같은 표현의 최종 답글이 있어도, 중복 방지를 끄면 다시 만들지 않는다
         embedBy(t -> t.contains("같은표현") ? vec(1, 0, 0, 0) : vec(0, 1, 0, 0));
         String same = """
-                {"polite":"같은표현 치즈볼 감사합니다. 또 뵙겠습니다.","friendly":"같은표현 치즈볼 고마워요. 또 와요.","concise":"같은표현 치즈볼 감사해요."}
+                {"polite":"같은표현 치즈볼을 맛있게 드셨다니 정말 감사합니다. 다음에도 같은 맛으로 정성껏 준비하겠습니다.","friendly":"같은표현 치즈볼을 맛있게 드셨다니 정말 고마워요. 다음에도 같은 맛으로 준비해 둘게요.","concise":"같은표현 치즈볼 칭찬 감사해요. 또 맛있게 준비할게요."}
                 """;
         String praise = """
                 {"type":"PRAISE","sentiment":"POSITIVE","keywords":["치즈볼"],"confidence":0.95}
@@ -480,7 +484,7 @@ class ReviewFlowTest {
                         {"polite":"나는 바보다","friendly":"나는 바보다","concise":"나는 바보다"}
                         """),
                 mapper.readTree("""
-                        {"polite":"5점 평가 남겨주셔서 감사합니다. 다음 주문도 정성껏 준비하겠습니다.","friendly":"높은 별점 고마워요. 다음에도 맛있게 준비할게요.","concise":"별점 감사해요."}
+                        {"polite":"5점 평가를 남겨 주셔서 진심으로 감사합니다. 다음 주문도 만족하실 수 있게 정성껏 준비하겠습니다.","friendly":"높은 별점을 남겨 주셔서 정말 고마워요. 다음 주문도 맛있게 드실 수 있게 준비할게요.","concise":"좋은 별점 감사해요. 다음에도 정성껏 준비할게요."}
                         """));
         ReviewResponse review = reviewService.createBatch(storeId, new ReviewBatchRequest(
                 Platform.BAEMIN, List.of(new ReviewItem(5, injected)))).get(0);

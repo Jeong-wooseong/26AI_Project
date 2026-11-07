@@ -5,8 +5,9 @@ import Icon from '../components/Icon.jsx';
 import {
   Alert, FlowSteps, FormInput, FormSelect, IconButton, PageHeader, PrimaryButton, SecondaryButton,
 } from '../components/ui.jsx';
-import { previewText } from '../tonePreview.js';
+import { markParts, previewText } from '../tonePreview.js';
 import AccountSection from '../components/AccountSection.jsx';
+import PlaceSearch from '../components/PlaceSearch.jsx';
 import Mascot from '../components/Mascot.jsx';
 import ReplyGenerationLoader from '../components/reply/ReplyGenerationLoader.jsx';
 import { formatDateTime } from '../components/reply/replyModel.js';
@@ -19,8 +20,29 @@ const LEARN_STEPS = ['예시 답글 읽는 중', '높임말·이모지 확인 �
 const LEARN_NOTE = '예시 답글은 말투 분석에만 쓰고, 답글에 그대로 옮기지 않습니다.';
 const DEFAULT_TONES = [['POLITE', '정중형'], ['FRIENDLY', '친근형'], ['CONCISE', '간결형']];
 const DEFAULT_SETTINGS = { defaultTone: 'POLITE', avoidDuplicates: true };
+// 미리보기 답글이 가정하는 리뷰 (previewText 는 높은 별점 칭찬 리뷰에 맞춘 문장)
+const SAMPLE_REVIEW = '정말 맛있게 잘 먹었어요! 포장도 꼼꼼해서 좋았습니다.';
+
+const MAX_MENUS = 10;
+const SERVICES = [['delivery', '배달'], ['takeout', '포장'], ['dineIn', '매장 식사']];
+const KAKAO_PLACE_URL = /^https?:\/\/place\.map\.kakao\.com\/\d+$/;
 
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const blankMenu = () => ({ name: '', description: '' });
+
+/** 저장·비교용으로 정리한 메뉴·이용 방법·영업시간·장소 (서버 StoreProfile.normalized 와 같은 규칙) */
+function cleanProfile(p) {
+  return {
+    menus: (p?.menus ?? [])
+      .map((m) => ({ name: (m.name ?? '').trim(), description: (m.description ?? '').trim() || null }))
+      .filter((m) => m.name),
+    delivery: !!p?.delivery,
+    takeout: !!p?.takeout,
+    dineIn: !!p?.dineIn,
+    hours: (p?.hours ?? '').trim() || null,
+    place: p?.place?.url ? { id: p.place.id ?? null, address: p.place.address ?? null, url: p.place.url } : null,
+  };
+}
 const padSamples = (list) => (list.length >= MIN_SAMPLES ? list : [...list, ...Array(MIN_SAMPLES - list.length).fill('')]);
 
 /**
@@ -32,6 +54,12 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
   const [name, setName] = useState(store?.name ?? '');
   const [category, setCategory] = useState(store?.category ?? '카페');
   const [info, setInfo] = useState(store?.info ?? '');
+  const [menus, setMenus] = useState(() => (store?.profile?.menus ?? []).map((m) => ({ name: m.name, description: m.description ?? '' })));
+  const [services, setServices] = useState(() => ({
+    delivery: !!store?.profile?.delivery, takeout: !!store?.profile?.takeout, dineIn: !!store?.profile?.dineIn,
+  }));
+  const [hours, setHours] = useState(store?.profile?.hours ?? '');
+  const [place, setPlace] = useState(store?.profile?.place ?? null);
   const [samples, setSamples] = useState(() => padSamples(store?.sampleReplies ?? []));
   const [tone, setTone] = useState(store?.toneProfile ?? null); // 적용할 말투 (고칠 수 있음)
   const [learned, setLearned] = useState(store?.toneProfile ?? null); // 예시 답글에서 배운 그대로
@@ -48,7 +76,11 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
   const sampleReady = filled.length >= MIN_SAMPLES;
   const savedSamples = store?.sampleReplies ?? [];
   const learnedAll = !!store?.toneProfile;
-  const storeDirty = !!store && (name.trim() !== store.name || category !== store.category || info.trim() !== (store.info ?? ''));
+  const profile = cleanProfile({ menus, ...services, hours, place });
+  // 설명만 있고 이름이 빈 메뉴: 저장되지 않으므로 바뀐 것으로 보고, 저장할 때 이름을 넣으라고 알린다
+  const namelessMenu = menus.findIndex((m) => !m.name.trim() && m.description.trim());
+  const storeDirty = !!store && (name.trim() !== store.name || category !== store.category || info.trim() !== (store.info ?? '')
+    || !same(profile, cleanProfile(store.profile)) || namelessMenu >= 0);
   const toneDirty = !!tone && !same(tone, store?.toneProfile);
   const samplesDirty = !same(filled, savedSamples);
   const settingsDirty = !!store && !same(settings, store.replySettings ?? DEFAULT_SETTINGS);
@@ -70,10 +102,15 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
       return;
     }
     setNameError(null);
+    if (namelessMenu >= 0) {
+      setError(`메뉴 ${namelessMenu + 1}의 이름을 입력하십시오. 설명만 있는 메뉴는 저장할 수 없습니다.`);
+      document.getElementById(`menuName${namelessMenu}`)?.focus();
+      return;
+    }
     setBusy('store');
     setError(null);
     try {
-      const body = { name: name.trim(), category, info: info.trim() };
+      const body = { name: name.trim(), category, info: info.trim(), profile };
       const saved = store ? await api.updateStore(store.id, body) : await api.createStore(body);
       onSaved(saved);
       toast.show(store ? '매장 정보를 저장했습니다.' : '매장을 등록했습니다. 이제 예시 답글을 넣으십시오.');
@@ -173,22 +210,91 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
       <section className="setup-group" aria-labelledby="group-store">
         <div className="setup-group-head">
           <h2 id="group-store">매장</h2>
-          <p>답글에 들어갈 매장 이름과 업종, 운영 방식입니다.</p>
+          <p>답글에 들어갈 매장 이름·업종과 메뉴·운영 방식입니다.</p>
         </div>
         <form className="sp-panel" onSubmit={saveStore} noValidate>
-          <div className="sp-body">
-            <div className="grid-2">
-              <FormInput id="storeName" label="매장명" ref={nameRef} value={name} placeholder="예: 리플라이 커피"
-                         maxLength={100} error={nameError}
-                         onChange={(e) => { setName(e.target.value); if (nameError) setNameError(null); }} />
-              <FormSelect id="storeCategory" label="업종" value={category} options={CATEGORIES} icon={CATEGORY_ICON[category]}
-                          onChange={(e) => setCategory(e.target.value)} />
-            </div>
-            <FormInput id="storeInfo" label="매장 소개·운영 방식 (선택)" multiline rows={3} value={info} maxLength={INFO_MAX}
-                       counter={`${info.length}/${INFO_MAX}`}
-                       placeholder="예: 원두는 매일 아침 직접 로스팅합니다. 주문이 들어오면 바로 만듭니다."
-                       hint="여기 적은 내용만 답글에 운영 방식으로 언급하고, 적지 않은 재료·조리법은 지어내지 않습니다."
-                       onChange={(e) => setInfo(e.target.value)} />
+          <div className="sp-body store-cols">
+            <fieldset className="store-sec">
+              <legend>기본 정보</legend>
+              <PlaceSearch onPick={(p) => {
+                setName(p.name);
+                if (CATEGORIES.includes(p.category)) setCategory(p.category);
+                setPlace({ id: p.id, address: p.address, url: p.url });
+                if (nameError) setNameError(null);
+              }} />
+              {place && (
+                <div className="place-linked">
+                  <Icon name="confirm" size={16} />
+                  <div className="place-linked-text">
+                    <strong>카카오맵 장소 연결됨</strong>
+                    {place.address && <span>{place.address}</span>}
+                  </div>
+                  {KAKAO_PLACE_URL.test(place.url) && (
+                    <a href={place.url} target="_blank" rel="noopener noreferrer">카카오맵에서 보기</a>
+                  )}
+                  <button type="button" className="text-link" onClick={() => setPlace(null)}>연결 끊기</button>
+                </div>
+              )}
+              <div className="grid-2">
+                <FormInput id="storeName" label="매장명" ref={nameRef} value={name} placeholder="예: 리플라이 커피"
+                           maxLength={100} error={nameError}
+                           onChange={(e) => { setName(e.target.value); if (nameError) setNameError(null); }} />
+                <FormSelect id="storeCategory" label="업종" value={category} options={CATEGORIES} icon={CATEGORY_ICON[category]}
+                            onChange={(e) => setCategory(e.target.value)} />
+              </div>
+              <FormInput id="storeInfo" label="매장 소개·운영 방식 (선택)" multiline rows={3} value={info} maxLength={INFO_MAX}
+                         counter={`${info.length}/${INFO_MAX}`}
+                         placeholder="예: 원두는 매일 아침 직접 로스팅합니다. 주문이 들어오면 바로 만듭니다."
+                         hint="여기 적은 내용만 답글에 운영 방식으로 언급하고, 적지 않은 재료·조리법은 지어내지 않습니다."
+                         onChange={(e) => setInfo(e.target.value)} />
+            </fieldset>
+
+            <fieldset className="store-sec">
+              <legend>메뉴와 운영 <span>(선택)</span></legend>
+              <p className="hint">
+                지도에는 메뉴·영업시간이 없어 직접 적습니다. 리뷰가 그 메뉴나 배달·영업시간을 말할 때만 답글에 덧붙이고, 다른 메뉴를 홍보하지는 않습니다.
+              </p>
+              <div className="field-group">
+                <span className="label">대표 메뉴</span>
+                {menus.length > 0 && (
+                  <ul className="menu-rows">
+                    {menus.map((m, i) => (
+                      <li key={i}>
+                        <FormInput id={`menuName${i}`} label={`메뉴 ${i + 1} 이름`} hideLabel value={m.name} maxLength={30}
+                                   placeholder="메뉴 이름 (예: 바닐라 라떼)"
+                                   onChange={(e) => setMenus(menus.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+                        <FormInput id={`menuDesc${i}`} label={`메뉴 ${i + 1} 설명`} hideLabel value={m.description} maxLength={100}
+                                   placeholder="한 줄 설명 (예: 바닐라빈 시럽을 직접 만듭니다)"
+                                   onChange={(e) => setMenus(menus.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))} />
+                        <IconButton icon="delete" tone="danger" size="sm" label={`메뉴 ${i + 1} 삭제`}
+                                    onClick={() => setMenus(menus.filter((_, j) => j !== i))} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {menus.length < MAX_MENUS && (
+                  <button type="button" className="add-row" onClick={() => setMenus([...menus, blankMenu()])}>
+                    <Icon name="add" size={18} />메뉴 추가
+                  </button>
+                )}
+              </div>
+              <div className="field-group" role="group" aria-labelledby="services-label">
+                <span className="label" id="services-label">이용 방법</span>
+                <div className="service-chips">
+                  {SERVICES.map(([key, label]) => (
+                    <label key={key} className={`chip ${services[key] ? 'is-on' : ''}`}>
+                      <input type="checkbox" className="sr-only" checked={services[key]}
+                             onChange={(e) => setServices((s) => ({ ...s, [key]: e.target.checked }))} />
+                      {services[key] && <Icon name="confirm" size={14} />}
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <FormInput id="storeHours" label="영업시간" value={hours} maxLength={100}
+                         placeholder="예: 매일 11:00~21:00, 화요일 휴무"
+                         onChange={(e) => setHours(e.target.value)} />
+            </fieldset>
           </div>
           <div className="sp-foot">
             <SaveState dirty={storeDirty} saved={!!store} at={store?.updatedAt} />
@@ -213,10 +319,9 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
             <div className="setup-2col">
               {/* 예시 답글 */}
               <div className="sp-panel">
-                <div className="sp-head">
-                  <h3>예시 답글</h3>
+                <PanelHead icon="edit" title="예시 답글">
                   <span className={`sp-count ${sampleReady ? 'is-ok' : ''}`}>{filled.length} / {MAX_SAMPLES}개</span>
-                </div>
+                </PanelHead>
                 <div className="sp-body">
                   {!sampleReady && (
                     <p className="sample-nudge">
@@ -251,10 +356,9 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
 
               {/* 답글 스타일 학습 */}
               <div className="sp-panel" ref={learnRef}>
-                <div className="sp-head">
-                  <h3>학습한 말투</h3>
+                <PanelHead icon="sparkles" title="학습한 말투">
                   <LearnState tone={tone} learnedAll={learnedAll} fresh={fresh} dirty={toneDirty || (samplesDirty && !!tone)} />
-                </div>
+                </PanelHead>
                 <div className="sp-body">
                   {busy === 'learn' ? (
                     <ReplyGenerationLoader steps={LEARN_STEPS} note={LEARN_NOTE} pose="analyzing" />
@@ -330,10 +434,8 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
             {/* 학습 결과 미리보기 */}
             {tone && (
               <div className="sp-panel">
-                <div className="sp-head">
-                  <h3>학습 결과 미리보기</h3>
-                  <p>사장님 답글과, 배운 말투로 쓴 예시 문장을 나란히 비교합니다.</p>
-                </div>
+                <PanelHead icon="chat" title="학습 결과 미리보기"
+                           desc="사장님 답글과, 배운 말투로 쓴 예시 답글을 비교합니다. 말투를 고치면 예시 답글이 바로 바뀝니다." />
                 <div className="sp-body compare-cols">
                   <figure className="compare-card">
                     <figcaption><Icon name="user" size={15} />사장님 예시 답글</figcaption>
@@ -341,8 +443,26 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
                   </figure>
                   <figure className="compare-card is-ai">
                     <figcaption><Icon name="sparkles" size={15} />배운 말투로 쓴 예시</figcaption>
-                    <blockquote>{previewText(tone)}</blockquote>
-                    <p className="hint">높은 별점 칭찬 리뷰를 가정한 예시입니다. 실제 답글은 리뷰 내용에 맞춰 새로 씁니다.</p>
+                    <div className="pv-review">
+                      <span className="pv-who">
+                        예시 리뷰
+                        <span className="star-row" role="img" aria-label="별점 5점">
+                          {[1, 2, 3, 4, 5].map((n) => <Icon key={n} name="star" size={13} className="is-on" />)}
+                        </span>
+                      </span>
+                      <p>{SAMPLE_REVIEW}</p>
+                    </div>
+                    <div className="pv-reply">
+                      <span className="pv-who"><Icon name="store" size={14} />{store.name} 답글</span>
+                      <blockquote>
+                        {markParts(previewText(tone), [...tone.phrases, tone.closing]).map((p, i) => (
+                          p.mark ? <mark key={i}>{p.text}</mark> : <span key={i}>{p.text}</span>
+                        ))}
+                      </blockquote>
+                    </div>
+                    <p className="hint">
+                      <mark>밑줄</mark>은 자주 쓰는 표현과 마무리 인사입니다. 실제 답글은 리뷰 내용에 맞춰 새로 씁니다.
+                    </p>
                   </figure>
                 </div>
               </div>
@@ -350,10 +470,7 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
 
             {/* 답글 기본 설정 */}
             <div className="sp-panel">
-              <div className="sp-head">
-                <h3>답글 기본 설정</h3>
-                <p>답글 초안을 만들 때 기본으로 적용합니다.</p>
-              </div>
+              <PanelHead icon="settings" title="답글 기본 설정" desc="답글 초안을 만들 때 기본으로 적용합니다." />
               <div className="sp-body defaults">
                 <OptionRow label="기본 답글 유형" hint="오늘의 리뷰와 일괄 처리에서 먼저 보여줄 말투입니다."
                            value={settings.defaultTone} options={DEFAULT_TONES}
@@ -391,6 +508,20 @@ export default function StoreSetup({ store, onSaved, toast, go, me, onAccountDel
 
       <AccountSection me={me} onDeleted={onAccountDeleted} />
     </>
+  );
+}
+
+/** 패널 제목 줄: 아이콘 + 제목(+설명) + 오른쪽 상태 */
+function PanelHead({ icon, title, desc, children }) {
+  return (
+    <div className="sp-head">
+      <span className="sp-icon"><Icon name={icon} size={18} /></span>
+      <div className="sp-title">
+        <h3>{title}</h3>
+        {desc && <p>{desc}</p>}
+      </div>
+      {children}
+    </div>
   );
 }
 

@@ -124,8 +124,7 @@ public class MaliciousGuideService {
     static String userMessage(Context ctx) {
         StringBuilder sb = new StringBuilder();
         sb.append("[매장] ").append(ctx.storeName()).append(" (").append(ctx.category()).append(")\n");
-        sb.append("[확인된 매장 정보] ")
-                .append(ctx.storeInfo() == null || ctx.storeInfo().isBlank() ? "없음" : ctx.storeInfo().strip()).append('\n');
+        sb.append(ReplyGenerationService.storeInfoBlock(ctx.storeInfo()));
         sb.append("[매장 말투] 높임말: ").append(ctx.tone() == null ? "하십시오체" : ctx.tone().formality()).append('\n');
         sb.append("[사장님이 고른 전략] ").append(ctx.chosen() == null ? "추천 요청" : ctx.chosen().name()).append('\n');
         sb.append("[리뷰]\n");

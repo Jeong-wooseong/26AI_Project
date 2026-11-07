@@ -7,6 +7,15 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms)); let genFailOnce = tru
 let failNext = true; let chunkFailOnce = true; let lostOnce = true;
 const maskIt = (c) => (c || '').replace(/01\d-?\d{3,4}-?\d{4}/g, '[전화번호]').trim();
 const log = []; globalThis.__log = log;
+// 매장 메뉴·이용 방법·영업시간·연결한 장소 (백엔드 StoreProfile.normalized 와 같은 정리)
+const EMPTY_PROFILE = { menus: [], delivery: false, takeout: false, dineIn: false, hours: null, place: null };
+const cleanProfile = (pr) => ({ menus: (pr.menus || []).filter(x => x?.name?.trim()).map(x => ({ name: x.name.trim(), description: x.description?.trim() || null })), delivery: !!pr.delivery, takeout: !!pr.takeout, dineIn: !!pr.dineIn, hours: pr.hours?.trim() || null, place: pr.place?.url ? { id: pr.place.id ?? null, address: pr.place.address ?? null, url: pr.place.url } : null });
+// 카카오 로컬 검색 흉내: '끔'이 들어가면 키 없음(503), '없음'이면 결과 없음
+const PLACES = [
+  { id: '101', name: '달빛카페 합정점', category: '카페', categoryPath: '음식점 > 카페 > 커피전문점', address: '서울 마포구 양화로 45', url: 'http://place.map.kakao.com/101' },
+  { id: '102', name: '달빛카페 연남점', category: '디저트', categoryPath: '음식점 > 카페 > 디저트카페', address: '서울 마포구 동교로 210', url: 'http://place.map.kakao.com/102' },
+  { id: '103', name: '달빛분식', category: '분식', categoryPath: '음식점 > 분식', address: '서울 마포구 월드컵로 12', url: 'http://place.map.kakao.com/103' },
+];
 http.createServer(async (req, res) => {
   let raw = ''; req.setEncoding('latin1'); for await (const c of req) raw += c;
   const ctype = req.headers['content-type'] || '';
@@ -68,8 +77,9 @@ http.createServer(async (req, res) => {
     return json(res, 200, { inquiries: A.inquiries.length, lastSevenDays: A.inquiries.length, byStatus: cnt(q => q.status), byType: cnt(q => q.type), byLocation: cnt(q => q.location || '미지정'), feedbackUp: fb.length - down.length, feedbackDown: down.length, downReasons: down.flatMap(r => r.feedbackReasons).reduce((a, k) => { a[k] = (a[k] || 0) + 1; return a; }, {}), downByTone: down.reduce((a, r) => { a[r.tone] = (a[r.tone] || 0) + 1; return a; }, {}) }); }
   if ((m = p.match(/^\/api\/replies\/(\d+)\/feedback$/))) { const rp = replies.find(x => x.id == m[1]); rp.feedback = body.value; rp.feedbackReasons = body.value === 'DOWN' ? body.reasons : []; rp.feedbackComment = body.comment ?? null; rp.feedbackAt = new Date().toISOString(); return json(res, 200, { maxSimilarity: null, regenCount: 0, strategy: null, strategyReason: null, checklist: [], ...rp }); }
   if (p === '/api/stores' && req.method === 'GET') return json(res, 200, stores);
-  if (p === '/api/stores' && req.method === 'POST') { const s = { id: sid++, name: body.name, category: body.category, info: body.info || null, toneProfile: null, sampleReplies: [], replySettings: { defaultTone: 'POLITE', avoidDuplicates: true } }; stores.push(s); return json(res, 201, s); }
-  if ((m = p.match(/^\/api\/stores\/(\d+)$/)) && req.method === 'PUT') { const s = stores.find(x => x.id == m[1]); s.name = body.name; s.category = body.category; if (body.info != null) s.info = body.info || null; return json(res, 200, s); }
+  if (p === '/api/places/search') { const q = (u.searchParams.get('query') || '').trim(); if (q.includes('끔')) return json(res, 503, { code: 'PLACE_SEARCH_OFF', message: '지도 검색이 아직 설정되지 않았습니다. 매장명과 업종을 직접 입력하십시오.' }); if (q.length < 2) return json(res, 400, { code: 'QUERY_TOO_SHORT', message: '매장 이름을 두 글자 이상 입력하십시오.' }); return json(res, 200, q.includes('없음') ? [] : PLACES.filter(x => q.split(/\s+/).some(w => x.name.includes(w)))); }
+  if (p === '/api/stores' && req.method === 'POST') { const s = { id: sid++, name: body.name, category: body.category, info: body.info || null, profile: body.profile ? cleanProfile(body.profile) : EMPTY_PROFILE, toneProfile: null, sampleReplies: [], replySettings: { defaultTone: 'POLITE', avoidDuplicates: true } }; stores.push(s); return json(res, 201, s); }
+  if ((m = p.match(/^\/api\/stores\/(\d+)$/)) && req.method === 'PUT') { const s = stores.find(x => x.id == m[1]); s.name = body.name; s.category = body.category; if (body.info != null) s.info = body.info || null; if (body.profile) s.profile = cleanProfile(body.profile); s.updatedAt = new Date().toISOString(); return json(res, 200, s); }
   if ((m = p.match(/^\/api\/stores\/(\d+)\/tone-profile\/extract$/))) return json(res, 200, { formality: '해요체', emojiLevel: '가끔', emojiExamples: ['😊'], length: '2~3문장', phrases: ['감사드려요', '보답할게요'], closing: '오늘도 좋은 하루 되세요!' });
   if ((m = p.match(/^\/api\/stores\/(\d+)\/reply-settings$/))) { const s = stores.find(x => x.id == m[1]); s.replySettings = { defaultTone: body.defaultTone, avoidDuplicates: !!body.avoidDuplicates }; return json(res, 200, s); }
   if ((m = p.match(/^\/api\/stores\/(\d+)\/tone-profile$/))) { const s = stores.find(x => x.id == m[1]); s.toneProfile = body.toneProfile; s.sampleReplies = body.sampleReplies; return json(res, 200, s); }

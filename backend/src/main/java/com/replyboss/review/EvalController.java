@@ -83,13 +83,13 @@ public class EvalController {
         try {
             if (c.type() == ReviewType.MALICIOUS) {
                 MaliciousGuideService.Guide g = maliciousGuideService.generate(new MaliciousGuideService.Context(
-                        store.getName(), store.getCategory(), store.getInfo(), tone,
+                        store.getName(), store.getCategory(), store.replyInfo(), tone,
                         request.rating(), c.keywords(), masked, null));
                 return new EvalReplyResponse(masked, c.type(), c.sentiment(), c.keywords(), injection, risks, Map.of(), 0,
                         g.strategy().name(), g.reason(), g.reply(), null, null);
             }
             ReplyGenerationService.Result r = replyGenerationService.generate(new ReplyGenerationService.Context(
-                    store.getName(), store.getCategory(), store.getInfo(), tone,
+                    store.getName(), store.getCategory(), store.replyInfo(), tone,
                     request.rating(), c.type(), c.sentiment(), c.keywords(), masked, List.of()));
             Map<String, String> drafts = new LinkedHashMap<>();
             r.drafts().forEach((t, d) -> drafts.put(t.name(), d.text()));

@@ -39,7 +39,7 @@ public class ReplyGenerationService {
 
     private static final Logger log = LoggerFactory.getLogger(ReplyGenerationService.class);
 
-    static final String PROMPT = "reply_generate_v10";
+    static final String PROMPT = "reply_generate_v12";
     static final List<ReviewType> TARGET_TYPES = List.of(ReviewType.PRAISE, ReviewType.COMPLAINT, ReviewType.INQUIRY);
 
     private static final Map<String, Object> SCHEMA = object(props(
@@ -249,6 +249,19 @@ public class ReplyGenerationService {
                     : "내용을 줄여 문장 수를 맞출 것";
             problems.add(name + ": " + count + "문장으로 작성됨 (" + range[0] + "~" + range[1] + "문장으로 맞출 것, " + fix + ")");
         }
+        int[] chars = charRange(ctx.tone(), tone);
+        int letters = letterCount(text);
+        if (letters < chars[0]) {
+            problems.add(name + ": 공백 제외 " + letters + "자로 너무 짧음 (" + chars[0] + "~" + chars[1]
+                    + "자로 맞출 것, 감사·다짐만 있는 짧은 문장 대신 리뷰에서 짚은 내용과 그에 대한 마음을 구체적으로 더할 것)");
+        } else if (letters > chars[1] * 3 / 2) {
+            problems.add(name + ": 공백 제외 " + letters + "자로 너무 김 (" + chars[0] + "~" + chars[1] + "자로 줄일 것)");
+        }
+        int thin = thinSentences(tone, text, ctx.tone());
+        if (thin > 0) {
+            problems.add(name + ": \"감사합니다.\", \"열심히 하겠습니다.\"처럼 내용 없이 짧은 문장이 " + thin
+                    + "개 있음 (문장마다 리뷰 내용에 대한 반응, 사장님의 마음과 이유, 무엇을 어떻게 하겠다는 다짐 중 하나를 구체적으로 담을 것)");
+        }
         return problems;
     }
 
@@ -287,6 +300,56 @@ public class ReplyGenerationService {
             case "3~4문장" -> new int[]{3, 4};
             default -> new int[]{2, 3};
         };
+    }
+
+    /**
+     * 톤별 목표 글자 수(공백 제외) [최소, 최대]. 문장 수만 보면 "감사합니다." 같은 짧은 문장으로도 채워져
+     * 길이 설정을 바꿔도 답글 길이가 거의 같았다. 한 문장에 30~55자 정도가 담기도록 문장 수에 맞춰 정한다.
+     */
+    static int[] charRange(ToneProfile tone, ReplyTone replyTone) {
+        if (replyTone == ReplyTone.CONCISE) {
+            // 간결형은 짧아야 하므로 "별점 감사해요." 같은 한마디만 막는다
+            return new int[]{20, 80};
+        }
+        int[] sentences = sentenceRange(tone, replyTone);
+        return switch (sentences[1]) {
+            case 2 -> new int[]{30, 90};
+            case 4 -> new int[]{120, 220};
+            default -> new int[]{75, 150};
+        };
+    }
+
+    /** 공백을 뺀 글자 수 */
+    static int letterCount(String text) {
+        return text == null ? 0 : text.replaceAll("\\s+", "").length();
+    }
+
+    /**
+     * 이 글자 수보다 짧은 문장은 내용 없이 인사만 있는 문장으로 본다 (공백 제외).
+     * "열심히 하겠습니다"(8자)·"감사합니다"(5자)는 걸리고, "배달이 늦어 죄송해요"(9자)는 통과한다.
+     */
+    static final int THIN_SENTENCE = 9;
+
+    /**
+     * 내용 없이 짧은 문장 수. 정중형·친근형이면서 2문장 이상 쓰는 설정일 때만 센다
+     * (간결형·1~2문장은 짧은 인사도 자연스럽다). 사장님이 정한 마무리 인사가 든 문장은 세지 않는다.
+     */
+    static int thinSentences(ReplyTone tone, String text, ToneProfile profile) {
+        if (tone == ReplyTone.CONCISE || sentenceRange(profile, tone)[0] < 2) {
+            return 0;
+        }
+        String closing = profile == null || profile.closing() == null ? "" : profile.closing().strip();
+        int thin = 0;
+        for (String part : SENTENCE_BREAK.split(text.strip())) {
+            if (!LETTER.matcher(part).find() || (!closing.isEmpty() && part.contains(closing))) {
+                continue;
+            }
+            String core = TRAILING.matcher(part.strip()).replaceAll("");
+            if (letterCount(core) < THIN_SENTENCE) {
+                thin++;
+            }
+        }
+        return thin;
     }
 
     /** 문장 끝의 문장부호·이모지·공백을 뗀 글자 */
@@ -341,11 +404,28 @@ public class ReplyGenerationService {
         return count;
     }
 
+    /**
+     * 프롬프트의 [확인된 매장 정보] 구역 (답글 초안·악성 리뷰 가이드 공통).
+     * 소개·메뉴·이용 방법·영업시간이 여러 줄이면 줄마다 "- " 를 붙이고, 없으면 "없음".
+     */
+    static String storeInfoBlock(String storeInfo) {
+        if (isBlank(storeInfo)) {
+            return "[확인된 매장 정보] 없음\n";
+        }
+        StringBuilder sb = new StringBuilder("[확인된 매장 정보]\n");
+        for (String line : storeInfo.strip().split("\n")) {
+            if (!line.isBlank()) {
+                sb.append("- ").append(line.strip()).append('\n');
+            }
+        }
+        return sb.toString();
+    }
+
     static String userMessage(Context ctx) {
         ToneProfile t = ctx.tone();
         StringBuilder sb = new StringBuilder();
         sb.append("[매장] ").append(ctx.storeName()).append(" (").append(ctx.category()).append(")\n");
-        sb.append("[확인된 매장 정보] ").append(isBlank(ctx.storeInfo()) ? "없음" : ctx.storeInfo().strip()).append('\n');
+        sb.append(storeInfoBlock(ctx.storeInfo()));
         sb.append("[매장 말투]\n");
         sb.append("- 높임말: ").append(t.formality()).append('\n');
         sb.append("- 이모지: ").append(t.emojiLevel());
@@ -363,9 +443,12 @@ public class ReplyGenerationService {
         sb.append("[작성 분량]\n");
         for (ReplyTone tone : List.of(ReplyTone.POLITE, ReplyTone.FRIENDLY, ReplyTone.CONCISE)) {
             int[] range = sentenceRange(t, tone);
+            int[] chars = charRange(t, tone);
             // 모델은 범위 아래쪽으로 짧게 쓰는 경향이 있어 위쪽 끝을 목표로 알려 준다
-            sb.append("- ").append(FIELD.get(tone)).append(": ").append(range[0]).append('~').append(range[1]).append("문장 (")
-                    .append(range[1]).append("문장을 목표로, ").append(range[0]).append("문장보다 짧으면 안 됨)\n");
+            sb.append("- ").append(FIELD.get(tone)).append(": ").append(range[0]).append('~').append(range[1]).append("문장, 공백 제외 ")
+                    .append(chars[0]).append('~').append(chars[1]).append("자 (")
+                    .append(range[1]).append("문장을 목표로, ").append(range[0]).append("문장·").append(chars[0])
+                    .append("자보다 짧으면 안 됨)\n");
         }
         sb.append("[리뷰]\n");
         sb.append("- 별점: ").append(ctx.rating()).append('\n');

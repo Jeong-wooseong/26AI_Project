@@ -13,7 +13,11 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
+import com.replyboss.common.JsonText;
+
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "store")
@@ -37,6 +41,10 @@ public class Store {
     /** 사장님이 직접 적은 매장 소개·운영 방식 (선택). 답글에는 여기 적힌 내용만 운영 방식으로 언급한다. */
     @Column(columnDefinition = "TEXT")
     private String info;
+
+    /** StoreProfile(메뉴·이용 방법·영업시간·연결한 장소)을 JSON 문자열로 저장 */
+    @Column(columnDefinition = "TEXT")
+    private String profile;
 
     /** ToneProfile 을 JSON 문자열로 저장 */
     @Column(name = "tone_profile", columnDefinition = "TEXT")
@@ -95,6 +103,29 @@ public class Store {
 
     public void describe(String info) {
         this.info = info;
+    }
+
+    public void updateProfile(StoreProfile profile) {
+        this.profile = profile == null ? null : JsonText.write(profile.normalized());
+    }
+
+    /** 저장된 메뉴·이용 방법 등 (없으면 빈 값) */
+    public StoreProfile profile() {
+        StoreProfile p = JsonText.read(profile, StoreProfile.class);
+        return p == null ? StoreProfile.EMPTY : p;
+    }
+
+    /**
+     * 답글 프롬프트의 [확인된 매장 정보]: 사장님이 적은 소개·운영 방식 + 메뉴·이용 방법·영업시간.
+     * 적은 것이 하나도 없으면 null. 연결한 장소(주소·링크)는 넣지 않는다.
+     */
+    public String replyInfo() {
+        List<String> lines = new ArrayList<>();
+        if (info != null && !info.isBlank()) {
+            lines.add("소개·운영 방식: " + info.strip());
+        }
+        lines.addAll(profile().replyLines());
+        return lines.isEmpty() ? null : String.join("\n", lines);
     }
 
     public void updateTone(String toneProfileJson, String sampleRepliesJson) {

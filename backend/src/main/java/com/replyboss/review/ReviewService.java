@@ -185,7 +185,7 @@ public class ReviewService {
         // 매장 설정에서 중복 답글 방지를 끄면 이전 답글을 넘기지 않아 비교·재생성을 하지 않는다.
         List<ReplyGenerationService.PastReply> past = store.isAvoidDuplicates() ? duplicateGuard.pastReplies(review) : List.of();
         ReplyGenerationService.Result result = replyGenerationService.generate(new ReplyGenerationService.Context(
-                store.getName(), store.getCategory(), store.getInfo(), tone,
+                store.getName(), store.getCategory(), store.replyInfo(), tone,
                 review.getRating(), review.getType(), review.getSentiment(), review.getKeywords(),
                 review.getMaskedContent(), past));
         Map<ReplyTone, ReplyGenerationService.Draft> drafts = result.drafts();
@@ -219,7 +219,7 @@ public class ReviewService {
         Store store = storeService.get(review.getStore().getId());
         ToneProfile tone = JsonText.read(store.getToneProfile(), ToneProfile.class);
         MaliciousGuideService.Guide guide = maliciousGuideService.generate(new MaliciousGuideService.Context(
-                store.getName(), store.getCategory(), store.getInfo(), tone,
+                store.getName(), store.getCategory(), store.replyInfo(), tone,
                 review.getRating(), review.getKeywords(), review.getMaskedContent(), strategy));
 
         Long finalId = reviewRepository.findById(reviewId).map(Review::getFinalReplyId).orElse(null);

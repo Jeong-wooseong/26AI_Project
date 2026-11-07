@@ -2,6 +2,7 @@
 // 같은 기능에는 항상 같은 아이콘을 쓰도록 이 파일에서만 가져온다.
 import {
   Menu,
+  SlidersHorizontal,
   Clock3,
   Calendar,
   ChartColumn,
@@ -99,6 +100,7 @@ const ICONS = {
   go: ArrowRight,
   sparkles: Sparkles, // 답글 스타일 분석
   menu: Menu,
+  settings: SlidersHorizontal, // 기본 설정
   shield: ShieldCheck,
   clock: Clock3,
   'cat-cafe': Coffee,
