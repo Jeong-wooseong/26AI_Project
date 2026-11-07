@@ -1,0 +1,121 @@
+// Lucide 아이콘을 같은 규칙으로 쓰기 위한 래퍼: Outline, 선 굵기 1.75, 기본 18px.
+// 같은 기능에는 항상 같은 아이콘을 쓰도록 이 파일에서만 가져온다.
+import {
+  Menu,
+  SlidersHorizontal,
+  Clock3,
+  Calendar,
+  ChartColumn,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  CircleAlert,
+  ClipboardPaste,
+  Download,
+  FileSpreadsheet,
+  Info,
+  Keyboard,
+  Undo2,
+  Upload,
+  ClipboardList,
+  Copy,
+  ListChecks,
+  LoaderCircle,
+  Lock,
+  MessageSquareText,
+  Pencil,
+  Plus,
+  RotateCw,
+  Save,
+  Search,
+  ShieldAlert,
+  ScanText,
+  Star,
+  Store,
+  Trash2,
+  X,
+  ThumbsUp,
+  ThumbsDown,
+  LogOut,
+  UserRound,
+  LifeBuoy,
+  MessageCircle,
+  ShieldCheck,
+  Send,
+  Paperclip,
+  Mail,
+  ArrowRight,
+  Coffee,
+  Soup,
+  UtensilsCrossed,
+  Pizza,
+  Drumstick,
+  CakeSlice,
+  Fish,
+  Sandwich,
+  Sparkles,
+} from 'lucide-react';
+
+const ICONS = {
+  store: Store, // 가게 설정
+  input: MessageSquareText, // 리뷰 입력
+  reviews: ClipboardList, // 오늘의 리뷰
+  report: ChartColumn, // 주간 리포트
+  add: Plus,
+  delete: Trash2,
+  remove: X,
+  lock: Lock,
+  save: Save,
+  analyze: ScanText,
+  classify: ListChecks,
+  calendar: Calendar,
+  copy: Copy,
+  edit: Pencil,
+  confirm: Check,
+  retry: RotateCw,
+  star: Star,
+  prev: ChevronLeft,
+  next: ChevronRight,
+  loading: LoaderCircle,
+  error: CircleAlert,
+  info: Info,
+  manual: Keyboard, // 직접 입력
+  paste: ClipboardPaste, // 여러 리뷰 붙여넣기
+  file: FileSpreadsheet, // 파일 가져오기
+  upload: Upload,
+  download: Download,
+  restore: Undo2,
+  search: Search,
+  guide: ShieldAlert, // 악성 리뷰 대응 가이드
+  like: ThumbsUp, // 답글 피드백: 마음에 들어요
+  dislike: ThumbsDown, // 답글 피드백: 개선하고 싶어요
+  logout: LogOut,
+  user: UserRound,
+  support: LifeBuoy, // 고객 지원
+  chat: MessageCircle, // 도우미
+  admin: ShieldCheck, // 관리자
+  send: Send,
+  attach: Paperclip,
+  mail: Mail,
+  go: ArrowRight,
+  sparkles: Sparkles, // 답글 스타일 분석
+  menu: Menu,
+  settings: SlidersHorizontal, // 기본 설정
+  shield: ShieldCheck,
+  clock: Clock3,
+  'cat-cafe': Coffee,
+  'cat-korean': Soup,
+  'cat-snack': Sandwich,
+  'cat-chinese': UtensilsCrossed,
+  'cat-japanese': Fish,
+  'cat-western': UtensilsCrossed,
+  'cat-chicken': Drumstick,
+  'cat-pizza': Pizza,
+  'cat-dessert': CakeSlice,
+  'cat-etc': Store,
+};
+
+export default function Icon({ name, size = 18, className = '', ...rest }) {
+  const Cmp = ICONS[name];
+  return <Cmp size={size} strokeWidth={1.75} aria-hidden="true" className={`icon ${className}`} {...rest} />;
+}

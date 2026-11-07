@@ -1,0 +1,13 @@
+# MySQL 없이 바로 실행하는 프로필.
+#   gradlew.bat bootRun --args="--spring.profiles.active=local"
+# 데이터는 backend/data/replyboss.mv.db 파일 하나에 저장되고, 껐다 켜도 남는다.
+# 지우고 처음부터 하려면 서버를 끄고 backend/data 폴더를 지우면 된다.
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/replyboss;MODE=MySQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+      path: /h2-console

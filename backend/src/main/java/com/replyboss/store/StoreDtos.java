@@ -1,0 +1,85 @@
+package com.replyboss.store;
+
+import com.replyboss.common.JsonText;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+public final class StoreDtos {
+
+    private StoreDtos() {
+    }
+
+    public record StoreRequest(
+            @NotBlank(message = "매장명을 입력하십시오.")
+            @Size(max = 100, message = "매장명은 100자 이내여야 합니다.")
+            String name,
+            @Size(max = 50, message = "업종은 50자 이내여야 합니다.")
+            String category,
+            /** 매장 소개·운영 방식 (선택). 보내지 않으면(null) 기존 값을 유지한다. */
+            @Size(max = 500, message = "매장 소개·운영 방식은 500자 이내여야 합니다.")
+            String info,
+            /** 메뉴·이용 방법·영업시간·연결한 장소 (선택). 보내지 않으면(null) 기존 값을 유지한다. */
+            @Valid StoreProfile profile
+    ) {
+        public StoreRequest(String name, String category) {
+            this(name, category, null, null);
+        }
+
+        public StoreRequest(String name, String category, String info) {
+            this(name, category, info, null);
+        }
+    }
+
+    public record ToneExtractRequest(
+            @NotNull(message = "예시 답글을 입력하십시오.")
+            @Size(min = 3, max = 5, message = "예시 답글은 3~5개가 필요합니다.")
+            List<@NotBlank(message = "비어 있는 예시 답글이 있습니다.") String> sampleReplies
+    ) {
+    }
+
+    public record ToneUpdateRequest(
+            @NotNull(message = "답글 스타일 정보가 없습니다.") @Valid ToneProfile toneProfile,
+            List<String> sampleReplies
+    ) {
+    }
+
+    /** 답글 기본 설정 */
+    public record ReplySettings(
+            @NotNull(message = "기본 답글 말투를 고르십시오.")
+            @jakarta.validation.constraints.Pattern(regexp = "POLITE|FRIENDLY|CONCISE", message = "기본 답글 말투는 정중형·친근형·간결형 중 하나여야 합니다.")
+            String defaultTone,
+            boolean avoidDuplicates
+    ) {
+    }
+
+    public record StoreResponse(
+            Long id,
+            String name,
+            String category,
+            String info,
+            StoreProfile profile,
+            ToneProfile toneProfile,
+            List<String> sampleReplies,
+            ReplySettings replySettings,
+            LocalDateTime updatedAt
+    ) {
+        public static StoreResponse from(Store store) {
+            return new StoreResponse(
+                    store.getId(),
+                    store.getName(),
+                    store.getCategory(),
+                    store.getInfo(),
+                    store.profile(),
+                    JsonText.read(store.getToneProfile(), ToneProfile.class),
+                    JsonText.readStringList(store.getSampleReplies()),
+                    new ReplySettings(store.getDefaultTone(), store.isAvoidDuplicates()),
+                    store.getUpdatedAt()
+            );
+        }
+    }
+}

@@ -1,0 +1,228 @@
+package com.replyboss.review;
+
+import com.replyboss.ai.RiskSignals;
+import com.replyboss.ai.UntrustedText;
+import com.replyboss.common.JsonText;
+import com.replyboss.reply.GuideStrategy;
+import com.replyboss.reply.RatingMismatch;
+import com.replyboss.reply.Reply;
+import com.replyboss.reply.ReplyTone;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Size;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+
+public final class ReviewDtos {
+
+    private ReviewDtos() {
+    }
+
+    public record ReviewItem(
+            @NotNull(message = "별점을 선택하십시오.")
+            @Min(value = 1, message = "별점은 1~5점입니다.")
+            @Max(value = 5, message = "별점은 1~5점입니다.")
+            Integer rating,
+            @Size(max = 2000, message = "리뷰 내용은 2000자 이내여야 합니다.")
+            String content,
+            /** 고객 작성일 (선택). 일괄 가져오기에서만 채워진다. */
+            @PastOrPresent(message = "작성일은 오늘 이전이어야 합니다.")
+            LocalDate writtenAt
+    ) {
+        /** 작성일 없이 만드는 기존 형태 */
+        public ReviewItem(Integer rating, String content) {
+            this(rating, content, null);
+        }
+    }
+
+    public record ReviewBatchRequest(
+            @NotNull(message = "리뷰 출처를 선택하십시오.")
+            Platform platform,
+            @NotEmpty(message = "리뷰를 1건 이상 입력하십시오.")
+            @Size(max = 30, message = "한 번에 최대 30건까지 등록할 수 있습니다.")
+            List<@Valid ReviewItem> reviews
+    ) {
+    }
+
+    public record ReplyResponse(
+            Long id,
+            ReplyTone tone,
+            String content,
+            String editedContent,
+            boolean selected,
+            /** 만들 때 이전 답글과 가장 비슷했던 정도 (비교하지 못했으면 null) */
+            Double maxSimilarity,
+            /** 이전 답글과 비슷하거나 규칙을 어겨 다시 생성한 횟수 */
+            int regenCount,
+            /** 악성 리뷰 가이드: APOLOGY | FACT | HOLD, 근거, 사장님이 확인할 것 */
+            String strategy,
+            String strategyReason,
+            List<String> checklist,
+            /** 사장님 피드백 UP | DOWN (없으면 null)과 고른 이유 */
+            String feedback,
+            List<String> feedbackReasons
+    ) {
+        public static ReplyResponse from(Reply reply) {
+            return new ReplyResponse(reply.getId(), reply.getTone(), reply.getContent(),
+                    reply.getEditedContent(), reply.isSelected(), reply.getMaxSimilarity(), reply.getRegenCount(),
+                    reply.getStrategy(), reply.getStrategyReason(), JsonText.readStringList(reply.getStrategyChecklist()),
+                    reply.getFeedback(), JsonText.readStringList(reply.getFeedbackReasons()));
+        }
+    }
+
+    public record ReviewResponse(
+            Long id,
+            Platform platform,
+            int rating,
+            String maskedContent,
+            ReviewType type,
+            Sentiment sentiment,
+            List<String> keywords,
+            Double confidence,
+            ReviewStatus status,
+            String failureCode,
+            LocalDateTime createdAt,
+            LocalDate writtenAt,
+            /** COMPLETED(최종 답글 확정) | DRAFT(초안만 있음) | NONE(답글 없음) */
+            String replyStatus,
+            Long finalReplyId,
+            LocalDateTime completedAt,
+            LocalDateTime finalUpdatedAt,
+            /** 비슷한 리뷰 묶음 (없으면 null)과 묶음 안의 다른 리뷰 수 */
+            String groupId,
+            int similarCount,
+            /** 본문에 AI 에게 보내는 지시문으로 보이는 문장이 있음 (답글 생성 때 무시하도록 처리) */
+            boolean injectionSuspected,
+            /** 사장님 확인이 필요한 신호 (건강·위생, 환불·보상, 법적 대응) */
+            List<String> riskSignals,
+            /** 별점과 본문 감정이 반대인 경우 HIGH_RATING_NEGATIVE | LOW_RATING_POSITIVE (아니면 null) */
+            RatingMismatch ratingMismatch,
+            List<ReplyResponse> replies
+    ) {
+        public static ReviewResponse from(Review review, List<Reply> replies) {
+            return from(review, replies, 0);
+        }
+
+        public static ReviewResponse from(Review review, List<Reply> replies, int similarCount) {
+            String replyStatus = review.isCompleted() ? "COMPLETED" : replies.isEmpty() ? "NONE" : "DRAFT";
+            return new ReviewResponse(
+                    review.getId(),
+                    review.getPlatform(),
+                    review.getRating(),
+                    review.getMaskedContent(),
+                    review.getType(),
+                    review.getSentiment(),
+                    review.getKeywords(),
+                    review.getConfidence(),
+                    review.getStatus(),
+                    review.getFailureCode(),
+                    review.getCreatedAt(),
+                    review.getWrittenOn(),
+                    replyStatus,
+                    review.getFinalReplyId(),
+                    review.getCompletedAt(),
+                    review.getFinalUpdatedAt(),
+                    review.getGroupId(),
+                    similarCount,
+                    UntrustedText.looksLikeInjection(review.getMaskedContent()),
+                    RiskSignals.of(review.getMaskedContent()),
+                    review.hasContent() ? RatingMismatch.of(review.getRating(), review.getSentiment()) : null,
+                    replies.stream().map(ReplyResponse::from).toList()
+            );
+        }
+    }
+
+    /** 작성 완료: 고른 답글과 (수정했으면 수정한) 최종 문장 */
+    public record CompleteReplyRequest(
+            @NotNull(message = "확정할 답글을 선택하십시오.")
+            Long replyId,
+            @NotBlank(message = "답글 내용을 입력하십시오.")
+            @Size(max = 2000, message = "답글은 2000자 이내여야 합니다.")
+            String content,
+            /** 악성 리뷰 대응 답글은 사장님 확인(true)이 있어야 확정할 수 있다 */
+            boolean confirmed
+    ) {
+        public CompleteReplyRequest(Long replyId, String content) {
+            this(replyId, content, false);
+        }
+    }
+
+    /** 악성 리뷰 가이드 요청: 고른 전략 (없으면 추천) */
+    public record GuideRequest(GuideStrategy strategy) {
+    }
+
+    public record SelectReplyRequest(
+            @Size(max = 2000, message = "답글은 2000자 이내여야 합니다.")
+            String editedContent
+    ) {
+    }
+
+    /** 일괄 등록 전 중복 확인: 같은 매장·출처에 같은 (마스킹된) 본문이 이미 있는지 */
+    public record DuplicateCheckRequest(
+            @NotNull(message = "확인할 리뷰가 없습니다.")
+            @Size(max = 300, message = "한 번에 최대 300건까지 확인할 수 있습니다.")
+            List<@Valid DuplicateCheckItem> items
+    ) {
+    }
+
+    public record DuplicateCheckItem(
+            @NotNull(message = "리뷰 출처를 선택하십시오.") Platform platform,
+            @Size(max = 2000, message = "리뷰 내용은 2000자 이내여야 합니다.") String content
+    ) {
+    }
+
+    /** 이미 등록된 리뷰와 같은 항목의 순번(0부터) */
+    public record DuplicateCheckResponse(List<Integer> duplicateIndexes) {
+    }
+
+    /** 정확도 측정용: 저장하지 않고 분류만 한다. */
+    public record EvalClassifyRequest(
+            @NotNull @Min(1) @Max(5) Integer rating,
+            String content
+    ) {
+    }
+
+    /** 답글 안전성 점검용: 저장하지 않고 분류 → 초안(또는 악성 가이드)까지 만든다 */
+    public record EvalReplyRequest(
+            @NotNull Long storeId,
+            @NotNull @Min(1) @Max(5) Integer rating,
+            @Size(max = 2000) String content
+    ) {
+    }
+
+    public record EvalReplyResponse(
+            String maskedContent,
+            ReviewType type,
+            Sentiment sentiment,
+            List<String> keywords,
+            boolean injectionSuspected,
+            List<String> riskSignals,
+            /** 톤(POLITE 등) → 초안. 만들지 못했으면 빈 맵 */
+            java.util.Map<String, String> drafts,
+            int regenerations,
+            String guideStrategy,
+            String guideReason,
+            String guideReply,
+            String errorCode,
+            String errorMessage
+    ) {
+    }
+
+    public record EvalClassifyResponse(
+            String maskedContent,
+            ReviewType type,
+            Sentiment sentiment,
+            List<String> keywords,
+            double confidence,
+            boolean ruleBased,
+            long latencyMs
+    ) {
+    }
+}
